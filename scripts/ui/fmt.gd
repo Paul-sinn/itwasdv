@@ -13,6 +13,14 @@ static func money(v: float) -> String:
 	return ("-" if n < 0 else "") + digits + out
 
 
+## "+금액"용: 10원 미만은 소수 첫째 자리까지 버림 ("0.97" → "0.9"), 그 위는 money와 같음.
+## 0강에서는 집 하나에 1원 안팎이라 "+0"으로만 보이지 않게.
+static func payout(v: float) -> String:
+	if v < 10.0:
+		return "%.1f" % (floorf(v * 10.0 + 1e-6) / 10.0)
+	return money(v)
+
+
 ## 소수점 둘째 자리까지, 필요 없는 0은 뗌: 8.0 → "8", 94.5 → "94.5", 99.75 → "99.75"
 static func num(v: float) -> String:
 	var x := snappedf(v, 0.01)

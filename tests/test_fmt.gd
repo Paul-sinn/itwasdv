@@ -12,6 +12,16 @@ func test_money() -> void:
 	check_eq(Fmt.money(-1234.0), "-1,234", "-1234")
 
 
+## "+금액": 10원 미만은 소수 첫째 자리까지 (버림)
+func test_payout() -> void:
+	check_eq(Fmt.payout(0.97), "0.9", "0.97")
+	check_eq(Fmt.payout(0.3), "0.3", "0.3 (실수 찌꺼기로 0.2가 되면 안 됨)")
+	check_eq(Fmt.payout(2.0), "2.0", "2")
+	check_eq(Fmt.payout(9.99), "9.9", "9.99")
+	check_eq(Fmt.payout(10.4), "10", "10.4")
+	check_eq(Fmt.payout(1234.5), "1,234", "1234.5")
+
+
 func test_num() -> void:
 	check_eq(Fmt.num(8.0), "8", "8.0")
 	check_eq(Fmt.num(94.5), "94.5", "94.5")

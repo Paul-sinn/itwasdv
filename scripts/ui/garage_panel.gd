@@ -1,4 +1,5 @@
-## 차고 패널: 트럭을 클릭하면 띠 위쪽에 열린다.
+## 차고: 전체 화면 오른쪽에 크게 보인다 (작은 화면에서는 안 보임).
+## 크기는 set_ui_scale()로 정한다 (1 = v0 패널 크기).
 ## 보여주기만 한다. 버튼을 누르면 신호만 보내고, 실제 강화·수리는 main.gd → scripts/core 가 한다.
 extends PanelContainer
 
@@ -8,7 +9,7 @@ const Enhance = preload("res://scripts/core/enhance.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
-const Band = preload("res://scripts/ui/band.gd")
+const Town = preload("res://scripts/ui/town.gd")
 
 signal enhance_pressed
 signal spare_pressed
@@ -27,7 +28,11 @@ var _spare_button: Button
 var _result: Label
 var _stats: Label
 var _flash: ColorRect
+var _box: VBoxContainer
 var _busy := false   ## 강화 결과를 기다리는 중 (뜸)
+var _scale := 1.0    ## v0 패널의 몇 배 크기
+var _result_size := Feel.PANEL_TEXT_SIZE   ## 결과 한 줄 글자 크기 (배수 곱하기 전)
+var _font_sizes := {}   ## 글자 → 배수 곱하기 전 크기
 
 
 func _ready() -> void:
@@ -39,7 +44,7 @@ func _ready() -> void:
 	add_theme_stylebox_override("panel", _style)
 
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 6)
+	_box = box
 	add_child(box)
 
 	_title = _label(box, Feel.PANEL_TITLE_SIZE, Feel.COLOR_STAR)
@@ -67,6 +72,30 @@ func _ready() -> void:
 	_flash.color = Color(1, 1, 1, 0)
 	_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_flash)
+	set_ui_scale(_scale)
+
+
+## 크기 배수 (1 = v0 패널). 글자, 폭, 여백, 테두리를 같이 키운다.
+func set_ui_scale(s: float) -> void:
+	_scale = s
+	if _box == null:
+		return
+	custom_minimum_size.x = Feel.PANEL_WIDTH * s
+	_style.set_corner_radius_all(int(roundf(Feel.PANEL_RADIUS * s)))
+	_style.set_content_margin_all(Feel.PANEL_PADDING * s)
+	_box.add_theme_constant_override("separation", int(roundf(6.0 * s)))
+	for c: Control in _font_sizes:
+		c.add_theme_font_size_override("font_size", _px(_font_sizes[c]))
+	_result.add_theme_font_size_override("font_size", _px(_result_size))
+	reset_size()
+
+
+func ui_scale() -> float:
+	return _scale
+
+
+func _px(base: float) -> int:
+	return maxi(1, int(roundf(base * _scale)))
 
 
 # ---------------- 강화 연출 ----------------
@@ -89,7 +118,7 @@ func celebrate() -> void:
 	_flash.color = Color(1, 1, 1, Feel.FLASH_ALPHA)
 	var tw := create_tween().set_ignore_time_scale(true)
 	tw.tween_property(_flash, "color:a", 0.0, Feel.FLASH_DURATION)
-	Band.pop(_title, Vector2(0.0, 0.5))   # 왼쪽 끝 기준 → 패널 밖으로 안 삐져나감
+	Town.pop(_title, Vector2(0.0, 0.5))   # 왼쪽 끝 기준 → 패널 밖으로 안 삐져나감
 
 
 ## 상태에 맞게 글자와 버튼을 고친다 (열려 있는 동안 매 프레임)
@@ -137,17 +166,18 @@ func refresh(b: Balance, s: GameState) -> void:
 		_wait.visible = not can
 
 	_style.border_color = Feel.COLOR_DANGER if danger else Feel.COLOR_PANEL_BORDER
-	_style.set_border_width_all(Feel.PANEL_BORDER_DANGER if danger else Feel.PANEL_BORDER)
+	_style.set_border_width_all(_px(Feel.PANEL_BORDER_DANGER if danger else Feel.PANEL_BORDER))
 
 	_stats.text = "누른 횟수 %d · 성공 %d / 실패 %d / 퍼짐 %d" % [
 		s.press_count(), s.success_count, s.fail_count, s.destroy_count]
 
 
-## 방금 일어난 일을 한 줄로 (6단계에서 연출을 붙일 자리)
+## 방금 일어난 일을 한 줄로. font_size는 v0 패널 기준 (배수는 여기서 곱함)
 func show_result(text: String, color: Color, font_size: int = Feel.PANEL_TEXT_SIZE) -> void:
 	_result.text = text
 	_result.add_theme_color_override("font_color", color)
-	_result.add_theme_font_size_override("font_size", font_size)
+	_result_size = font_size
+	_result.add_theme_font_size_override("font_size", _px(font_size))
 	_result.visible = true
 
 
@@ -165,6 +195,7 @@ func _set_visible(shown: Array, hidden: Array) -> void:
 
 func _label(parent: Node, font_size: int, color: Color) -> Label:
 	var l := Label.new()
+	_font_sizes[l] = font_size
 	l.add_theme_font_size_override("font_size", font_size)
 	l.add_theme_color_override("font_color", color)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -175,6 +206,7 @@ func _label(parent: Node, font_size: int, color: Color) -> Label:
 func _button(parent: Node, text: String) -> Button:
 	var btn := Button.new()
 	btn.text = text
+	_font_sizes[btn] = Feel.PANEL_BUTTON_SIZE
 	btn.add_theme_font_size_override("font_size", Feel.PANEL_BUTTON_SIZE)
 	btn.focus_mode = Control.FOCUS_NONE   # 스페이스/엔터로 실수로 눌리지 않게
 	parent.add_child(btn)

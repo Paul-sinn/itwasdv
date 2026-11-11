@@ -1,6 +1,10 @@
-## 게임 시작점. 숫자(balance)와 상태(game_state)를 들고, 띠와 차고 패널에 보여주고,
-## 배송마다 돈을 넣고, 버튼·치트 키를 scripts/core 함수로 연결한다.
+## 게임 시작점. 숫자(balance)와 상태(game_state)를 들고, 동네와 차고에 보여주고,
+## 집에 들를 때마다 돈을 넣고, 버튼·치트 키를 scripts/core 함수로 연결한다.
 ## 확률·가격 계산은 하지 않는다 → scripts/core/
+##
+## v1 화면 두 개 (창 다루기는 screen_mode.gd):
+##   작은 화면: 동네만. 보이는 곳 아무 데나 클릭 → 전체 화면. 차고는 안 열림
+##   전체 화면: 왼쪽에 같은 동네를 크게 + 오른쪽에 차고 + [작게] 버튼
 extends Control
 
 const Balance = preload("res://scripts/core/balance.gd")
@@ -10,7 +14,7 @@ const GameState = preload("res://scripts/core/game_state.gd")
 const Save = preload("res://scripts/core/save.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
-const Band = preload("res://scripts/ui/band.gd")
+const Town = preload("res://scripts/ui/town.gd")
 const GaragePanel = preload("res://scripts/ui/garage_panel.gd")
 const ReturnPopup = preload("res://scripts/ui/return_popup.gd")
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
@@ -23,10 +27,11 @@ var save_path := Save.DEFAULT_PATH
 
 var balance: Balance
 var state: GameState
-var band: Band
-var panel: GaragePanel
+var town: Town
+var panel: GaragePanel       ## 차고 (전체 화면에서만 보임)
 var popup: ReturnPopup
 var screen: ScreenMode       ## 작은 화면 / 전체 화면 오가기 (창 다루기는 전부 여기)
+var small_button: Button     ## 전체 화면 [작게]
 var rng := RandomNumberGenerator.new()
 
 ## 켰을 때 계산한 꺼둔 동안 수익 (확인용): { away_seconds, earned }. 저장이 없었으면 빈 묶음
@@ -42,8 +47,10 @@ var _measure_earned := 0.0
 var _measure_hourly := 0.0
 var _debug_label: Label
 var _last_cheat := ""
-var _panel_center_x := 0.0   ## 패널을 연 순간 트럭 가운데 x
-var _panel_shake := Vector2.ZERO   ## 실패 연출: 패널 흔들림
+var _bg: ColorRect
+var _ui_scale := 1.0               ## 전체 화면 글자·간격 배수 (창 높이 900 = 1)
+var _panel_spot := Vector2.ZERO    ## 차고 오른쪽 위 모서리 (흔들림 빼고)
+var _panel_shake := Vector2.ZERO   ## 실패 연출: 차고 흔들림
 
 ## 강화 뜸 중 (결과 기다리는 중). 이때는 강화 버튼을 또 눌러도 무시
 var enhancing := false
@@ -66,20 +73,30 @@ func _ready() -> void:
 	add_child(screen)
 	screen.mode_changed.connect(func(_mode): _layout())
 
-	band = Band.new()
-	band.show_background = not screen.is_transparent()
-	add_child(band)
-	band.truck.delivered.connect(_on_delivered)
+	# 배경: 투명 창(바탕화면 위)이 아닐 때만 칠함
+	_bg = ColorRect.new()
+	_bg.color = Feel.COLOR_BG
+	_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(_bg)
 
-	_debug_label = Band.make_label(Feel.DEBUG_FONT_SIZE, Feel.COLOR_DEBUG)
-	_debug_label.visible = OS.is_debug_build()
-	band.add_child(_debug_label)
+	town = Town.new()
+	add_child(town)
+	town.truck.delivered.connect(_on_delivered)
 
 	panel = GaragePanel.new()
-	panel.visible = false
 	add_child(panel)
 	panel.enhance_pressed.connect(_on_enhance_pressed)
 	panel.spare_pressed.connect(_on_spare_pressed)
+
+	small_button = Button.new()
+	small_button.text = "작게 (Esc)"
+	small_button.focus_mode = Control.FOCUS_NONE
+	small_button.pressed.connect(func(): screen.enter_small())
+	add_child(small_button)
+
+	_debug_label = Town.make_label(Feel.DEBUG_FONT_SIZE, Feel.COLOR_DEBUG)
+	add_child(_debug_label)
 
 	popup = ReturnPopup.new()
 	popup.visible = false
@@ -104,17 +121,64 @@ func _ready() -> void:
 	_save()   # 꺼둔 동안 수익을 넣었으면 바로 저장 (다시 켰을 때 두 번 받지 않게)
 
 
+func is_full() -> bool:
+	return screen.mode == ScreenMode.Mode.FULL
+
+
+## 창 크기·화면이 바뀌면 다시 배치 (mode_changed, size_changed)
 func _layout() -> void:
 	var view := get_viewport_rect().size
-	band.position = Vector2(0, view.y - Feel.BAND_HEIGHT)
-	band.layout(view.x)
-	_debug_label.position = Vector2(Feel.DEPOT_X + Feel.DEPOT_SIZE.x + 16, Feel.GROUND_Y + 3)
+	_bg.visible = not screen.is_transparent()
+	var full := is_full()
+	panel.visible = full
+	small_button.visible = full
+	_debug_label.visible = full and OS.is_debug_build()
+	town.show_ground = full
+
+	if not full:
+		# 작은 화면: 동네를 창에 꽉 차게 (창 = 동네 설계 크기면 1배)
+		_ui_scale = 1.0
+		var z := minf(view.x / Feel.TOWN_SIZE.x, view.y / Feel.TOWN_SIZE.y)
+		town.layout((view - Feel.TOWN_SIZE * z) / 2.0, z, z)
+		return
+
+	# 전체 화면: 위쪽 줄에 [작게], 왼쪽에 동네(크게), 오른쪽에 차고
+	_ui_scale = clampf(view.y / Feel.FULL_REF_HEIGHT, Feel.FULL_UI_SCALE_MIN, Feel.FULL_UI_SCALE_MAX)
+	var m := Feel.FULL_MARGIN * _ui_scale
+	small_button.add_theme_font_size_override("font_size", int(roundf(Feel.PANEL_BUTTON_SIZE * _ui_scale)))
+	small_button.reset_size()
+	small_button.position = Vector2(view.x - m - small_button.size.x, m * 0.5)
+	_debug_label.add_theme_font_size_override("font_size", int(roundf(Feel.DEBUG_FONT_SIZE * _ui_scale)))
+
+	panel.set_ui_scale(Feel.GARAGE_SCALE * _ui_scale)
+	var top := small_button.position.y + small_button.size.y + m * 0.5
+	# 동네 자리: 차고 폭은 정해진 폭(PANEL_WIDTH × 배수)으로 잡는다
+	# (글자 크기를 바꾼 직후에는 차고의 실제 크기가 다음 프레임에야 바뀌어서 믿을 수 없음)
+	var garage_w := Feel.PANEL_WIDTH * panel.ui_scale()
+	var debug_h := _debug_label.get_combined_minimum_size().y if _debug_label.visible else 0.0
+	var area := Rect2(m, top, view.x - garage_w - m * 3.0, view.y - top - m - debug_h)
+	var z := maxf(0.1, minf(area.size.x / Feel.TOWN_SIZE.x, area.size.y / Feel.TOWN_SIZE.y))
+	var town_pos := Vector2(area.position.x, area.get_center().y - Feel.TOWN_SIZE.y * z / 2.0)
+	town.layout(town_pos, z, minf(z, Feel.FULL_TOWN_TEXT_MAX * _ui_scale))
+	# 차고: 오른쪽, 위쪽을 동네 위쪽에 맞춤
+	_panel_spot = Vector2(view.x - m, town_pos.y)
+	_place_panel()
+	_debug_label.position = Vector2(m, view.y - m * 0.5 - debug_h)
+
+
+## 차고: 오른쪽에 붙여서 (내용에 따라 폭이 바뀌어도 오른쪽 끝은 그대로). 아래가 창 밖으로 나가면 올림
+func _place_panel() -> void:
+	panel.reset_size()
+	var view := get_viewport_rect().size
+	var m := Feel.FULL_MARGIN * _ui_scale
+	var y := minf(_panel_spot.y, view.y - m - panel.size.y)
+	panel.position = Vector2(_panel_spot.x - panel.size.x, maxf(m * 0.5, y)) + _panel_shake
 
 
 func _process(delta: float) -> void:
-	band.truck.star = state.star
-	band.truck.running = not state.broken
-	band.set_hud(state.money, state.current_hourly(balance), state.star)
+	town.truck.star = state.star
+	town.truck.running = not state.broken
+	town.set_hud(state.money, state.star)
 	if panel.visible:
 		panel.refresh(balance, state)
 		_place_panel()
@@ -126,13 +190,13 @@ func _process(delta: float) -> void:
 		_update_debug_label()
 
 
-func _on_delivered(trip_seconds: float) -> void:
-	var pay := Economy.delivery_pay(balance, state.star, trip_seconds)
+func _on_delivered(_house: int, seconds: float) -> void:
+	var pay := Economy.delivery_pay(balance, state.star, seconds)
 	state.money += pay
 	earned_total += pay
 	if _measuring:
 		_measure_earned += pay
-	band.show_payout(pay)
+	town.show_payout(_house, pay)   # 글자만 만듦 (돈은 위에서 이미 넣음)
 
 
 # ---------------- 저장 · 꺼둔 동안 수익 ----------------
@@ -171,10 +235,11 @@ func _open_return_popup() -> void:
 	popup.open(main_text, note)
 
 
+## 복귀 팝업: 창 가운데 (작은 화면이면 480x220 안에)
 func _place_popup() -> void:
 	popup.reset_size()
 	var view := get_viewport_rect().size
-	popup.position = Vector2((view.x - popup.size.x) / 2.0, band.position.y - Feel.PANEL_GAP - popup.size.y)
+	popup.position = ((view - popup.size) / 2.0).max(Vector2.ZERO)
 
 
 func _save() -> void:
@@ -188,55 +253,27 @@ func _save() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
 		_save()
-	elif what == NOTIFICATION_APPLICATION_FOCUS_OUT and panel != null:
-		# 투명 창에서는 바깥 클릭이 다른 프로그램으로 가므로, 다른 프로그램을 누른 순간 패널을 닫는다
-		_close_panel()
 
 
 ## 지금 보이는 것들의 사각형 (창 좌표). 투명 창에서는 이것만 그려지고 클릭을 받는다.
+## 전체 화면은 창 전체가 보이는 곳.
 func visible_rects() -> Array:
-	var pad := band.truck.speed() * Engine.time_scale * Feel.CLICK_REGION_INTERVAL * 2.0 + 4.0
+	var view := get_viewport_rect().size
+	if is_full():
+		return [Rect2(Vector2.ZERO, view)]
+	var pad := town.truck.speed() * Engine.time_scale * Feel.CLICK_REGION_INTERVAL * 2.0 + 4.0
 	# 흔들림 연출 중이면 흔들리는 만큼 넉넉하게 (잘려 보이지 않게)
-	var shake := position.length() + _panel_shake.length()
-	var rects := []
-	for r: Rect2 in band.visible_rects(pad):
-		rects.append(Rect2(r.position + band.position, r.size))
-	if _debug_label.visible:
-		rects.append(Rect2(band.position + _debug_label.position, _debug_label.get_combined_minimum_size()).grow(Feel.TEXT_OUTLINE_SIZE))
-	if panel.visible:
-		rects.append(panel.get_rect())
+	var shake := position.length()
+	var rects := town.visible_rects(pad)
 	if popup.visible:
 		rects.append(popup.get_rect())
 	var out := []
 	for r: Rect2 in rects:
-		out.append(Rect2(r.position + position, r.size).grow(shake))
+		out.append(Rect2(r.position + town.position + position, r.size).grow(shake))
 	return out
 
 
-# ---------------- 차고 패널 ----------------
-
-func _open_panel() -> void:
-	var r := band.truck.click_rect()
-	_panel_center_x = band.position.x + r.get_center().x
-	panel.clear_result()
-	panel.visible = true
-	panel.refresh(balance, state)
-	_place_panel()
-
-
-func _close_panel() -> void:
-	panel.visible = false
-
-
-## 띠 바로 위, 트럭 위쪽에. 창 밖으로 안 나가게.
-func _place_panel() -> void:
-	panel.reset_size()
-	var view := get_viewport_rect().size
-	var w := panel.size.x
-	var x := clampf(_panel_center_x - w / 2.0, Feel.PANEL_EDGE, maxf(Feel.PANEL_EDGE, view.x - w - Feel.PANEL_EDGE))
-	var y := band.position.y - Feel.PANEL_GAP - panel.size.y
-	panel.position = Vector2(x, y) + _panel_shake
-
+# ---------------- 강화 ----------------
 
 ## 강화 버튼: 뜸 → 굴리기(enhance.gd) → 결과 연출
 ## 굴리기는 뜸이 끝난 뒤에 한다 (뜸 동안 꺼도 돈이 안 빠짐)
@@ -248,27 +285,28 @@ func _on_enhance_pressed() -> void:
 	panel.begin_suspense()
 	var wait := Feel.SUSPENSE_DANGER if danger else Feel.SUSPENSE_SAFE
 	if danger:
-		band.truck.shake(wait, Feel.ENGINE_SHAKE_PX)
+		town.truck.shake(wait, Feel.ENGINE_SHAKE_PX)   # 트럭 자기 좌표라 동네가 커지면 같이 커짐
 	await get_tree().create_timer(wait, true, false, true).timeout   # 배속과 상관없이 진짜 시간
 
 	var star_before := state.star
 	var result := Enhance.try_enhance(state, balance, rng)
 	panel.end_suspense()
+	var fx := panel.ui_scale()   # 흔들림 세기: 차고 크기에 맞춰
 	match result:
 		Enhance.Result.SUCCESS:
 			panel.show_result("성공!  ★%d → ★%d" % [star_before, state.star], Feel.COLOR_SUCCESS)
 			panel.celebrate()
-			band.pop_star()
-			band.truck.flash(Feel.FLASH_DURATION)
-			band.truck.boost(Feel.BOOST_MULT, Feel.BOOST_DURATION)
+			town.pop_star()
+			town.truck.flash(Feel.FLASH_DURATION)
+			town.truck.boost(Feel.BOOST_MULT, Feel.BOOST_DURATION)
 		Enhance.Result.FAIL:
 			panel.show_result("실패", Feel.COLOR_FAIL)
-			_shake(func(o): _panel_shake = o, Feel.FAIL_SHAKE_PX, Feel.FAIL_SHAKE_DURATION)
+			_shake(func(o): _panel_shake = o, Feel.FAIL_SHAKE_PX * fx, Feel.FAIL_SHAKE_DURATION)
 		Enhance.Result.DESTROY:
 			panel.show_result("엔진 퍼짐!", Feel.COLOR_DANGER, Feel.DESTROY_TEXT_SIZE)
-			band.truck.running = false
-			band.truck.smoke_burst(Feel.DESTROY_SMOKE_BURST)
-			_shake(func(o): position = o, Feel.DESTROY_SHAKE_PX, Feel.DESTROY_SHAKE_DURATION)
+			town.truck.running = false
+			town.truck.smoke_burst(Feel.DESTROY_SMOKE_BURST)
+			_shake(func(o): position = o, Feel.DESTROY_SHAKE_PX * fx, Feel.DESTROY_SHAKE_DURATION)
 	panel.refresh(balance, state)
 	enhancing = false
 
@@ -312,19 +350,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	get_viewport().set_input_as_handled()
 
 
-## 패널 안 클릭은 패널(버튼)이 먼저 가져가서 여기로 오지 않는다.
-## 트럭 클릭 → 열기/닫기, 그 밖의 곳 클릭 → 닫기
-func _on_click(pos: Vector2) -> void:
-	var truck_rect := band.truck.click_rect()
-	truck_rect.position += band.position
-	if truck_rect.has_point(pos):
-		if panel.visible:
-			_close_panel()
-		else:
-			_open_panel()
-	elif panel.visible:
-		_close_panel()
-	get_viewport().set_input_as_handled()
+## 버튼·팝업 위 클릭은 그쪽이 먼저 가져가서 여기로 오지 않는다.
+## 작은 화면: 아무 데나 클릭 → 전체 화면 (투명 창에서는 보이는 곳만 클릭이 들어옴)
+func _on_click(_pos: Vector2) -> void:
+	if not is_full():
+		screen.enter_full()
+		get_viewport().set_input_as_handled()
 
 
 ## F1: 돈 + 1시간치. 고장 중에도 쓸 수 있게 "지금 강수의" 시간당 수익으로 준다.
@@ -388,7 +419,7 @@ func _show_fatal(errors: PackedStringArray) -> void:
 	for e in errors:
 		push_error(e)
 	var bg := ColorRect.new()
-	bg.color = Feel.COLOR_BAND_BG
+	bg.color = Feel.COLOR_BG
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 	var label := Label.new()
