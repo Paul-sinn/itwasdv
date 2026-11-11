@@ -98,5 +98,5 @@ python "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\tools\de
 `docs/PROTOTYPE_V0.md` 0~6단계 구현 끝. 플레이 테스트 끝 ("아니오" 1개, 결과는 `docs/IDEAS.md`).
 퍼짐 구간 "스페어값 남겨야 강화 가능" 규칙 넣음. 남은 것:
 - 5단계 2시간 켜두기 확인 (`tests/soak_desktop.ps1`)
-- 플레이 테스트 4번 "거슬림 / 생각한 UI 구조와 다름" → 사용자가 생각한 구조를 듣고 정하기
-- 다음 지시서 (사용자는 튜닝(큐브)을 넣고 싶어 함)
+- 다음: `docs/PROTOTYPE_V1.md` (초안. 작은 화면 + 전체 화면). 사용자가 [정해야 함]을 정하면 0단계부터
+- 튜닝(큐브)은 v1 플레이 테스트 통과 뒤 다음 지시서
