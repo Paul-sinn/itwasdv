@@ -115,9 +115,13 @@ python -X utf8 "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\
     작은 화면에 새로 그리는 것이 생기면 `visible_rects()`(main.gd / town.gd)에 넣어야 보인다.
   - 클릭 통과 다각형을 빈 배열로 주면 창 전체가 클릭을 받는다 (큰 화면).
   - 창의 `transparent`는 켜 둔 채 `transparent_bg`만 껐다 켜면 투명 ↔ 불투명이 깨지지 않는다.
-  - 큰 화면 전체 화면은 `Window.MODE_FULLSCREEN`. 창 크기를 모니터와 똑같이 직접 맞추면 Godot이
-    독점 전체 화면으로 바꿔서 다시 작아지지 않는다.
+  - 큰 화면 전체 화면은 `Window.MODE_FULLSCREEN`을 안 쓴다: 그건 창을 2픽셀 크게 만들고 그림은 아래쪽부터
+    모니터 크기만큼만 그려서 맨 위 2줄로 바탕화면이 보인다. 창 크기를 모니터와 똑같이 맞추면 Godot이
+    독점 전체 화면으로 바꿔서 다시 작아지지 않는다 → 테두리 없는 보통 창을 모니터보다 위아래 1픽셀씩 크게
+    (`DesktopWindow.full_window_rect()`). `check_switch.ps1`이 모니터 맨 위 2줄까지 확인함.
   - 전체 화면 → 창 모드로 바로 가면 안쪽이 4픽셀씩 줄어든다 → 작은 화면 처리를 거쳐 간다 (`desktop_window.gd`).
+  - PowerShell 5.1: `Start-Process -PassThru`로 띄우고 `HasExited`로만 기다리면 `ExitCode`가 빈다
+    → 띄우자마자 `$null = $p.Handle`.
   - 새 알림 영역 아이콘은 Windows 11이 ^ 숨김 칸에 넣는다 (앱에서 못 바꿈).
 - Godot 좌표와 Windows 좌표는 원점이 다르다 (주 모니터 왼쪽 위가 Windows 0,0)
 - `_console.exe`는 진짜 게임을 자식 프로세스로 띄운다 → 그 PID로 GDI를 재면 0. 게임이 찍은 PID로 잰다
@@ -127,7 +131,8 @@ python -X utf8 "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\
 `docs/PROTOTYPE_V0.md` 끝 (플레이 테스트 "아니오" 1개, 결과는 `docs/IDEAS.md`).
 `docs/PROTOTYPE_V1.md` (작은 화면 + 큰 화면): 창 담당 / 동네 담당 두 에이전트가 병렬로 만들고 `prototype-v1`에 합침.
 화면 없는 확인은 전부 통과. 남은 것:
-- 진짜 창 확인 (`check_switch.ps1`, `check_desktop.ps1`): 화면이 깜빡여서 사용자가 자리 비울 때 ("돌려"라고 하면)
+- 진짜 창 확인: 2026-11-10 사용자 자리 비운 동안 돌림. `check_switch.ps1` 전부 통과 (Windows 20/20, Godot 10750/10750,
+  220번 오가도 메모리 +2.2MB·GDI 0), `check_desktop.ps1` 44/44. 그때 전체 화면 맨 위 2줄 빈틈을 찾아 고침
 - 오래 켜두기: 따로 안 함. 사용자가 2026-11-10에 2시간 넘게 켜 두고 화면 어두워짐·작업표시줄 깨짐 없음을 확인
   (v0 기록 1시간 44분: GDI·USER·핸들 그대로, 작업 메모리만 98~472MB 오르내림. 원인 모름 → 평소 쓸 때 지켜보기)
 - 사용자가 손으로: 알림 영역 아이콘 왼쪽 클릭(다른 프로그램을 쓰던 중에도 큰 화면이 앞으로 오나), 오른쪽 클릭 메뉴

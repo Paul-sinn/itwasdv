@@ -31,6 +31,7 @@ for ($i = 0; $i -lt 100 -and -not $p; $i++) {
   if ((Test-Path $log) -and ((Get-Content $log -Encoding UTF8 -ErrorAction SilentlyContinue) -join "`n") -match "PID (\d+)") { $p = Get-Process -Id ([int]$Matches[1]) -ErrorAction SilentlyContinue }
 }
 if (-not $p) { "게임을 못 띄움. 로그: $log"; exit 1 }
+$null = $p.Handle   # 핸들을 먼저 읽어 둬야 꺼졌을 때 ExitCode가 보임 (PowerShell 5.1)
 Start-Sleep -Seconds 5
 $cpu0 = $p.TotalProcessorTime.TotalSeconds; $t0 = Get-Date
 # 메모리 세 가지: 작업 메모리(Windows가 보는 것, 그래픽 드라이버 몫이 섞여 크게 오르내림) /

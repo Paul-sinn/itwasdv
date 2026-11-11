@@ -95,6 +95,15 @@ func _run() -> void:
 	_set_style(ScreenMode.FullStyle.FULLSCREEN, "몸풀기")
 	for i in WARMUP_ROUNDS:
 		await _round(i + 1, false)
+	# 창 모드 크기 바꾸기·최대화·최소화·아이콘 메뉴도 몸풀기에서 한 번 해 둔다.
+	# 처음 보는 창 크기에서 글자를 그리면 그 크기의 글꼴 캐시가 한 번 생겨서(진짜 창 1회차 실측: Godot 메모리 +12MB,
+	# 오브젝트 +96) 이걸 빼고 재면 새는 것처럼 보임. 뒤에서 한 번 더 하고 그때는 안 늘어나야 한다.
+	await _check_window_memory()
+	await _check_tray()
+	if screen.full_style != ScreenMode.FullStyle.FULLSCREEN:
+		_set_style(ScreenMode.FullStyle.FULLSCREEN, "몸풀기 끝")
+	for i in WARMUP_ROUNDS:
+		await _round(i + 1, false)
 	await _sample("warm")
 
 	print("--- 큰 화면 = 전체 화면 방식 %d번" % ROUNDS)
@@ -114,9 +123,12 @@ func _run() -> void:
 	print("--- 창 모드 크기 기억·최소 크기·최대화·최소화, 알림 영역 아이콘")
 	await _check_window_memory()
 	await _check_tray()
+	await _sample("extras_done")
 
 	print("--- 마무리 (전체 화면 %d번)" % WARMUP_ROUNDS)
-	_set_style(ScreenMode.FullStyle.FULLSCREEN, "마무리")
+	# 바로 앞 확인이 이미 전체 화면 방식으로 끝났을 수 있음 (그때 또 고르면 신호가 안 오는 게 맞음)
+	if screen.full_style != ScreenMode.FullStyle.FULLSCREEN:
+		_set_style(ScreenMode.FullStyle.FULLSCREEN, "마무리")
 	for i in WARMUP_ROUNDS:
 		await _round(i + 1, false)
 	await _sample("end")
@@ -310,14 +322,16 @@ func _check_full(tag: String) -> void:
 	match kind:
 		Kind.DESKTOP:
 			var windowed := screen.full_style == ScreenMode.FullStyle.WINDOWED
-			var r := big_expected if windowed else DesktopWindow.full_rect()
+			var r := big_expected if windowed else DesktopWindow.full_window_rect()
 			if windowed:
 				_check(win.mode == Window.MODE_WINDOWED, tag + ": 창 모드인데 창 모드가 MODE_WINDOWED가 아님 (%d)" % win.mode)
 				_check(not win.borderless, tag + ": 창 모드인데 테두리가 없음")
 				_check(not win.unresizable, tag + ": 창 모드인데 크기 조절이 막힘")
 				_check(win.min_size == Feel.BIG_WINDOW_MIN_SIZE, tag + ": 최소 크기 기대 %s, 실제 %s" % [Feel.BIG_WINDOW_MIN_SIZE, win.min_size])
 			else:
-				_check(win.mode == Window.MODE_FULLSCREEN, tag + ": 창 모드가 MODE_FULLSCREEN이 아님 (%d)" % win.mode)
+				# 전체 화면 = 테두리 없는 보통 창, 모니터보다 위아래 1픽셀씩 큼 (desktop_window.gd 맨 위 설명)
+				_check(win.mode == Window.MODE_WINDOWED, tag + ": 전체 화면인데 창 모드가 MODE_WINDOWED가 아님 (%d)" % win.mode)
+				_check(win.borderless, tag + ": 전체 화면인데 테두리가 있음")
 			_check(win.size == r.size and DisplayServer.window_get_size() == r.size,
 					tag + ": 창 크기 기대 %s, 실제 %s / %s" % [r.size, win.size, DisplayServer.window_get_size()])
 			_check(win.position == r.position and DisplayServer.window_get_position() == r.position,
@@ -385,7 +399,7 @@ func _win_full(tag: String) -> void:
 	if screen.full_style == ScreenMode.FullStyle.WINDOWED:
 		await _win(tag, "window", big_expected)
 	else:
-		await _win(tag, "full", DesktopWindow.full_rect())
+		await _win(tag, "full", DesktopWindow.full_window_rect())
 
 
 ## check_switch.ps1이 Windows 쪽 진짜 창 크기를 재는 순간 (Windows 좌표: 주 모니터 왼쪽 위가 0,0)

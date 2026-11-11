@@ -4,15 +4,19 @@
 ##   테두리 없음 / 항상 위 / 배경 투명 / 보이는 것만 클릭 받음 (click_region.gd 설명 참고).
 ##   작업표시줄 위치·해상도가 바뀌면 다시 붙인다.
 ## 큰 화면 (어떻게 띄울지는 사용자가 고름. screen_mode.gd의 FullStyle):
-##   전체 화면: 주 모니터를 꽉 채움 (Godot의 MODE_FULLSCREEN). 테두리 없음
+##   전체 화면: 주 모니터를 꽉 채움. 테두리 없는 보통 창을 모니터보다 위아래 1픽셀씩 크게 (full_window_rect)
 ##   창 모드: 테두리 있는 보통 창. 크기 조절 가능. 처음엔 주 모니터 가운데 Feel.BIG_WINDOW_SIZE,
 ##            최소 Feel.BIG_WINDOW_MIN_SIZE. 게임을 켜 둔 동안은 마지막 크기·위치(최대화 여부)를 기억
 ##   둘 다: 배경 칠함 / 클릭 통과 없음 / 항상 위 아님 / 앞으로 가져오기
 ##
 ## Godot 4.6.3 + Windows에서 직접 확인한 것 (v1 0단계):
 ##   - 창 크기를 모니터 크기와 똑같이 직접 맞추면 Godot이 "독점 전체 화면"(MODE_EXCLUSIVE_FULLSCREEN)으로
-##     바꿔버리고, 그 뒤로는 크기를 바꿔도 작아지지 않는다 → 직접 맞추지 말고 MODE_FULLSCREEN을 쓴다.
-##     (MODE_FULLSCREEN은 창을 모니터보다 2픽셀 크게 만들고 넘친 곳을 잘라서 이 문제를 피한다)
+##     바꿔버리고, 그 뒤로는 크기를 바꿔도 작아지지 않는다.
+##   - Godot의 MODE_FULLSCREEN은 창을 모니터보다 2픽셀 크게 만드는데 그림은 모니터 크기만큼 아래쪽부터 그려서
+##     화면 맨 위 2줄이 비고, 그 2줄로 뒤의 바탕화면이 보인다 (창 투명을 꺼도 같음).
+##   → 테두리 없는 보통 창을 모니터보다 위아래 1픽셀씩 크게 직접 놓는다. Godot이 창 크기 그대로 다 그려서
+##     빈 줄이 없고, 크기가 모니터와 달라서 독점 전체 화면으로 안 바뀌고, 작업표시줄도 덮인다 (3440x1440에서 실측).
+##     (주 모니터 바로 위에 다른 모니터가 있으면 그 모니터 맨 아래 1줄에 이 창이 보일 수 있음)
 ##   - 창의 투명 설정(transparent)은 켜 둔 채로 두고, 배경 투명(transparent_bg)만 껐다 켜도 깨지지 않는다.
 ##   - 클릭 통과 다각형을 빈 배열로 주면 창 전체가 클릭을 받는다.
 ##
@@ -63,6 +67,12 @@ static func full_rect() -> Rect2i:
 	return Rect2i(DisplayServer.screen_get_position(s), DisplayServer.screen_get_size(s))
 
 
+## 전체 화면 창의 실제 자리: 주 모니터보다 위아래 1픽셀씩 큼 (맨 위 설명 참고)
+static func full_window_rect() -> Rect2i:
+	var r := full_rect()
+	return Rect2i(r.position - Vector2i(0, 1), r.size + Vector2i(0, 2))
+
+
 func _ready() -> void:
 	apply_small()
 
@@ -86,9 +96,9 @@ func apply_small() -> void:
 ## 배경 칠함, 창 전체가 클릭 받음, 앞으로 가져오기. 이미 큰 화면이어도 불러도 된다 (방식 바꾸기).
 func apply_full(windowed: bool) -> void:
 	var win := get_window()
-	if windowed and win.mode == Window.MODE_FULLSCREEN:
+	if windowed and _full and not _big_window:
 		# 전체 화면에서 바로 테두리 있는 창으로 바꾸면 안쪽 높이가 4픽셀씩 모자라게 되고,
-		# 그 뒤 작은 화면도 480x216이 된다 (4.6.3 Windows에서 확인).
+		# 그 뒤 작은 화면도 480x216이 된다 (4.6.3 Windows, MODE_FULLSCREEN 쓰던 때 확인).
 		# 작은 화면 상태를 한 번 거쳐 가면 괜찮다 (같은 프레임 안이라 작은 화면이 보이지는 않음).
 		apply_small()
 	_remember_big_window()
@@ -112,9 +122,12 @@ func apply_full(windowed: bool) -> void:
 			win.mode = Window.MODE_MAXIMIZED
 	else:
 		win.min_size = Vector2i.ZERO
+		if win.mode != Window.MODE_WINDOWED:
+			win.mode = Window.MODE_WINDOWED
 		win.borderless = true
-		win.current_screen = DisplayServer.get_primary_screen()
-		win.mode = Window.MODE_FULLSCREEN
+		var r := full_window_rect()
+		win.size = r.size
+		win.position = r.position
 	win.grab_focus()
 
 

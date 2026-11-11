@@ -31,7 +31,8 @@ public class SwitchW32 {
 }
 "@
 [SwitchW32]::SetProcessDpiAwarenessContext([IntPtr]::new(-4)) | Out-Null
-if ($shots) { Add-Type -AssemblyName System.Drawing; New-Item -ItemType Directory -Force $shots | Out-Null }
+Add-Type -AssemblyName System.Drawing   # 전체 화면 맨 위 줄 확인에도 씀
+if ($shots) { New-Item -ItemType Directory -Force $shots | Out-Null }
 function Shot($name, $x, $y, $w, $h, $scale) {
   $bmp = New-Object System.Drawing.Bitmap $w, $h
   $g = [System.Drawing.Graphics]::FromImage($bmp); $g.CopyFromScreen($x, $y, 0, 0, (New-Object System.Drawing.Size $w, $h)); $g.Dispose()
@@ -43,6 +44,8 @@ $log = Join-Path $env:TEMP "check_switch_godot.log"
 Remove-Item $log, "$log.err" -ErrorAction SilentlyContinue
 # 콘솔용 실행 파일은 진짜 게임을 자식으로 띄운다 → 게임이 찍은 "PID n"으로 진짜 게임을 잰다
 $p = Start-Process -FilePath $G -ArgumentList @("--path", "`"$proj`"", "-s", "tests/check_switch.gd") -RedirectStandardOutput $log -RedirectStandardError "$log.err" -PassThru -WindowStyle Hidden
+# 핸들을 먼저 한 번 읽어 둔다: 안 그러면 HasExited로만 기다렸을 때 ExitCode가 비어서(PowerShell 5.1) 다 통과해도 실패로 나옴
+$null = $p.Handle
 $gp = $null; $done = 0; $samples = @(); $winFails = 0; $winTotal = 0; $summary = ""; $godotFails = @()
 $deadline = (Get-Date).AddSeconds(240)
 while ((Get-Date) -lt $deadline) {
@@ -66,10 +69,15 @@ while ((Get-Date) -lt $deadline) {
       switch ($what) {
         "small" { $ok = $r.L -eq $x -and $r.T -eq $y -and ($r.R - $r.L) -eq $w -and ($r.B - $r.T) -eq $hh -and $top -and -not $caption
                   $seen = "창 ({0},{1}) {2}x{3}" -f $r.L, $r.T, ($r.R - $r.L), ($r.B - $r.T) }
-        # Godot 전체 화면은 창을 모니터보다 2픽셀 크게 만들고 넘친 곳을 잘라 그린다 (보이는 곳은 모니터와 같음)
-        "full"  { $dw = ($r.R - $r.L) - $w; $dh = ($r.B - $r.T) - $hh
-                  $ok = $r.L -eq $x -and $r.T -eq $y -and $dw -ge 0 -and $dw -le 2 -and $dh -ge 0 -and $dh -le 2 -and -not $top -and -not $caption
-                  $seen = "창 ({0},{1}) {2}x{3}" -f $r.L, $r.T, ($r.R - $r.L), ($r.B - $r.T) }
+        # 전체 화면 = 테두리 없는 보통 창, 모니터보다 위아래 1픽셀씩 큼 (desktop_window.gd 맨 위 설명).
+        # 모니터 맨 위 줄이 정말 게임으로 덮였나도 본다 (전에는 맨 위 2줄로 바탕화면이 보였음)
+        "full"  { $ok = $r.L -eq $x -and $r.T -eq $y -and ($r.R - $r.L) -eq $w -and ($r.B - $r.T) -eq $hh -and -not $top -and -not $caption
+                  $line = New-Object System.Drawing.Bitmap $w, 2; $gl = [System.Drawing.Graphics]::FromImage($line)
+                  $gl.CopyFromScreen($x, $y + 1, 0, 0, (New-Object System.Drawing.Size $w, 2)); $gl.Dispose()
+                  $notBg = 0; for ($ly = 0; $ly -lt 2; $ly++) { for ($lx = 0; $lx -lt $w; $lx += 4) { $c = $line.GetPixel($lx, $ly); if (-not ($c.R -eq 33 -and $c.G -eq 38 -and $c.B -eq 48)) { $notBg++ } } }
+                  $line.Dispose()
+                  if ($notBg -gt 0) { $ok = $false }
+                  $seen = "창 ({0},{1}) {2}x{3}, 모니터 맨 위 2줄 중 배경색 아닌 점 {4}개" -f $r.L, $r.T, ($r.R - $r.L), ($r.B - $r.T), $notBg }
         "window" { $c = New-Object SwitchW32+RECT; [SwitchW32]::GetClientRect($h, [ref]$c) | Out-Null
                    $pt = New-Object SwitchW32+POINT; [SwitchW32]::ClientToScreen($h, [ref]$pt) | Out-Null
                    $ok = $pt.X -eq $x -and $pt.Y -eq $y -and $c.R -eq $w -and $c.B -eq $hh -and -not $top -and $caption -and $sizable
@@ -105,4 +113,5 @@ if ($warm -and $end) {
 "Windows 쪽 창 확인 {0}개 중 {1}개 통과" -f $winTotal, ($winTotal - $winFails)
 if ($winTotal -eq 0) { "[실패] Windows 쪽 창 확인을 못 함"; $bad++ }
 if ($summary) { "Godot 안 확인: $summary" } else { "[실패] Godot 쪽 결과가 없음. 로그: $log"; $bad++ }
+if ($p.ExitCode -ne 0) { "[실패] 게임 종료 코드 [$($p.ExitCode)] (0이어야 함)" }
 if ($bad -eq 0 -and $winFails -eq 0 -and $godotFails.Count -eq 0 -and $p.ExitCode -eq 0) { "전부 통과"; exit 0 } else { "실패 있음"; exit 1 }
