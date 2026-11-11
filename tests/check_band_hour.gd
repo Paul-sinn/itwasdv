@@ -6,6 +6,8 @@
 extends SceneTree
 
 const MAIN_SCENE := "res://scenes/main.tscn"
+const Save = preload("res://scripts/core/save.gd")
+const TEST_SAVE := "user://test_check_save.json"
 const GAME_SECONDS := 3600.0
 const TOLERANCE := 0.01
 const STARS_TO_CHECK := [0, 10, 20, 30]   # 강수가 오르면 트럭이 빨라져도 수익은 같아야 함
@@ -31,6 +33,8 @@ func _start(star: int) -> void:
 			ProjectSettings.get_setting("display/window/size/viewport_width"),
 			ProjectSettings.get_setting("display/window/size/viewport_height"))
 	_main = load(MAIN_SCENE).instantiate()
+	Save.delete_file(TEST_SAVE)
+	_main.save_path = TEST_SAVE   # 진짜 저장 파일은 건드리지 않음
 	root.add_child(_main)
 	if _main.state == null:
 		print("[실패] main을 띄웠는데 상태가 없음 (balance.json 문제?)")
@@ -66,5 +70,6 @@ func _on_frame() -> void:
 	if _star_index < STARS_TO_CHECK.size():
 		_start.call_deferred(STARS_TO_CHECK[_star_index])
 	else:
+		Save.delete_file(TEST_SAVE)
 		print("전부 통과" if _all_ok else "실패 있음")
 		quit(0 if _all_ok else 1)

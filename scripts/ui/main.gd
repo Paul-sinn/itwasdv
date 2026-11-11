@@ -7,16 +7,28 @@ const Balance = preload("res://scripts/core/balance.gd")
 const Economy = preload("res://scripts/core/economy.gd")
 const Enhance = preload("res://scripts/core/enhance.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
+const Save = preload("res://scripts/core/save.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const Band = preload("res://scripts/ui/band.gd")
 const GaragePanel = preload("res://scripts/ui/garage_panel.gd")
+const ReturnPopup = preload("res://scripts/ui/return_popup.gd")
+
+const AUTOSAVE_SECONDS := 30.0        ## 30초마다 저장 (배속과 상관없이 진짜 30초)
+const RETURN_POPUP_MIN_AWAY := 60.0   ## 이보다 짧게 껐다 켜면 복귀 팝업 안 띄움 (돈은 넣음)
+
+## 저장 파일 위치. 확인 스크립트는 진짜 저장을 건드리지 않게 add_child 전에 바꾼다.
+var save_path := Save.DEFAULT_PATH
 
 var balance: Balance
 var state: GameState
 var band: Band
 var panel: GaragePanel
+var popup: ReturnPopup
 var rng := RandomNumberGenerator.new()
+
+## 켰을 때 계산한 꺼둔 동안 수익 (확인용): { away_seconds, earned }. 저장이 없었으면 빈 묶음
+var offline_report := {}
 
 ## 켠 뒤로 배송으로 번 돈 합계 (확인용)
 var earned_total := 0.0
@@ -41,6 +53,8 @@ func _ready() -> void:
 		return
 
 	state = GameState.new()
+	var load_notice := _load_save()
+
 	band = Band.new()
 	add_child(band)
 	band.truck.delivered.connect(_on_delivered)
@@ -58,8 +72,26 @@ func _ready() -> void:
 	panel.enhance_pressed.connect(_on_enhance_pressed)
 	panel.spare_pressed.connect(_on_spare_pressed)
 
+	popup = ReturnPopup.new()
+	popup.visible = false
+	add_child(popup)
+
+	var autosave := Timer.new()
+	autosave.name = "Autosave"
+	autosave.wait_time = AUTOSAVE_SECONDS
+	autosave.ignore_time_scale = true
+	autosave.autostart = true
+	autosave.timeout.connect(_save)
+	add_child(autosave)
+
 	get_viewport().size_changed.connect(_layout)
 	_layout()
+
+	if load_notice != "":
+		popup.open(load_notice, "")
+	elif not offline_report.is_empty():
+		_open_return_popup()
+	_save()   # 꺼둔 동안 수익을 넣었으면 바로 저장 (다시 켰을 때 두 번 받지 않게)
 
 
 func _layout() -> void:
@@ -76,6 +108,8 @@ func _process(delta: float) -> void:
 	if panel.visible:
 		panel.refresh(balance, state)
 		_place_panel()
+	if popup.visible:
+		_place_popup()
 	if _measuring:
 		_measure_seconds += delta
 	if _debug_label.visible:
@@ -89,6 +123,61 @@ func _on_delivered(trip_seconds: float) -> void:
 	if _measuring:
 		_measure_earned += pay
 	band.show_payout(pay)
+
+
+# ---------------- 저장 · 꺼둔 동안 수익 ----------------
+
+## 저장 파일을 읽어 상태를 되살리고 꺼둔 동안 수익을 넣는다.
+## 저장이 깨졌으면 새로 시작하고, 알려줄 글자를 돌려준다.
+func _load_save() -> String:
+	var r := Save.read_file(save_path, balance)
+	match r["status"]:
+		Save.Status.OK:
+			state = r["state"]
+			var away := Time.get_unix_time_from_system() - float(r["saved_at"])
+			var earned := Economy.offline_earnings(balance, state.star, state.broken, away)
+			state.money += earned
+			offline_report = { "away_seconds": away, "earned": earned }
+		Save.Status.BROKEN:
+			push_warning("저장 파일이 깨져서 새로 시작: " + r["error"])
+			return "저장 파일이 깨져서 새로 시작합니다.\n(깨진 파일은 %s 로 남겨 둠)" % (save_path.get_file() + ".broken")
+	return ""
+
+
+func _open_return_popup() -> void:
+	var away: float = offline_report["away_seconds"]
+	var earned: float = offline_report["earned"]
+	if away >= 0.0 and away < RETURN_POPUP_MIN_AWAY:
+		return
+	var note := "꺼둔 동안은 %s만, 최대 %s시간치까지 쌓입니다." % [
+		Fmt.percent(balance.offline_rate), Fmt.num(balance.offline_cap_hours)]
+	if away < 0.0:
+		note = "컴퓨터 시계가 저장했을 때보다 %s 이전이라 0원입니다." % Fmt.away(away)
+	elif state.broken:
+		note = "엔진 고장 중이라 꺼둔 동안 번 돈이 없습니다."
+	var main_text := "자리 비운 %s 동안 +%s원" % [Fmt.away(maxf(away, 0.0)), Fmt.money(earned)]
+	if away < 0.0:
+		main_text = "자리 비운 동안 +0원"
+	popup.open(main_text, note)
+
+
+func _place_popup() -> void:
+	popup.reset_size()
+	var view := get_viewport_rect().size
+	popup.position = Vector2((view.x - popup.size.x) / 2.0, band.position.y - Feel.PANEL_GAP - popup.size.y)
+
+
+func _save() -> void:
+	if state == null:
+		return
+	var err := Save.write_file(save_path, state, int(Time.get_unix_time_from_system()))
+	if err != OK:
+		push_warning("저장 실패 (오류 %d): %s" % [err, save_path])
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		_save()
 
 
 # ---------------- 차고 패널 ----------------
@@ -195,12 +284,15 @@ func _toggle_fast_time() -> void:
 		_measuring = false   # 측정 결과는 화면에 그대로 남겨 둔다
 
 
-## F3: 처음부터 (돈 0, 0강, 통계 0)
+## F3: 저장 초기화 → 처음부터 (돈 0, 0강, 통계 0)
 func _cheat_reset() -> void:
+	Save.delete_file(save_path)
 	state = GameState.new()
 	earned_total = 0.0
 	panel.clear_result()
-	_last_cheat = "F3 처음부터"
+	popup.visible = false
+	_save()
+	_last_cheat = "F3 저장 초기화"
 
 
 ## F4: 강수 +1 (최대 강수까지)

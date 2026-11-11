@@ -74,6 +74,11 @@ const COLOR_DANGER := Color(1.0, 0.30, 0.25)
 const COLOR_SUCCESS := Color(0.45, 0.95, 0.55)
 const COLOR_FAIL := Color(0.62, 0.62, 0.62)
 
+# --- 복귀 팝업 ---
+const POPUP_WIDTH := 380.0
+const POPUP_MAIN_SIZE := 18      ## "자리 비운 N시간 동안 +금액"
+const POPUP_NOTE_SIZE := 12      ## 아래 설명 한 줄
+
 # --- 치트 (디버그 실행일 때만) ---
 const CHEAT_TIME_SCALE := 60.0   ## F2: 시간 몇 배속
 

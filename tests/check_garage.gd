@@ -6,6 +6,8 @@
 extends SceneTree
 
 const MAIN_SCENE := "res://scenes/main.tscn"
+const Save = preload("res://scripts/core/save.gd")
+const TEST_SAVE := "user://test_check_save.json"
 
 var m: Node
 var fails := PackedStringArray()
@@ -22,6 +24,8 @@ func _run() -> void:
 			ProjectSettings.get_setting("display/window/size/viewport_width"),
 			ProjectSettings.get_setting("display/window/size/viewport_height"))
 	m = load(MAIN_SCENE).instantiate()
+	Save.delete_file(TEST_SAVE)
+	m.save_path = TEST_SAVE   # 진짜 저장 파일은 건드리지 않음
 	root.add_child(m)
 	await _frames(3)
 	var b = m.balance
@@ -102,6 +106,7 @@ func _run() -> void:
 	await _frames(1)
 	_check(m.state.star == 0 and m.state.money == 0.0 and m.state.press_count() == 0, "F3 뒤 처음 상태가 아님")
 
+	Save.delete_file(TEST_SAVE)
 	print("확인 %d개 중 %d개 통과" % [checks, checks - fails.size()])
 	for f in fails:
 		print("  [실패] " + f)

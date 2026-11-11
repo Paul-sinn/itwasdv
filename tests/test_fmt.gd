@@ -12,6 +12,12 @@ func test_money() -> void:
 	check_eq(Fmt.money(-1234.0), "-1,234", "-1234")
 
 
+func test_num() -> void:
+	check_eq(Fmt.num(8.0), "8", "8.0")
+	check_eq(Fmt.num(94.5), "94.5", "94.5")
+	check_eq(Fmt.num(0.5), "0.5", "0.5")
+
+
 func test_percent() -> void:
 	check_eq(Fmt.percent(0.9975), "99.75%", "0.9975")
 	check_eq(Fmt.percent(0.945), "94.5%", "0.945")
@@ -29,6 +35,14 @@ func test_wait_text() -> void:
 	check_eq(Fmt.wait_text(3600.0), "약 1시간 0분 뒤 가능", "1시간")
 	check_eq(Fmt.wait_text(5400.0), "약 1시간 30분 뒤 가능", "1시간 30분")
 	check_eq(Fmt.wait_text(INF), "버는 돈이 없어서 모을 수 없음", "INF")
+
+
+func test_away() -> void:
+	check_eq(Fmt.away(30.0), "1분 미만", "30초")
+	check_eq(Fmt.away(900.0), "15분", "900초")
+	check_eq(Fmt.away(10800.0), "3시간", "3시간")
+	check_eq(Fmt.away(11700.0), "3시간 15분", "3시간 15분")
+	check_eq(Fmt.away(-18000.0), "5시간", "음수(시계 거꾸로)도 길이만")
 
 
 func test_duration() -> void:

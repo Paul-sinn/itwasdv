@@ -57,6 +57,9 @@ PowerShell (사용자 터미널): 어느 폴더에서든 그대로 복사해서 
 # 차고 패널 확인 (3단계 완료 기준. 진짜 키·클릭으로 0~30강, 퍼짐 → 수리까지)
 & "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -s tests/check_garage.gd
 
+# 저장·꺼둔 동안 수익 확인 (4단계 완료 기준. 진짜 저장 파일은 안 건드림)
+& "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -s tests/check_save.gd
+
 # 편집기 열기
 & "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64.exe" --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" --editor
 
@@ -68,9 +71,11 @@ python "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\tools\de
 ```
 
 그 밖에:
+- 저장 파일: `C:\Users\PAUL SHIN\AppData\Roaming\Godot\app_userdata\택배 방치형\save.json`
+  (`saved_at_utc`는 세계 표준시. 손으로 3시간 전으로 바꾸면 꺼둔 동안 수익 확인 가능)
 - 설치된 버전 문서 뽑기 (규칙 7): `<GODOT_CONSOLE> --headless --doctool <빈 폴더>`
   → `<빈 폴더>/doc/classes/클래스이름.xml` 에서 함수·설정 이름 확인
 - Git Bash에서는 `&` 없이 경로를 따옴표로 감싸서 실행
 
 ## 현재 작업
-`docs/PROTOTYPE_V0.md`를 순서대로. 3단계(차고 패널과 강화) 끝남 → 다음은 4단계(저장과 꺼둔 동안 수익).
+`docs/PROTOTYPE_V0.md`를 순서대로. 4단계(저장과 꺼둔 동안 수익) 끝남 → 다음은 5단계(투명 창).

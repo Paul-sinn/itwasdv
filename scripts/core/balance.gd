@@ -55,7 +55,7 @@ static func from_text(text: String) -> RefCounted:
 	var json := JSON.new()
 	if json.parse(text) != OK:
 		var b = new()
-		b.errors.append("JSON 형식이 깨짐 (%d번째 줄: %s)" % [json.get_error_line(), json.get_error_message()])
+		b.errors.append("JSON 형식이 깨짐 (%d번째 줄: %s)" % [json.get_error_line() + 1, json.get_error_message()])
 		return b
 	if typeof(json.data) != TYPE_DICTIONARY:
 		var b = new()
