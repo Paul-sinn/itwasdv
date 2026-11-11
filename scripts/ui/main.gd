@@ -13,7 +13,7 @@ const Fmt = preload("res://scripts/ui/fmt.gd")
 const Band = preload("res://scripts/ui/band.gd")
 const GaragePanel = preload("res://scripts/ui/garage_panel.gd")
 const ReturnPopup = preload("res://scripts/ui/return_popup.gd")
-const DesktopWindow = preload("res://scripts/ui/desktop_window.gd")
+const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
 
 const AUTOSAVE_SECONDS := 30.0        ## 30초마다 저장 (배속과 상관없이 진짜 30초)
 const RETURN_POPUP_MIN_AWAY := 60.0   ## 이보다 짧게 껐다 켜면 복귀 팝업 안 띄움 (돈은 넣음)
@@ -26,7 +26,7 @@ var state: GameState
 var band: Band
 var panel: GaragePanel
 var popup: ReturnPopup
-var desktop: DesktopWindow   ## 투명 창 모드일 때만 있음
+var screen: ScreenMode       ## 작은 화면 / 전체 화면 오가기 (창 다루기는 전부 여기)
 var rng := RandomNumberGenerator.new()
 
 ## 켰을 때 계산한 꺼둔 동안 수익 (확인용): { away_seconds, earned }. 저장이 없었으면 빈 묶음
@@ -61,15 +61,13 @@ func _ready() -> void:
 	state = GameState.new()
 	var load_notice := _load_save()
 
-	# 창: 작업표시줄 위 투명 창 / 평범한 창(--windowed) / 화면 없음(테스트)
-	if DesktopWindow.wanted():
-		desktop = DesktopWindow.new()
-		add_child(desktop)
-	elif DisplayServer.get_name() != "headless":
-		DesktopWindow.make_plain_window(get_window())
+	# 창: 투명 창 / 평범한 창(--windowed) / 화면 없음(테스트). 작은 화면 ↔ 전체 화면
+	screen = ScreenMode.new()
+	add_child(screen)
+	screen.mode_changed.connect(func(_mode): _layout())
 
 	band = Band.new()
-	band.show_background = desktop == null
+	band.show_background = not screen.is_transparent()
 	add_child(band)
 	band.truck.delivered.connect(_on_delivered)
 
@@ -97,8 +95,7 @@ func _ready() -> void:
 
 	get_viewport().size_changed.connect(_layout)
 	_layout()
-	if desktop != null:
-		desktop.rects_provider = visible_rects
+	screen.rects_provider = visible_rects
 
 	if load_notice != "":
 		popup.open(load_notice, "")

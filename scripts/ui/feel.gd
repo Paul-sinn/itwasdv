@@ -31,6 +31,10 @@ const WINDOW_RECHECK_SECONDS := 2.0        ## 작업표시줄 위치·화면 크
 const TEXT_OUTLINE_SIZE := 4               ## 바탕화면 위에서도 글자가 읽히게 두르는 테두리
 const COLOR_TEXT_OUTLINE := Color(0.05, 0.06, 0.08, 0.9)
 
+# --- v1: 화면 두 개 (창 담당. 이 칸만 고친다) ---
+const SMALL_SIZE := Vector2i(480, 220)        ## 작은 화면 크기 (사용자 결정 2026-11-10)
+const WINDOWED_FULL_SIZE := Vector2i(1600, 900)  ## --windowed 개발용 창에서 "전체 화면" 대신 쓰는 크기
+
 # --- 글자 크기 ---
 const HUD_FONT_SIZE := 16
 const LABEL_FONT_SIZE := 11
@@ -109,6 +113,10 @@ const POPUP_NOTE_SIZE := 12      ## 아래 설명 한 줄
 
 # --- 치트 (디버그 실행일 때만) ---
 const CHEAT_TIME_SCALE := 60.0   ## F2: 시간 몇 배속
+
+# --- v1: 작은 화면 동네 (동네 담당. 이 칸과 위쪽 기존 칸을 고친다) ---
+const TOWN_HOUSES := 5            ## 꼬불길 가의 집 수 (사용자 결정 2026-11-10)
+const TOWN_STOP_SECONDS := 1.5    ## 집 앞에서 멈추는 초 (사용자 결정 2026-11-10)
 
 
 ## 지금 강수에서 편도 걸리는 초
