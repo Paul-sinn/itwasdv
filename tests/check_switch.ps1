@@ -14,6 +14,8 @@ param([string]$shots = "")
 $proj = Split-Path -Parent $PSScriptRoot
 $G = "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe"
 # 늘어난 것을 "늘었다"고 볼 기준 (warm → end, 그 사이 220번 오감)
+# 메모리는 작업 메모리(ws_mb)로 본다. private_mb는 그래픽 드라이버가 창 크기에 따라 잡았다 놓는 몫이 섞여서
+# 같은 상태에서도 100MB 넘게 오르내린다 (2026-11-10 실측) → 참고로만 보여줌
 $MAX_GDI = 2; $MAX_USER = 2; $MAX_HANDLES = 30; $MAX_MEM_MB = 10
 Add-Type @"
 using System; using System.Runtime.InteropServices;
@@ -96,8 +98,8 @@ $samples | Format-Table tag, private_mb, ws_mb, gdi, user, handles, godot -AutoS
 $bad = 0
 $warm = $samples | Where-Object tag -eq "warm"; $end = $samples | Where-Object tag -eq "end"
 if ($warm -and $end) {
-  $d = [pscustomobject]@{ gdi = $end.gdi - $warm.gdi; user = $end.user - $warm.user; handles = $end.handles - $warm.handles; mem = [math]::Round($end.private_mb - $warm.private_mb, 1) }
-  "warm → end 늘어난 양: GDI {0} (기준 {1} 이하), USER {2} (기준 {3} 이하), 핸들 {4} (기준 {5} 이하), 메모리 {6}MB (기준 {7}MB 이하)" -f $d.gdi, $MAX_GDI, $d.user, $MAX_USER, $d.handles, $MAX_HANDLES, $d.mem, $MAX_MEM_MB
+  $d = [pscustomobject]@{ gdi = $end.gdi - $warm.gdi; user = $end.user - $warm.user; handles = $end.handles - $warm.handles; mem = [math]::Round($end.ws_mb - $warm.ws_mb, 1); priv = [math]::Round($end.private_mb - $warm.private_mb, 1) }
+  "warm → end 늘어난 양: GDI {0} (기준 {1} 이하), USER {2} (기준 {3} 이하), 핸들 {4} (기준 {5} 이하), 작업 메모리 {6}MB (기준 {7}MB 이하), private {8}MB (참고)" -f $d.gdi, $MAX_GDI, $d.user, $MAX_USER, $d.handles, $MAX_HANDLES, $d.mem, $MAX_MEM_MB, $d.priv
   if ($d.gdi -gt $MAX_GDI -or $d.user -gt $MAX_USER -or $d.handles -gt $MAX_HANDLES -or $d.mem -gt $MAX_MEM_MB) { "[실패] 오갈수록 늘어남"; $bad++ } else { "[통과] 오가도 늘지 않음" }
 } else { "[실패] 메모리를 못 잼 (게임 PID를 못 받음?) 로그: $log"; $bad++ }
 "Windows 쪽 창 확인 {0}개 중 {1}개 통과" -f $winTotal, ($winTotal - $winFails)
