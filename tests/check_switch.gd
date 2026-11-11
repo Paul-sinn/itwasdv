@@ -68,6 +68,8 @@ func _run() -> void:
 	for i in 60:
 		await process_frame
 	screen = m.screen
+	if screen.tray != null:
+		screen.tray.popup_enabled = false   # 진짜 메뉴를 띄우면 닫힐 때까지 멈춤 → 띄우려는지(menu_requested)만 본다
 	screen.mode_changed.connect(func(md): signals.append(md))
 	screen.full_style_changed.connect(func(st): style_signals.append(st))
 	big_expected = DesktopWindow.big_window_first_rect()
@@ -139,7 +141,7 @@ func _run() -> void:
 	# 끝내기 (알림 영역 메뉴 "끝내기"와 같은 길): 저장하고 끝나나
 	Save.delete_file(TEST_SAVE)
 	if screen.tray != null:
-		screen.tray.menu.id_pressed.emit(TrayIcon.Item.QUIT)
+		screen.tray.choose(TrayIcon.Item.QUIT)
 	else:
 		screen.quit_game()
 	_check(FileAccess.file_exists(TEST_SAVE), "끝내기: 저장 파일이 안 생김 (main.gd가 WM_CLOSE_REQUEST에서 저장해야 함)")
@@ -284,14 +286,24 @@ func _check_tray() -> void:
 	_tray_click()
 	await _settle()
 	_check_full("큰 화면에서 아이콘 또 클릭 (그대로)")
-	screen.tray.indicator.pressed.emit(MOUSE_BUTTON_RIGHT, Vector2i.ZERO)   # 오른쪽은 메뉴. 그 밖엔 아무 일 없음
-	await _settle()
+	# 오른쪽은 메뉴: 버튼을 뗄 시간(TRAY_MENU_DELAY) 뒤에 한 번만 띄우려 함. 그 밖엔 아무 일 없음
+	var menu_asks := [0]
+	screen.tray.menu_requested.connect(func(): menu_asks[0] += 1)
+	screen.tray.indicator.pressed.emit(MOUSE_BUTTON_RIGHT, Vector2i.ZERO)
+	screen.tray.indicator.pressed.emit(MOUSE_BUTTON_RIGHT, Vector2i.ZERO)   # 빨리 두 번 눌러도 메뉴는 한 번
+	_check(menu_asks[0] == 0, "오른쪽 클릭: 버튼을 떼기 전(바로)에는 메뉴를 띄우면 안 됨")
+	await _wait_ms(int(Feel.TRAY_MENU_DELAY * 1000.0) + 300)
+	_check(menu_asks[0] == 1, "오른쪽 클릭: 메뉴를 한 번 띄우려 해야 함 (%d번)" % menu_asks[0])
+	if screen.tray.indicator.get_rect().has_area():   # 아이콘이 ^ 숨김 칸에 있으면 자리를 모름 (그땐 마우스 자리)
+		var mp: Vector2i = screen.tray.menu_position()
+		var prim := DisplayServer.screen_get_size(DisplayServer.get_primary_screen())
+		_check(Rect2i(Vector2i.ZERO, prim).has_point(mp), "메뉴 자리가 주 모니터 밖 (Windows 좌표 %s)" % mp)
 	_check_full("오른쪽 클릭 (그대로)")
 	_check(signals == [ScreenMode.Mode.FULL], "아이콘 클릭: 신호는 FULL 한 번: %s" % [signals])
-	screen.tray.menu.id_pressed.emit(TrayIcon.Item.SMALL)
+	screen.tray.choose(TrayIcon.Item.SMALL)
 	await _settle()
 	_check_small("메뉴 \"작게\"", true)
-	screen.tray.menu.id_pressed.emit(TrayIcon.Item.FULL)
+	screen.tray.choose(TrayIcon.Item.FULL)
 	await _settle()
 	_check_full("메뉴 \"전체 화면\"")
 	screen.enter_small()
