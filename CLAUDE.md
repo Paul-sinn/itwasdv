@@ -45,10 +45,10 @@ winget으로 설치됨. 실행 파일 폴더:
 명령은 저장소 폴더(`project.godot` 있는 곳)에서 실행:
 - 편집기 열기: `<GODOT> --path . --editor`
 - 게임 실행: `<GODOT> --path .` (메인 씬은 2단계에서 정함)
-- 테스트: `<GODOT_CONSOLE> --headless --path . -s tests/run_tests.gd` (1단계에서 만듦)
+- 테스트: `<GODOT_CONSOLE> --headless --path . -s tests/run_tests.gd` (전부 통과면 종료 코드 0)
 - 설치된 버전 문서 뽑기 (규칙 7): `<GODOT_CONSOLE> --headless --doctool <빈 폴더>`
   → `<빈 폴더>/doc/classes/클래스이름.xml` 에서 함수·설정 이름 확인
 - 시뮬: `python tools/delivery_sim.py`
 
 ## 현재 작업
-`docs/PROTOTYPE_V0.md`를 순서대로. 0단계(준비) 끝남 → 다음은 1단계(계산 코드).
+`docs/PROTOTYPE_V0.md`를 순서대로. 1단계(계산 코드) 끝남 → 다음은 2단계(띠 화면).
