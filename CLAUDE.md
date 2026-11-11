@@ -23,13 +23,15 @@
 ## 폴더
 ```
 data/balance.json        게임 숫자 전부 (게임과 시뮬이 같이 읽음)
-docs/PROTOTYPE_V0.md     지금 할 일 (시제품 지시서)
+docs/PROTOTYPE_V1.md     지금 할 일 (시제품 v1 지시서)
+docs/PROTOTYPE_V0.md     끝난 시제품 v0 지시서
 docs/IDEAS.md            나중에 할 것 / 이미 정한 것
 tools/delivery_sim.py    경제 시뮬레이터 (파이썬, 가상 유저 1만 명)
 scripts/core/            계산 코드 (balance, economy, enhance, game_state, save)
-scripts/ui/              화면 코드
+scripts/ui/              화면 코드 (main, town 동네, route 꼬불길 계산, truck, garage_panel 차고,
+                         settings_panel 설정, screen_mode 두 화면 오가기, desktop_window 창, tray_icon 알림 영역)
 scenes/                  Godot 씬
-tests/                   화면 없이 돌리는 테스트
+tests/                   테스트·확인 스크립트 (soak_logs/ = 오래 켜두기 기록)
 ```
 
 ## 명령
@@ -50,33 +52,50 @@ winget으로 설치됨. 실행 파일 폴더:
 (Bypass는 그 한 번만 허용. PC 설정은 안 바뀜)
 
 PowerShell (사용자 터미널): 어느 폴더에서든 그대로 복사해서 붙여 넣기
+
+**화면 없이 도는 확인** (창이 안 뜸. 언제 돌려도 됨)
 ```powershell
 # 테스트 (전부 통과면 마지막 줄 "테스트 N개 중 N개 통과")
 & "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -s tests/run_tests.gd
 
-# 띠 1시간 수익 확인 (2단계 완료 기준. 화면 없이 게임 1시간을 몇 초 만에 돌림)
-& "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" --fixed-fps 60 -s tests/check_band_hour.gd
+# 동네 1시간 수익 (0/10/20/30강 + 화면 오가기. 게임 1시간을 몇 초 만에)
+& "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" --fixed-fps 60 -s tests/check_town_hour.gd
 
-# 차고 패널 확인 (3단계 완료 기준. 진짜 키·클릭으로 0~30강, 퍼짐 → 수리까지)
+# 차고 (작은 화면 클릭 → 큰 화면, 0~30강, 퍼짐 → 수리, 여러 창 크기, [설정], [작게])
 & "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -s tests/check_garage.gd
 
-# 저장·꺼둔 동안 수익 확인 (4단계 완료 기준. 진짜 저장 파일은 안 건드림)
+# 저장·꺼둔 동안 수익 (진짜 저장 파일은 안 건드림)
 & "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -s tests/check_save.gd
 
-# 투명 창 클릭 통과 확인 (5단계. 진짜 창을 몇 초 띄움. 마우스는 안 건드림)
+# 작은 화면 ↔ 큰 화면 오가기 (창은 안 건드림. 마지막 줄 "확인 N개 중 N개 통과")
+& "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -s tests/check_switch.gd
+```
+
+**진짜 창이 뜨는 확인** (화면이 깜빡이거나 덮임. 사용자에게 먼저 묻고 한 번에 몰아서. 마우스·키보드는 안 건드림)
+```powershell
+# 작은 화면 ↔ 큰 화면 진짜 창으로 오가기 (전체 화면 100번 + 창 모드 100번 + 방식 바꾸기 20번. 약 1분 깜빡임)
+powershell -ExecutionPolicy Bypass -File "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\tests\check_switch.ps1"
+
+# 투명 창 클릭 통과 (작은 화면 + 큰 화면 두 방식. 몇 초 동안 큰 화면이 주 모니터를 덮음)
 powershell -ExecutionPolicy Bypass -File "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\tests\check_desktop.ps1"
 
-# 오래 켜두기 확인 (5단계. 기본 2시간, 1분마다 메모리·GDI 기록. 짧게는 끝에 -minutes 10)
+# 오래 켜두기 (기본 2시간, 작은 화면, 시험용 저장. 10분마다 큰 화면 3초: 끝에 -switchEvery 10. 기록은 tests\soak_logs)
 powershell -ExecutionPolicy Bypass -File "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\tests\soak_desktop.ps1"
+
+# 화면 사진 찍기 (평범한 창이 몇 초 떴다 꺼짐. 1280x720~3440x1440, 강화 연출, 설정 화면)
+& "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -s tests/shot_screens.gd -- --windowed "--out=<사진 폴더>"
+```
+
+**실행**
+```powershell
+# 게임 (작은 화면 = 주 모니터 오른쪽 아래 구석. 디버그 실행이라 F1~F5 치트 키가 켜져 있음)
+& "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64.exe" --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv"
+
+# 게임: 평범한 창 (개발용. 작은 화면 480x220 ↔ 큰 화면 1600x900)
+& "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64.exe" --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -- --windowed
 
 # 편집기 열기
 & "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64.exe" --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" --editor
-
-# 게임 실행: 작업표시줄 위 투명 띠 (디버그 실행이라 F1~F5 치트 키가 켜져 있음)
-& "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64.exe" --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv"
-
-# 게임 실행: 평범한 창 (개발용)
-& "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64.exe" --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -- --windowed
 
 # 시뮬
 python "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\tools\delivery_sim.py"
@@ -85,19 +104,30 @@ python "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\tools\de
 그 밖에:
 - 저장 파일: `C:\Users\PAUL SHIN\AppData\Roaming\Godot\app_userdata\택배 방치형\save.json`
   (`saved_at_utc`는 세계 표준시. 손으로 3시간 전으로 바꾸면 꺼둔 동안 수익 확인 가능)
+- 설정 파일: 같은 폴더 `settings.cfg` (`[screen] full_style = "fullscreen"` 또는 `"windowed"`).
+  확인 스크립트는 main을 만들기 전에 `ScreenMode.settings_path`를 시험용으로 바꾼다
 - 설치된 버전 문서 뽑기 (규칙 7): `<GODOT_CONSOLE> --headless --doctool <빈 폴더>`
   → `<빈 폴더>/doc/classes/클래스이름.xml` 에서 함수·설정 이름 확인
 - Git Bash에서는 `&` 없이 경로를 따옴표로 감싸서 실행
 - 투명 창에서 알아둘 것 (Godot 4.6.3 + Windows에서 직접 확인):
-  창 전체 클릭 통과(`Window.mouse_passthrough`)는 다른 프로그램으로 클릭이 안 넘어간다.
-  `mouse_passthrough_polygon`만 되는데, 다각형 밖은 그려지지도 않는다 → "보이는 것 = 클릭 받는 곳".
-  새로 그리는 것이 생기면 `visible_rects()`(main.gd / band.gd)에 넣어야 보인다.
+  - 창 전체 클릭 통과(`Window.mouse_passthrough`)는 다른 프로그램으로 클릭이 안 넘어간다.
+    `mouse_passthrough_polygon`만 되는데, 다각형 밖은 그려지지도 않는다 → "보이는 것 = 클릭 받는 곳".
+    작은 화면에 새로 그리는 것이 생기면 `visible_rects()`(main.gd / town.gd)에 넣어야 보인다.
+  - 클릭 통과 다각형을 빈 배열로 주면 창 전체가 클릭을 받는다 (큰 화면).
+  - 창의 `transparent`는 켜 둔 채 `transparent_bg`만 껐다 켜면 투명 ↔ 불투명이 깨지지 않는다.
+  - 큰 화면 전체 화면은 `Window.MODE_FULLSCREEN`. 창 크기를 모니터와 똑같이 직접 맞추면 Godot이
+    독점 전체 화면으로 바꿔서 다시 작아지지 않는다.
+  - 전체 화면 → 창 모드로 바로 가면 안쪽이 4픽셀씩 줄어든다 → 작은 화면 처리를 거쳐 간다 (`desktop_window.gd`).
+  - 새 알림 영역 아이콘은 Windows 11이 ^ 숨김 칸에 넣는다 (앱에서 못 바꿈).
 - Godot 좌표와 Windows 좌표는 원점이 다르다 (주 모니터 왼쪽 위가 Windows 0,0)
+- `_console.exe`는 진짜 게임을 자식 프로세스로 띄운다 → 그 PID로 GDI를 재면 0. 게임이 찍은 PID로 잰다
+- 프로젝트 안의 `.csv`는 Godot가 번역 파일로 가져간다 → 기록 파일은 `.gdignore`가 있는 폴더(`tests/soak_logs`)에
 
 ## 현재 작업
-`docs/PROTOTYPE_V0.md` 0~6단계 구현 끝. 플레이 테스트 끝 ("아니오" 1개, 결과는 `docs/IDEAS.md`).
-퍼짐 구간 "스페어값 남겨야 강화 가능" 규칙 넣음. 남은 것:
-- 5단계 2시간 켜두기 확인 (`tests/soak_desktop.ps1`)
-- 지금: `docs/PROTOTYPE_V1.md` (작은 화면 + 전체 화면). 사용자 확정, 멈추지 않고 진행.
-  창 담당 / 동네 담당 두 에이전트가 각자 worktree에서 병렬 작업 → 합치기. 맡은 파일은 지시서 "나눠 맡기"
+`docs/PROTOTYPE_V0.md` 끝 (플레이 테스트 "아니오" 1개, 결과는 `docs/IDEAS.md`).
+`docs/PROTOTYPE_V1.md` (작은 화면 + 큰 화면): 창 담당 / 동네 담당 두 에이전트가 병렬로 만들고 `prototype-v1`에 합침.
+화면 없는 확인은 전부 통과. 남은 것:
+- 진짜 창 확인 (`check_switch.ps1`, `check_desktop.ps1`, 오가며 오래 켜두기): 화면이 깜빡여서 사용자 허락 뒤에
+- 사용자가 손으로: 알림 영역 아이콘 왼쪽 클릭(다른 프로그램을 쓰던 중에도 큰 화면이 앞으로 오나), 오른쪽 클릭 메뉴
+- v1 플레이 테스트 (지시서 맨 아래 5문항)
 - 튜닝(큐브)은 v1 플레이 테스트 통과 뒤 다음 지시서
