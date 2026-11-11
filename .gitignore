@@ -2,3 +2,7 @@
 node_modules/
 .env
 .env.*
+
+# Godot 4
+.godot/
+/android/

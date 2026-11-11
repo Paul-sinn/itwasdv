@@ -33,8 +33,19 @@ tests/                   화면 없이 돌리는 테스트
 ```
 
 ## 명령
+Godot 4.6.3 (winget으로 설치). 실행 파일 폴더:
+`C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\`
+- `Godot_v4.6.3-stable_win64.exe`: 보통 실행용 (아래 `<GODOT>`)
+- `Godot_v4.6.3-stable_win64_console.exe`: 출력이 터미널에 찍히는 실행용 (아래 `<GODOT_CONSOLE>`)
+- 렌더러: Compatibility (OpenGL). 2D만 쓰고, 하루 종일 켜두는 게임이라 가벼운 쪽
+
+명령은 저장소 폴더(`project.godot` 있는 곳)에서 실행:
+- 편집기 열기: `<GODOT> --path . --editor`
+- 게임 실행: `<GODOT> --path .` (메인 씬은 2단계에서 정함)
+- 테스트: `<GODOT_CONSOLE> --headless --path . -s tests/run_tests.gd` (1단계에서 만듦)
+- 설치된 버전 문서 뽑기 (규칙 7): `<GODOT_CONSOLE> --headless --doctool <빈 폴더>`
+  → `<빈 폴더>/doc/classes/클래스이름.xml` 에서 함수·설정 이름 확인
 - 시뮬: `python tools/delivery_sim.py`
-- 게임 실행 / 테스트: (0단계에서 Godot 실행 파일 경로 확인 후 여기 채우기)
 
 ## 현재 작업
-`docs/PROTOTYPE_V0.md`를 읽고 0단계부터 순서대로.
+`docs/PROTOTYPE_V0.md`를 순서대로. 0단계(준비) 끝남 → 다음은 1단계(계산 코드).

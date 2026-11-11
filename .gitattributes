@@ -1,0 +1,2 @@
+# 줄바꿈을 LF로 통일 (Godot 기본값과 같게)
+* text=auto eol=lf
