@@ -23,7 +23,10 @@ const COLOR_TEXT_OUTLINE := Color(0.05, 0.06, 0.08, 0.9)
 
 # --- v1: 화면 두 개 (창 담당. 이 칸만 고친다) ---
 const SMALL_SIZE := Vector2i(480, 220)        ## 작은 화면 크기 (사용자 결정 2026-11-10)
-const WINDOWED_FULL_SIZE := Vector2i(1600, 900)  ## --windowed 개발용 창에서 "전체 화면" 대신 쓰는 크기
+const BIG_WINDOW_SIZE := Vector2i(1600, 900)      ## 큰 화면 "창 모드"의 처음 크기 (사용자 결정 2026-11-10)
+const BIG_WINDOW_MIN_SIZE := Vector2i(1280, 720)  ## 큰 화면 "창 모드"에서 이보다 작게 못 줄임 (사용자 결정 2026-11-10)
+const WINDOWED_FULL_SIZE := BIG_WINDOW_SIZE       ## --windowed 개발용 창에서 큰 화면 대신 쓰는 크기
+const TRAY_ICON_SIZE := 32                    ## 알림 영역 아이콘 그림 크기 (픽셀. Windows가 알아서 줄여 그림)
 
 # --- 글자 크기 (작은 화면 기준) ---
 const HUD_FONT_SIZE := 13        ## 구석 ★·돈

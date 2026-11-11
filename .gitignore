@@ -7,3 +7,4 @@ node_modules/
 .godot/
 /android/
 soak_*.csv
+tests/soak_logs/*.csv
