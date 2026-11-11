@@ -24,6 +24,7 @@
 ```
 data/balance.json        게임 숫자 전부 (게임과 시뮬이 같이 읽음)
 docs/PROTOTYPE_V1.md     지금 할 일 (시제품 v1 지시서)
+docs/PROTOTYPE_V2.md     다음 할 일 초안 (튜닝·큐브. 사용자가 정하기 전엔 안 만듦)
 docs/PROTOTYPE_V0.md     끝난 시제품 v0 지시서
 docs/IDEAS.md            나중에 할 것 / 이미 정한 것
 tools/delivery_sim.py    경제 시뮬레이터 (파이썬, 가상 유저 1만 명)
@@ -137,4 +138,4 @@ python -X utf8 "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\
   (v0 기록 1시간 44분: GDI·USER·핸들 그대로, 작업 메모리만 98~472MB 오르내림. 원인 모름 → 평소 쓸 때 지켜보기)
 - 사용자가 손으로: 알림 영역 아이콘 왼쪽 클릭(다른 프로그램을 쓰던 중에도 큰 화면이 앞으로 오나), 오른쪽 클릭 메뉴
 - v1 플레이 테스트 (지시서 맨 아래 5문항)
-- 튜닝(큐브)은 v1 플레이 테스트 통과 뒤 다음 지시서
+- 튜닝(큐브): `docs/PROTOTYPE_V2.md` 초안 있음. v1 플레이 테스트 통과 + [정해야 함] 정한 뒤 시작
