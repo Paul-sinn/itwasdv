@@ -33,7 +33,10 @@ tests/                   화면 없이 돌리는 테스트
 ```
 
 ## 명령
-Godot 4.6.3 (winget으로 설치). 실행 파일 폴더:
+**Godot 4.6.3 사용.** 함수·설정 이름은 반드시 4.6.3 기준으로 찾는다 (다른 4.x 버전 문서·기억 말고).
+버전을 바꾸려면 사용자와 먼저 정하고 여기를 고친다.
+
+winget으로 설치됨. 실행 파일 폴더:
 `C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\`
 - `Godot_v4.6.3-stable_win64.exe`: 보통 실행용 (아래 `<GODOT>`)
 - `Godot_v4.6.3-stable_win64_console.exe`: 출력이 터미널에 찍히는 실행용 (아래 `<GODOT_CONSOLE>`)
