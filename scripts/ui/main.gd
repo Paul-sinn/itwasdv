@@ -4,7 +4,9 @@
 ##
 ## v1 화면 두 개 (창 다루기는 screen_mode.gd):
 ##   작은 화면: 동네만. 보이는 곳 아무 데나 클릭 → 전체 화면. 차고는 안 열림
-##   전체 화면: 왼쪽에 같은 동네를 크게 + 오른쪽에 차고 + [작게] 버튼
+##   큰 화면: 왼쪽에 같은 동네를 크게 + 오른쪽에 차고 + [설정] [작게] 버튼
+##     큰 화면은 전체 화면 또는 창 모드(사용자가 [설정]에서 고름). 창 모드는 창 크기가 수시로 바뀜
+##     → 창 크기가 바뀔 때마다 _layout() (최소 1280x720에서도 안 깨지게)
 extends Control
 
 const Balance = preload("res://scripts/core/balance.gd")
@@ -17,6 +19,7 @@ const Fmt = preload("res://scripts/ui/fmt.gd")
 const Town = preload("res://scripts/ui/town.gd")
 const GaragePanel = preload("res://scripts/ui/garage_panel.gd")
 const ReturnPopup = preload("res://scripts/ui/return_popup.gd")
+const SettingsPanel = preload("res://scripts/ui/settings_panel.gd")
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
 
 const AUTOSAVE_SECONDS := 30.0        ## 30초마다 저장 (배속과 상관없이 진짜 30초)
@@ -31,7 +34,9 @@ var town: Town
 var panel: GaragePanel       ## 차고 (전체 화면에서만 보임)
 var popup: ReturnPopup
 var screen: ScreenMode       ## 작은 화면 / 전체 화면 오가기 (창 다루기는 전부 여기)
-var small_button: Button     ## 전체 화면 [작게]
+var small_button: Button     ## 큰 화면 [작게]
+var settings_button: Button  ## 큰 화면 [설정]
+var settings: SettingsPanel  ## [설정]을 누르면 가운데 뜨는 "화면: 전체 화면 / 창 모드"
 var rng := RandomNumberGenerator.new()
 
 ## 켰을 때 계산한 꺼둔 동안 수익 (확인용): { away_seconds, earned }. 저장이 없었으면 빈 묶음
@@ -95,8 +100,21 @@ func _ready() -> void:
 	small_button.pressed.connect(func(): screen.enter_small())
 	add_child(small_button)
 
+	settings_button = Button.new()
+	settings_button.text = "설정"
+	settings_button.focus_mode = Control.FOCUS_NONE
+	settings_button.pressed.connect(func(): close_settings() if settings.visible else open_settings())
+	add_child(settings_button)
+
 	_debug_label = Town.make_label(Feel.DEBUG_FONT_SIZE, Feel.COLOR_DEBUG)
 	add_child(_debug_label)
+
+	settings = SettingsPanel.new()
+	settings.visible = false
+	add_child(settings)
+	settings.style_picked.connect(_on_style_picked)
+	settings.close_pressed.connect(close_settings)
+	screen.full_style_changed.connect(func(style): settings.show_style(style))
 
 	popup = ReturnPopup.new()
 	popup.visible = false
@@ -132,6 +150,9 @@ func _layout() -> void:
 	var full := is_full()
 	panel.visible = full
 	small_button.visible = full
+	settings_button.visible = full
+	if not full:
+		settings.visible = false
 	_debug_label.visible = full and OS.is_debug_build()
 	town.show_ground = full
 
@@ -143,11 +164,16 @@ func _layout() -> void:
 		return
 
 	# 전체 화면: 위쪽 줄에 [작게], 왼쪽에 동네(크게), 오른쪽에 차고
-	_ui_scale = clampf(view.y / Feel.FULL_REF_HEIGHT, Feel.FULL_UI_SCALE_MIN, Feel.FULL_UI_SCALE_MAX)
+	# 창 높이 900(폭 1600) 기준. 좁고 긴 창(창 모드)에서 차고가 너무 넓어지지 않게 폭도 본다
+	var by_size := minf(view.y / Feel.FULL_REF_SIZE.y, view.x / Feel.FULL_REF_SIZE.x)
+	_ui_scale = clampf(by_size, Feel.FULL_UI_SCALE_MIN, Feel.FULL_UI_SCALE_MAX)
 	var m := Feel.FULL_MARGIN * _ui_scale
-	small_button.add_theme_font_size_override("font_size", int(roundf(Feel.PANEL_BUTTON_SIZE * _ui_scale)))
-	small_button.reset_size()
+	for b in [small_button, settings_button]:
+		b.add_theme_font_size_override("font_size", int(roundf(Feel.PANEL_BUTTON_SIZE * _ui_scale)))
+		b.reset_size()
 	small_button.position = Vector2(view.x - m - small_button.size.x, m * 0.5)
+	settings_button.position = small_button.position - Vector2(settings_button.size.x + m * 0.5, 0)
+	settings.set_ui_scale(Feel.GARAGE_SCALE * _ui_scale)
 	_debug_label.add_theme_font_size_override("font_size", int(roundf(Feel.DEBUG_FONT_SIZE * _ui_scale)))
 
 	panel.set_ui_scale(Feel.GARAGE_SCALE * _ui_scale)
@@ -184,6 +210,9 @@ func _process(delta: float) -> void:
 		_place_panel()
 	if popup.visible:
 		_place_popup()
+	if settings.visible:
+		settings.reset_size()
+		settings.position = ((get_viewport_rect().size - settings.size) / 2.0).max(Vector2.ZERO)
 	if _measuring:
 		_measure_seconds += delta
 	if _debug_label.visible:
@@ -271,6 +300,25 @@ func visible_rects() -> Array:
 	for r: Rect2 in rects:
 		out.append(Rect2(r.position + town.position + position, r.size).grow(shake))
 	return out
+
+
+# ---------------- 설정 (큰 화면) ----------------
+
+func open_settings() -> void:
+	if not is_full():
+		return
+	settings.show_style(screen.full_style)
+	settings.visible = true
+
+
+func close_settings() -> void:
+	settings.visible = false
+
+
+## 전체 화면 / 창 모드 고름 → 창 바꾸기·저장은 screen_mode.gd. 실제로 바뀐 값을 다시 표시
+func _on_style_picked(style: ScreenMode.FullStyle) -> void:
+	screen.set_full_style(style)
+	settings.show_style(screen.full_style)
 
 
 # ---------------- 강화 ----------------

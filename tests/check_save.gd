@@ -2,7 +2,8 @@
 ## - 껐다 켜도 상태 유지
 ## - 저장 시각을 3시간 전 / 20시간 전 / 미래로 → 3시간치의 절반 / 8시간치의 절반 / 0
 ## - 고장이면 0, 깨진 저장 파일이면 새로 시작, F3이면 저장 지움, 30초 자동 저장
-## 진짜 게임 화면(main.tscn)을 띄워서 확인한다. 진짜 저장 파일은 건드리지 않는다.
+## - 복귀 팝업은 작은 화면(480x220) 위에, 그 안에 다 들어감 (v1)
+## 진짜 게임 화면(main.tscn)을 작은 화면 크기로 띄워서 확인한다. 진짜 저장 파일은 건드리지 않는다.
 ##
 ## 실행:
 ##   <GODOT_CONSOLE> --headless --path <프로젝트> -s tests/check_save.gd
@@ -12,7 +13,8 @@ const MAIN_SCENE := "res://scenes/main.tscn"
 const Save = preload("res://scripts/core/save.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Economy = preload("res://scripts/core/economy.gd")
-const TEST_SAVE := "user://test_check_save.json"
+const Feel = preload("res://scripts/ui/feel.gd")
+const TEST_SAVE := "user://test_town_save.json"
 const HOUR := 3600
 
 var fails := PackedStringArray()
@@ -25,7 +27,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	await process_frame
-	root.size = Vector2i(1280, 400)
+	root.size = Feel.SMALL_SIZE
 	Save.delete_file(TEST_SAVE)
 
 	# 1) 껐다 켜도 상태 유지 (끌 때 저장 → 다시 켬)
@@ -68,6 +70,8 @@ func _run() -> void:
 		_check(absf(got - expected) <= maxf(0.01, hourly * 3.0 / HOUR),   # 켜는 데 걸린 몇 초는 봐줌
 				"%s: 들어온 돈 %.2f, 기대 %.2f" % [c["name"], got, expected])
 		_check(m.popup.visible, "%s: 복귀 팝업이 안 뜸" % c["name"])
+		_check(m.screen.mode == 0 and Rect2(Vector2.ZERO, Vector2(Feel.SMALL_SIZE)).encloses(m.popup.get_rect()),
+				"%s: 복귀 팝업이 작은 화면 480x220 안에 없음: %s" % [c["name"], m.popup.get_rect()])
 		_check(m.popup.note_text().contains(c["note"]), "%s: 팝업 설명에 '%s'가 없음: %s" % [c["name"], c["note"], m.popup.note_text()])
 		print("  %s → +%.1f원 (기대 %.1f) · 팝업: %s / %s" % [c["name"], got, expected, m.popup.main_text(), m.popup.note_text()])
 		await _close(m)
@@ -83,6 +87,7 @@ func _run() -> void:
 	m = await _launch()
 	_check(m.state.star == 0 and m.state.money < 1.0, "깨진 저장인데 새로 시작 안 함")
 	_check(m.popup.visible and m.popup.main_text().contains("깨져서"), "깨진 저장 알림이 없음")
+	_check(Rect2(Vector2.ZERO, Vector2(Feel.SMALL_SIZE)).encloses(m.popup.get_rect()), "깨진 저장 알림이 작은 화면 밖: %s" % m.popup.get_rect())
 	_check(FileAccess.file_exists(TEST_SAVE + ".broken"), "깨진 파일을 .broken 으로 안 남김")
 	DirAccess.remove_absolute(TEST_SAVE + ".broken")
 

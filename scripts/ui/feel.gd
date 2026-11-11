@@ -140,11 +140,12 @@ const TOWN_TRUCK_LIFT := 3.0      ## 바퀴 바닥이 길 가운데 선보다 �
 const TOWN_HUD_POS := Vector2(8, 4)   ## 구석 ★·돈
 
 # --- v1: 전체 화면 (동네 담당) ---
-const FULL_REF_HEIGHT := 900.0    ## 글자·간격은 창 높이 900 기준. 창이 크면 비례해서 키움
+const FULL_REF_SIZE := Vector2(1600, 900)  ## 글자·간격은 이 창 크기 기준. 창이 크면 비례해서 키움 (높이·폭 중 덜 큰 쪽)
 const FULL_UI_SCALE_MIN := 0.75
 const FULL_UI_SCALE_MAX := 2.0
 const FULL_MARGIN := 28.0         ## 창 가장자리·동네·차고 사이 간격 (높이 900 기준)
 const GARAGE_SCALE := 1.5         ## 전체 화면 차고 = v0 패널의 몇 배 (높이 900 기준)
+const SETTINGS_WIDTH := 300.0     ## [설정] 화면 폭 (v0 패널 크기 기준, 차고와 같은 배수로 키움)
 const FULL_TOWN_TEXT_MAX := 2.5   ## 동네를 확대해도 동네 글자(★·돈·+금액)는 이 배수(× 화면 배수)까지만
 
 
