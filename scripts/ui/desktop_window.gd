@@ -1,7 +1,16 @@
-## 5단계: 작업표시줄 바로 위에 붙는 투명 창.
-## - 테두리 없음 / 항상 위 / 배경 투명: project.godot 설정
-## - 위치: 주 모니터의 작업표시줄 바로 위, 화면 가로 전체 (높이는 project.godot의 viewport_height)
-## - 클릭: 보이는 것만 받고 나머지는 뒤 창으로 통과 (click_region.gd 설명 참고)
+## 바탕화면 위 진짜 창 다루기 (v1: 작은 화면 / 전체 화면). screen_mode.gd가 부른다.
+##
+## 작은 화면: 주 모니터 쓸 수 있는 영역(작업표시줄 뺀 곳)의 오른쪽 아래 구석, 크기 Feel.SMALL_SIZE.
+##   테두리 없음 / 항상 위 / 배경 투명 / 보이는 것만 클릭 받음 (click_region.gd 설명 참고).
+##   작업표시줄 위치·해상도가 바뀌면 다시 붙인다.
+## 전체 화면: 주 모니터를 꽉 채움 (Godot의 MODE_FULLSCREEN). 배경 칠함 / 클릭 통과 없음 / 항상 위 아님.
+##
+## Godot 4.6.3 + Windows에서 직접 확인한 것 (v1 0단계):
+##   - 창 크기를 모니터 크기와 똑같이 직접 맞추면 Godot이 "독점 전체 화면"(MODE_EXCLUSIVE_FULLSCREEN)으로
+##     바꿔버리고, 그 뒤로는 크기를 바꿔도 작아지지 않는다 → 직접 맞추지 말고 MODE_FULLSCREEN을 쓴다.
+##     (MODE_FULLSCREEN은 창을 모니터보다 2픽셀 크게 만들고 넘친 곳을 잘라서 이 문제를 피한다)
+##   - 창의 투명 설정(transparent)은 켜 둔 채로 두고, 배경 투명(transparent_bg)만 껐다 켜도 깨지지 않는다.
+##   - 클릭 통과 다각형을 빈 배열로 주면 창 전체가 클릭을 받는다.
 ##
 ## 평범한 창으로 띄우려면(개발용): 실행 명령 끝에 -- --windowed
 extends Node
@@ -12,6 +21,7 @@ const Feel = preload("res://scripts/ui/feel.gd")
 ## 클릭 받을 사각형 목록(창 좌표)을 돌려주는 함수. main.gd가 넣어준다.
 var rects_provider: Callable
 
+var _full := false
 var _last_polygon := PackedVector2Array()
 var _next_region_usec := 0
 var _next_recheck_usec := 0
@@ -23,42 +33,90 @@ static func wanted() -> bool:
 	return DisplayServer.get_name() != "headless" and not OS.get_cmdline_user_args().has("--windowed")
 
 
-## 평범한 창으로 되돌리기 (--windowed 개발용)
-static func make_plain_window(win: Window) -> void:
+## 평범한 창으로 되돌리기 (--windowed 개발용). 안쪽 크기를 size로.
+static func make_plain_window(win: Window, size: Vector2i) -> void:
 	win.borderless = false
 	win.always_on_top = false
 	win.transparent = false
 	win.transparent_bg = false
 	# 테두리가 생기면 그만큼 안쪽이 줄어든다 (1280x460 → 1264x421, 4.6.3 Windows에서 확인).
-	# 안쪽 크기를 설정값대로 다시 맞춘다.
-	win.size = Vector2i(
-			int(ProjectSettings.get_setting("display/window/size/viewport_width")),
-			int(ProjectSettings.get_setting("display/window/size/viewport_height")))
+	# 안쪽 크기를 다시 맞춘다.
+	win.size = size
+
+
+## 작은 화면이 놓일 자리 (Godot 화면 좌표): 주 모니터 쓸 수 있는 영역의 오른쪽 아래 구석
+static func small_rect() -> Rect2i:
+	var usable := DisplayServer.screen_get_usable_rect(DisplayServer.get_primary_screen())
+	return Rect2i(usable.end - Feel.SMALL_SIZE, Feel.SMALL_SIZE)
+
+
+## 전체 화면이 덮을 곳 (Godot 화면 좌표): 주 모니터 전체
+static func full_rect() -> Rect2i:
+	var s := DisplayServer.get_primary_screen()
+	return Rect2i(DisplayServer.screen_get_position(s), DisplayServer.screen_get_size(s))
 
 
 func _ready() -> void:
+	apply_small()
+
+
+## 작은 화면으로: 투명, 항상 위, 구석에 붙이기. 클릭 영역은 refresh_region()에서.
+func apply_small() -> void:
+	_full = false
+	var win := get_window()
+	if win.mode != Window.MODE_WINDOWED:
+		win.mode = Window.MODE_WINDOWED
+	win.always_on_top = true
+	win.transparent_bg = true
 	place_window()
 
 
-## 주 모니터 작업표시줄 바로 위에 붙이기
-func place_window() -> void:
-	var usable := DisplayServer.screen_get_usable_rect(DisplayServer.get_primary_screen())
-	_placed_for = usable
-	var h := int(ProjectSettings.get_setting("display/window/size/viewport_height"))
+## 전체 화면으로: 주 모니터를 꽉, 배경 칠함, 창 전체가 클릭 받음, 앞으로 가져오기.
+## 이미 전체 화면이어도 불러도 된다 (최소화됐거나 다른 창 뒤에 있으면 다시 앞으로).
+func apply_full() -> void:
+	_full = true
 	var win := get_window()
-	win.size = Vector2i(usable.size.x, h)
-	win.position = Vector2i(usable.position.x, usable.end.y - h)
+	win.mouse_passthrough_polygon = PackedVector2Array()   # 빈 배열 = 창 전체가 클릭 받음
+	_last_polygon = PackedVector2Array()
+	win.transparent_bg = false
+	# 항상 위는 끈다: 켜 두면 Alt+Tab으로 다른 창을 골라도 그 창이 이 화면 뒤로 숨는다
+	win.always_on_top = false
+	win.current_screen = DisplayServer.get_primary_screen()
+	win.mode = Window.MODE_FULLSCREEN
+	win.grab_focus()
+
+
+## 주 모니터 작업표시줄 바로 위, 오른쪽 구석에 붙이기 (작은 화면일 때만)
+func place_window() -> void:
+	_placed_for = DisplayServer.screen_get_usable_rect(DisplayServer.get_primary_screen())
+	var r := small_rect()
+	var win := get_window()
+	win.size = r.size
+	win.position = r.position
+
+
+## 클릭 받는 영역(=보이는 영역)을 지금 바로 다시 만든다 (작은 화면일 때만)
+func refresh_region() -> void:
+	_next_region_usec = 0
+	_update_region(Time.get_ticks_usec())
 
 
 func _process(_delta: float) -> void:
+	if _full:
+		return
 	var now := Time.get_ticks_usec()   # 배속(F2)과 상관없는 진짜 시간
 	if now >= _next_recheck_usec:
 		_next_recheck_usec = now + int(Feel.WINDOW_RECHECK_SECONDS * 1e6)
 		if DisplayServer.screen_get_usable_rect(DisplayServer.get_primary_screen()) != _placed_for:
 			place_window()
-	if now >= _next_region_usec and rects_provider.is_valid():
-		_next_region_usec = now + int(Feel.CLICK_REGION_INTERVAL * 1e6)
-		var poly := ClickRegion.build(rects_provider.call(), get_window().size.y)
-		if poly != _last_polygon:
-			_last_polygon = poly
-			get_window().mouse_passthrough_polygon = poly
+	_update_region(now)
+
+
+func _update_region(now: int) -> void:
+	if _full or now < _next_region_usec or not rects_provider.is_valid():
+		return
+	_next_region_usec = now + int(Feel.CLICK_REGION_INTERVAL * 1e6)
+	var poly := ClickRegion.build(rects_provider.call(), get_window().size.y)
+	if poly != _last_polygon:
+		_last_polygon = poly
+		get_window().mouse_passthrough_polygon = poly
