@@ -25,6 +25,12 @@ const PAYOUT_RISE := 34.0        ## 위로 올라가는 거리 (픽셀)
 const PAYOUT_DURATION := 1.2     ## 사라지기까지 초
 const PAYOUT_FONT_SIZE := 15
 
+# --- 투명 창 (5단계) ---
+const CLICK_REGION_INTERVAL := 1.0 / 30.0  ## 클릭 받는 영역(=보이는 영역)을 몇 초마다 고치나
+const WINDOW_RECHECK_SECONDS := 2.0        ## 작업표시줄 위치·화면 크기가 바뀌었나 몇 초마다 보나
+const TEXT_OUTLINE_SIZE := 4               ## 바탕화면 위에서도 글자가 읽히게 두르는 테두리
+const COLOR_TEXT_OUTLINE := Color(0.05, 0.06, 0.08, 0.9)
+
 # --- 글자 크기 ---
 const HUD_FONT_SIZE := 16
 const LABEL_FONT_SIZE := 11

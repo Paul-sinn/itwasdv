@@ -13,6 +13,7 @@ const Fmt = preload("res://scripts/ui/fmt.gd")
 const Band = preload("res://scripts/ui/band.gd")
 const GaragePanel = preload("res://scripts/ui/garage_panel.gd")
 const ReturnPopup = preload("res://scripts/ui/return_popup.gd")
+const DesktopWindow = preload("res://scripts/ui/desktop_window.gd")
 
 const AUTOSAVE_SECONDS := 30.0        ## 30초마다 저장 (배속과 상관없이 진짜 30초)
 const RETURN_POPUP_MIN_AWAY := 60.0   ## 이보다 짧게 껐다 켜면 복귀 팝업 안 띄움 (돈은 넣음)
@@ -25,6 +26,7 @@ var state: GameState
 var band: Band
 var panel: GaragePanel
 var popup: ReturnPopup
+var desktop: DesktopWindow   ## 투명 창 모드일 때만 있음
 var rng := RandomNumberGenerator.new()
 
 ## 켰을 때 계산한 꺼둔 동안 수익 (확인용): { away_seconds, earned }. 저장이 없었으면 빈 묶음
@@ -55,14 +57,19 @@ func _ready() -> void:
 	state = GameState.new()
 	var load_notice := _load_save()
 
+	# 창: 작업표시줄 위 투명 창 / 평범한 창(--windowed) / 화면 없음(테스트)
+	if DesktopWindow.wanted():
+		desktop = DesktopWindow.new()
+		add_child(desktop)
+	elif DisplayServer.get_name() != "headless":
+		DesktopWindow.make_plain_window(get_window())
+
 	band = Band.new()
+	band.show_background = desktop == null
 	add_child(band)
 	band.truck.delivered.connect(_on_delivered)
 
-	_debug_label = Label.new()
-	_debug_label.add_theme_font_size_override("font_size", Feel.DEBUG_FONT_SIZE)
-	_debug_label.add_theme_color_override("font_color", Feel.COLOR_DEBUG)
-	_debug_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_debug_label = Band.make_label(Feel.DEBUG_FONT_SIZE, Feel.COLOR_DEBUG)
 	_debug_label.visible = OS.is_debug_build()
 	band.add_child(_debug_label)
 
@@ -86,6 +93,8 @@ func _ready() -> void:
 
 	get_viewport().size_changed.connect(_layout)
 	_layout()
+	if desktop != null:
+		desktop.rects_provider = visible_rects
 
 	if load_notice != "":
 		popup.open(load_notice, "")
@@ -178,6 +187,24 @@ func _save() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
 		_save()
+	elif what == NOTIFICATION_APPLICATION_FOCUS_OUT and panel != null:
+		# 투명 창에서는 바깥 클릭이 다른 프로그램으로 가므로, 다른 프로그램을 누른 순간 패널을 닫는다
+		_close_panel()
+
+
+## 지금 보이는 것들의 사각형 (창 좌표). 투명 창에서는 이것만 그려지고 클릭을 받는다.
+func visible_rects() -> Array:
+	var pad := band.truck.speed() * Engine.time_scale * Feel.CLICK_REGION_INTERVAL * 2.0 + 4.0
+	var out := []
+	for r: Rect2 in band.visible_rects(pad):
+		out.append(Rect2(r.position + band.position, r.size))
+	if _debug_label.visible:
+		out.append(Rect2(band.position + _debug_label.position, _debug_label.get_combined_minimum_size()).grow(Feel.TEXT_OUTLINE_SIZE))
+	if panel.visible:
+		out.append(panel.get_rect())
+	if popup.visible:
+		out.append(popup.get_rect())
+	return out
 
 
 # ---------------- 차고 패널 ----------------

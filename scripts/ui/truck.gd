@@ -33,6 +33,14 @@ func set_track(x_from: float, x_to: float, y: float) -> void:
 	position = Vector2(_x, y)
 
 
+## 지금 속도 (픽셀/초, 배속 곱하기 전). 멈춰 있으면 0
+func speed() -> float:
+	var distance := _x_to - _x_from
+	if not running or distance < 1.0:
+		return 0.0
+	return distance / Feel.one_way_seconds(star)
+
+
 ## 클릭 판정용 사각형 (트럭의 부모 기준 좌표)
 func click_rect() -> Rect2:
 	var size := Feel.TRUCK_SIZE + Vector2(0, Feel.WHEEL_RADIUS)

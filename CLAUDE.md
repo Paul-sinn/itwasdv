@@ -60,11 +60,20 @@ PowerShell (사용자 터미널): 어느 폴더에서든 그대로 복사해서 
 # 저장·꺼둔 동안 수익 확인 (4단계 완료 기준. 진짜 저장 파일은 안 건드림)
 & "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -s tests/check_save.gd
 
+# 투명 창 클릭 통과 확인 (5단계. 진짜 창을 몇 초 띄움. 마우스는 안 건드림)
+& "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\tests\check_desktop.ps1"
+
+# 오래 켜두기 확인 (5단계. 기본 2시간, 1분마다 메모리·GDI 기록. 짧게는 끝에 -minutes 10)
+& "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\tests\soak_desktop.ps1"
+
 # 편집기 열기
 & "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64.exe" --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" --editor
 
-# 게임 실행 (디버그 실행이라 F1~F5 치트 키가 켜져 있음)
+# 게임 실행: 작업표시줄 위 투명 띠 (디버그 실행이라 F1~F5 치트 키가 켜져 있음)
 & "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64.exe" --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv"
+
+# 게임 실행: 평범한 창 (개발용)
+& "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64.exe" --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -- --windowed
 
 # 시뮬
 python "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\tools\delivery_sim.py"
@@ -76,6 +85,11 @@ python "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\tools\de
 - 설치된 버전 문서 뽑기 (규칙 7): `<GODOT_CONSOLE> --headless --doctool <빈 폴더>`
   → `<빈 폴더>/doc/classes/클래스이름.xml` 에서 함수·설정 이름 확인
 - Git Bash에서는 `&` 없이 경로를 따옴표로 감싸서 실행
+- 투명 창에서 알아둘 것 (Godot 4.6.3 + Windows에서 직접 확인):
+  창 전체 클릭 통과(`Window.mouse_passthrough`)는 다른 프로그램으로 클릭이 안 넘어간다.
+  `mouse_passthrough_polygon`만 되는데, 다각형 밖은 그려지지도 않는다 → "보이는 것 = 클릭 받는 곳".
+  새로 그리는 것이 생기면 `visible_rects()`(main.gd / band.gd)에 넣어야 보인다.
+- Godot 좌표와 Windows 좌표는 원점이 다르다 (주 모니터 왼쪽 위가 Windows 0,0)
 
 ## 현재 작업
-`docs/PROTOTYPE_V0.md`를 순서대로. 4단계(저장과 꺼둔 동안 수익) 끝남 → 다음은 5단계(투명 창).
+`docs/PROTOTYPE_V0.md`를 순서대로. 5단계(투명 창) 구현 끝, 2시간 켜두기 확인은 사용자 몫 → 다음은 6단계(연출 다듬기).
