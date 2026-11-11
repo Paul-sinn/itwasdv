@@ -5,6 +5,7 @@
 ## 약속 (docs/PROTOTYPE_V1.md "나눠 맡기"). 아래 이름과 뜻은 바꾸지 않는다:
 ##   enum Mode { SMALL, FULL } / var mode / signal mode_changed(mode)
 ##   enter_full() / enter_small() / is_transparent() / rects_provider
+##   enum FullStyle { FULLSCREEN, WINDOWED } / var full_style / signal full_style_changed(style) / set_full_style()
 ##
 ## 지금은 껍데기: v0 동작(투명 띠 / --windowed 평범한 창)을 그대로 두고,
 ## --windowed에서만 창 크기를 SMALL_SIZE ↔ WINDOWED_FULL_SIZE 로 바꾼다. 속은 창 담당이 채운다.
@@ -15,10 +16,18 @@ const Feel = preload("res://scripts/ui/feel.gd")
 
 enum Mode { SMALL, FULL }
 
+## 큰 화면(Mode.FULL)을 어떻게 띄우나. 사용자가 설정에서 고른다 (저장됨).
+##   FULLSCREEN: 모니터를 꽉 채우는 테두리 없는 전체 화면 (기본)
+##   WINDOWED:   테두리 있는 보통 창 (크기 조절 가능)
+enum FullStyle { FULLSCREEN, WINDOWED }
+
 ## 화면이 바뀐 뒤에 보냄 (창 크기가 이미 바뀐 상태)
 signal mode_changed(mode: Mode)
+## 큰 화면 띄우는 방식이 바뀐 뒤에 보냄
+signal full_style_changed(style: FullStyle)
 
 var mode: Mode = Mode.SMALL
+var full_style: FullStyle = FullStyle.FULLSCREEN
 
 ## 작은 화면(투명)에서 클릭 받을 사각형 목록(창 좌표)을 돌려주는 함수. main.gd가 넣어준다.
 var rects_provider: Callable:
@@ -63,6 +72,15 @@ func enter_small() -> void:
 	if _plain:
 		get_window().size = Feel.SMALL_SIZE
 	mode_changed.emit(mode)
+
+
+## 큰 화면 띄우는 방식 바꾸기 (설정 화면에서 부름). 껍데기: 값과 신호만.
+## 창 담당이 채울 것: 실제 창 바꾸기 + 설정 저장(user://settings.cfg) + 켤 때 읽기
+func set_full_style(style: FullStyle) -> void:
+	if style == full_style:
+		return
+	full_style = style
+	full_style_changed.emit(full_style)
 
 
 ## Esc → 작은 화면
