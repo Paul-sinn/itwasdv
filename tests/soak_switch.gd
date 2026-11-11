@@ -5,7 +5,9 @@
 ##
 ## 인자 (-- 뒤에): --switch-every <분>  0이면 안 오감 (소수도 됨)
 ##                 --minutes <분>       이만큼 + 2분 지나면 저절로 끝 (PowerShell이 먼저 죽었을 때 대비)
-## 출력: "PID n", 오갈 때마다 "SWITCH 번호 방식"
+## 출력: "PID n", 오갈 때마다 "SWITCH 번호 방식",
+##       30초마다 "MEM <Godot 자체 MB> <그래픽 MB> <오브젝트 수> <노드 수> <고아 노드 수>"
+##       (작업 메모리는 그래픽 드라이버 몫이 섞여 크게 오르내림 → 진짜 새는지는 이 줄로 본다)
 extends SceneTree
 
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
@@ -13,6 +15,7 @@ const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
 const TEST_SAVE := "user://test_window_soak.json"
 const TEST_SETTINGS := "user://test_window_soak.cfg"
 const FULL_SECONDS := 3.0        ## 큰 화면에 머무는 초
+const MEM_EVERY_SECONDS := 30.0  ## 메모리 줄을 찍는 간격
 
 var m: Node
 var switches := 0
@@ -32,6 +35,13 @@ func _run() -> void:
 	root.add_child(m)
 	# 진짜 시간 기준 (F2 배속과 상관없이)
 	create_timer((minutes + 2.0) * 60.0, true, false, true).timeout.connect(_finish)
+	var mem_timer := Timer.new()
+	mem_timer.ignore_time_scale = true
+	mem_timer.process_mode = Node.PROCESS_MODE_ALWAYS
+	mem_timer.timeout.connect(_print_mem)
+	root.add_child(mem_timer)
+	mem_timer.start(MEM_EVERY_SECONDS)
+	_print_mem()
 	if every <= 0.0:
 		return
 	_every = every * 60.0
@@ -60,6 +70,15 @@ func _on_timer() -> void:
 		switches += 1
 		print("SWITCH %d %s" % [switches, ScreenMode.STYLE_NAMES[m.screen.full_style]])
 		_timer.start(_every)
+
+
+func _print_mem() -> void:
+	print("MEM %.1f %.1f %d %d %d" % [
+		Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0,
+		Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0,
+		Performance.get_monitor(Performance.OBJECT_COUNT),
+		Performance.get_monitor(Performance.OBJECT_NODE_COUNT),
+		Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)])
 
 
 ## 끝내기 (알림 영역 메뉴 "끝내기"와 같은 길: 저장하고 끝)

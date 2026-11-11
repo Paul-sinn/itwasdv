@@ -33,17 +33,23 @@ for ($i = 0; $i -lt 100 -and -not $p; $i++) {
 if (-not $p) { "게임을 못 띄움. 로그: $log"; exit 1 }
 Start-Sleep -Seconds 5
 $cpu0 = $p.TotalProcessorTime.TotalSeconds; $t0 = Get-Date
-"minute,mem_mb,cpu_percent,gdi,user,handles,switches" | Out-File $csv -Encoding utf8
-"{0,4} {1,9} {2,7} {3,5} {4,5} {5,7} {6,6}" -f "분", "메모리MB", "CPU%", "GDI", "USER", "핸들", "오간수"
+# 메모리 세 가지: 작업 메모리(Windows가 보는 것, 그래픽 드라이버 몫이 섞여 크게 오르내림) /
+# 개인 메모리(프로세스가 잡은 것) / Godot 자체·그래픽·노드 (게임이 30초마다 찍는 "MEM" 줄. 진짜 새는지는 이걸로)
+"minute,work_mb,private_mb,godot_mb,video_mb,cpu_percent,gdi,user,handles,objects,nodes,orphans,switches" | Out-File $csv -Encoding utf8
+"{0,4} {1,7} {2,7} {3,7} {4,7} {5,6} {6,4} {7,4} {8,5} {9,5} {10,4} {11,5}" -f "분", "작업MB", "개인MB", "Godot", "그래픽", "CPU%", "GDI", "USER", "핸들", "노드", "고아", "오간수"
 for ($m = 0; $m -le $minutes; $m++) {
   $p.Refresh()
   if ($p.HasExited) { "게임이 꺼짐 (종료 코드 {0}) - {1}분째" -f $p.ExitCode, $m; break }
   $el = ((Get-Date) - $t0).TotalSeconds
   $cpu = if ($el -gt 0) { ($p.TotalProcessorTime.TotalSeconds - $cpu0) / $el / [Environment]::ProcessorCount * 100 } else { 0 }
   $sw = @(Select-String -Path $log -Pattern "^SWITCH" -ErrorAction SilentlyContinue).Count
-  $row = @($m, [math]::Round($p.WorkingSet64 / 1MB, 1), [math]::Round($cpu, 2), [GuiRes]::GetGuiResources($p.Handle, 0), [GuiRes]::GetGuiResources($p.Handle, 1), $p.HandleCount, $sw)
+  $mem = @("", "", "", "", "")
+  $memLine = Select-String -Path $log -Pattern "^MEM " -ErrorAction SilentlyContinue | Select-Object -Last 1
+  if ($memLine) { $mem = ($memLine.Line -split " ")[1..5] }
+  $row = @($m, [math]::Round($p.WorkingSet64 / 1MB, 1), [math]::Round($p.PrivateMemorySize64 / 1MB, 1), $mem[0], $mem[1], [math]::Round($cpu, 2),
+    [GuiRes]::GetGuiResources($p.Handle, 0), [GuiRes]::GetGuiResources($p.Handle, 1), $p.HandleCount, $mem[2], $mem[3], $mem[4], $sw)
   ($row -join ",") | Out-File $csv -Append -Encoding utf8
-  "{0,4} {1,9} {2,7} {3,5} {4,5} {5,7} {6,6}" -f $row[0], $row[1], $row[2], $row[3], $row[4], $row[5], $row[6]
+  "{0,4} {1,7} {2,7} {3,7} {4,7} {5,6} {6,4} {7,4} {8,5} {9,5} {10,4} {11,5}" -f $row[0], $row[1], $row[2], $row[3], $row[4], $row[5], $row[6], $row[7], $row[8], $row[10], $row[11], $row[12]
   if ($m -lt $minutes) { Start-Sleep -Seconds 60 }
 }
 if (-not $p.HasExited) { $p.CloseMainWindow() | Out-Null; $p.WaitForExit(5000) | Out-Null; if (-not $p.HasExited) { $p.Kill() } }
