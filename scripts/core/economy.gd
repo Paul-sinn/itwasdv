@@ -27,6 +27,21 @@ static func spare_price(b: Balance, star_before_break: int) -> float:
 	return roundf(b.spare_hours * hourly_income(b, star_before_break))
 
 
+## 강화 버튼을 누를 때 남겨둬야 하는 스페어값.
+## 퍼질 수 있는 강수(destroy > 0)면 "여기서 퍼졌을 때의 스페어 가격", 아니면 0.
+## (퍼져도 스페어는 반드시 살 수 있게 → 수익 0으로 영영 갇히는 일이 없음)
+static func spare_reserve(b: Balance, star: int) -> float:
+	if b.destroy[star] > 0.0:
+		return spare_price(b, star)
+	return 0.0
+
+
+## 강화 버튼을 누르려면 가지고 있어야 하는 돈 = 강화 비용 + 남겨둘 스페어값.
+## 실제로 빠지는 돈은 강화 비용뿐이다.
+static func enhance_need(b: Balance, star: int) -> float:
+	return enhance_cost(b, star) + spare_reserve(b, star)
+
+
 ## 배송 한 번에 받는 돈 = 시간당 수익 ÷ 3600 × 그 배송에 걸린 초
 ## 트럭이 빨라 보여도 1시간 동안 번 돈의 합은 시간당 수익과 같다.
 static func delivery_pay(b: Balance, star: int, trip_seconds: float) -> float:

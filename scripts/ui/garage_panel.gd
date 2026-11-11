@@ -20,6 +20,7 @@ var _income: Label
 var _chances: Label
 var _danger: Label
 var _cost: Label
+var _reserve: Label   ## 퍼질 수 있는 강수: "스페어값 N원은 남겨둬야 누를 수 있음"
 var _wait: Label
 var _enhance_button: Button
 var _spare_button: Button
@@ -49,6 +50,7 @@ func _ready() -> void:
 	_chances = _label(box, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
 	_danger = _label(box, Feel.PANEL_DANGER_SIZE, Feel.COLOR_DANGER)
 	_cost = _label(box, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
+	_reserve = _label(box, Feel.PANEL_TEXT_SIZE, Feel.COLOR_DIM)
 	_wait = _label(box, Feel.PANEL_TEXT_SIZE, Feel.COLOR_DIM)
 
 	_enhance_button = _button(box, "강화")
@@ -105,17 +107,19 @@ func refresh(b: Balance, s: GameState) -> void:
 		_spare_button.disabled = not s.can_buy_spare(b)
 		_wait.text = "" if s.can_buy_spare(b) else \
 				"%s원 모자람 · 고장 중에는 수익 0" % Fmt.money(price - s.money)
-		_set_visible([_spare_button, _wait], [_income, _chances, _danger, _cost, _enhance_button])
+		_set_visible([_spare_button, _wait], [_income, _chances, _danger, _cost, _reserve, _enhance_button])
 		_wait.visible = not s.can_buy_spare(b)
 		danger = true
 	elif at_max:
 		_income.text = "시간당 %s원" % Fmt.money(Economy.hourly_income(b, s.star))
-		_set_visible([_income], [_chances, _danger, _cost, _wait, _enhance_button, _spare_button])
+		_set_visible([_income], [_chances, _danger, _cost, _reserve, _wait, _enhance_button, _spare_button])
 	else:
 		var now := Economy.hourly_income(b, s.star)
 		var next := Economy.hourly_income(b, s.star + 1)
 		var c := Enhance.chances(b, s.star)
 		var cost := Economy.enhance_cost(b, s.star)
+		var reserve := Economy.spare_reserve(b, s.star)
+		var need := Economy.enhance_need(b, s.star)
 		var can := Enhance.block_reason(s, b) == Enhance.Block.NONE
 		_income.text = "시간당 %s원 → 성공하면 %s원" % [Fmt.money(now), Fmt.money(next)]
 		_chances.text = "성공 %s · 실패(유지) %s · 퍼짐 %s" % [
@@ -123,10 +127,13 @@ func refresh(b: Balance, s: GameState) -> void:
 		danger = c["destroy"] > 0.0
 		_danger.text = "퍼질 확률 %s" % Fmt.percent(c["destroy"])
 		_cost.text = "비용 %s원" % Fmt.money(cost)
-		_wait.text = Fmt.wait_text(Economy.seconds_to_afford(cost, s.money, s.current_hourly(b)))
+		_reserve.text = "스페어값 %s원은 남겨둬야 누를 수 있음" % Fmt.money(reserve)
+		var wait := Fmt.wait_text(Economy.seconds_to_afford(need, s.money, s.current_hourly(b)))
+		_wait.text = ("강화 비용 부족 · " + wait) if reserve > 0.0 else wait
 		_enhance_button.disabled = not can or _busy
 		_set_visible([_income, _chances, _cost, _enhance_button], [_spare_button])
 		_danger.visible = danger
+		_reserve.visible = reserve > 0.0
 		_wait.visible = not can
 
 	_style.border_color = Feel.COLOR_DANGER if danger else Feel.COLOR_PANEL_BORDER

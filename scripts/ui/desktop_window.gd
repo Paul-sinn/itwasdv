@@ -29,6 +29,11 @@ static func make_plain_window(win: Window) -> void:
 	win.always_on_top = false
 	win.transparent = false
 	win.transparent_bg = false
+	# 테두리가 생기면 그만큼 안쪽이 줄어든다 (1280x460 → 1264x421, 4.6.3 Windows에서 확인).
+	# 안쪽 크기를 설정값대로 다시 맞춘다.
+	win.size = Vector2i(
+			int(ProjectSettings.get_setting("display/window/size/viewport_width")),
+			int(ProjectSettings.get_setting("display/window/size/viewport_height")))
 
 
 func _ready() -> void:

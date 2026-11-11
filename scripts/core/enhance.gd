@@ -50,12 +50,13 @@ static func roll(b: Balance, star: int, rng: RandomNumberGenerator) -> Result:
 
 
 ## 지금 강화할 수 있나? 못 하면 그 이유.
+## 퍼질 수 있는 강수에서는 강화 비용 + 스페어값이 있어야 한다 (Economy.enhance_need).
 static func block_reason(state: GameState, b: Balance) -> Block:
 	if state.broken:
 		return Block.BROKEN
 	if state.star >= b.max_star:
 		return Block.MAX_STAR
-	if state.money < Economy.enhance_cost(b, state.star):
+	if state.money < Economy.enhance_need(b, state.star):
 		return Block.NO_MONEY
 	return Block.NONE
 

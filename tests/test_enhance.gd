@@ -175,6 +175,47 @@ func test_blocked_when_no_money_or_max() -> void:
 	check_eq(Enhance.try_enhance(s, b, rng), Enhance.Result.BLOCKED, "30강인데 강화가 됨")
 
 
+## 퍼질 수 있는 강수: 강화 비용만 있으면 막힘, 스페어값까지 있어야 누를 수 있음
+func test_blocked_without_spare_reserve() -> void:
+	var rng := RandomNumberGenerator.new()
+	var s := GameState.new()
+	s.star = 17   # 안 퍼지는 강수: 비용만 있으면 됨
+	s.money = Economy.enhance_cost(b, 17)
+	check_eq(Enhance.block_reason(s, b), Enhance.Block.NONE, "17강: 비용이 딱 있는데 막힘")
+
+	s.star = 18
+	s.money = Economy.enhance_cost(b, 18)
+	check_eq(Enhance.block_reason(s, b), Enhance.Block.NO_MONEY, "18강: 스페어값 없이 강화 가능으로 나옴")
+	check_eq(Enhance.try_enhance(s, b, rng), Enhance.Result.BLOCKED, "18강: 스페어값 없이 강화가 됨")
+	check_eq(s.money, Economy.enhance_cost(b, 18), "막혔는데 돈이 빠짐")
+	s.money = Economy.enhance_need(b, 18) - 1.0
+	check_eq(Enhance.block_reason(s, b), Enhance.Block.NO_MONEY, "18강: 1원 모자란데 강화 가능으로 나옴")
+	s.money = Economy.enhance_need(b, 18)
+	check_eq(Enhance.block_reason(s, b), Enhance.Block.NONE, "18강: 비용 + 스페어값이 딱 있는데 막힘")
+
+
+## 이 규칙의 목적: 18~29강 어디서 퍼져도 스페어는 반드시 살 수 있음 (수익 0으로 갇히지 않음)
+## 누를 수 있는 가장 적은 돈(비용 + 스페어값 딱 맞게)으로 퍼질 때까지 눌러 본다.
+func test_destroy_never_leaves_you_stuck() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 99
+	for star in range(b.max_star):
+		if b.destroy[star] <= 0.0:
+			continue
+		var s := GameState.new()
+		var result := Enhance.Result.FAIL
+		var tries := 0
+		while result != Enhance.Result.DESTROY and tries < 2000:
+			tries += 1
+			s.star = star
+			s.money = Economy.enhance_need(b, star)
+			result = Enhance.try_enhance(s, b, rng)
+		check_eq(result, Enhance.Result.DESTROY, "%d강: 2000번 안에 안 퍼짐" % star)
+		check(s.can_buy_spare(b), "%d강에서 퍼졌는데 스페어를 못 삼 (돈 %s, 스페어 %s)" % [star, s.money, s.spare_price(b)])
+		check(s.buy_spare(b), "%d강: 스페어 구매 실패" % star)
+		check(s.current_hourly(b) > 0.0, "%d강: 수리 뒤에도 수익 0" % star)
+
+
 ## F5(강제로 퍼지게 하기)에서도 쓰는 퍼짐 처리
 func test_break_engine_edge_cases() -> void:
 	var s := GameState.new()

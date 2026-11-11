@@ -16,6 +16,20 @@ func test_answer_values() -> void:
 	check_eq(Economy.spare_price(b, 18), 133438.0, "18강에서 퍼졌을 때 스페어")
 
 
+## 퍼질 수 있는 강수(18강~)에서는 강화 비용 + 스페어값이 있어야 누를 수 있음
+func test_spare_reserve() -> void:
+	for star in b.max_star:
+		var cost := Economy.enhance_cost(b, star)
+		if b.destroy[star] > 0.0:
+			check_eq(Economy.spare_reserve(b, star), Economy.spare_price(b, star), "%d강: 남겨둘 스페어값" % star)
+			check_eq(Economy.enhance_need(b, star), cost + Economy.spare_price(b, star), "%d강: 필요한 돈" % star)
+		else:
+			check_eq(Economy.spare_reserve(b, star), 0.0, "%d강: 안 퍼지는데 스페어값을 남기라고 함" % star)
+			check_eq(Economy.enhance_need(b, star), cost, "%d강: 필요한 돈이 비용과 다름" % star)
+	check_eq(Economy.spare_reserve(b, 17), 0.0, "17강은 안 퍼짐")
+	check_eq(Economy.enhance_need(b, 18), 77839.0 + 133438.0, "18강: 비용 77,839 + 스페어 133,438")
+
+
 func test_hourly_income() -> void:
 	check_near(Economy.hourly_income(b, 0), 1000.0, 1e-9, "0강 시간당 수익")
 	check_near(Economy.hourly_income(b, 1), 1100.0, 1e-9, "1강 시간당 수익")

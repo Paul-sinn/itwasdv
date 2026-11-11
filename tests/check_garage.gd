@@ -7,6 +7,8 @@ extends SceneTree
 
 const MAIN_SCENE := "res://scenes/main.tscn"
 const Save = preload("res://scripts/core/save.gd")
+const Economy = preload("res://scripts/core/economy.gd")
+const Fmt = preload("res://scripts/ui/fmt.gd")
 const TEST_SAVE := "user://test_check_save.json"
 
 var m: Node
@@ -43,7 +45,10 @@ func _run() -> void:
 		_check(m.state.star == star, "F4 %d번째: 강수 %d (기대 %d)" % [star, m.state.star, star])
 		var danger: bool = b.destroy[star] > 0.0
 		_check(p._danger.visible == danger, "%d강: '퍼질 확률' 표시가 %s여야 함" % [star, "보임" if danger else "숨김"])
+		_check(p._reserve.visible == danger, "%d강: '스페어값 남겨두기' 줄이 %s여야 함" % [star, "보임" if danger else "숨김"])
+		_check(p._wait.text.begins_with("강화 비용 부족") == danger, "%d강: 모자람 안내가 이상함: '%s'" % [star, p._wait.text])
 		_check(p._chances.text.contains("성공"), "%d강: 확률 줄이 비어 있음" % star)
+		_check(p.get_global_rect().position.y >= 0.0, "%d강: 패널 위쪽이 창 밖으로 잘림 (y = %.0f)" % [star, p.get_global_rect().position.y])
 		_key(KEY_F4)
 		await _frames(1)
 	_check(m.state.star == b.max_star, "F4를 30번 눌렀는데 30강이 아님: %d" % m.state.star)
@@ -75,6 +80,26 @@ func _run() -> void:
 	await _frames(2)
 	_check(not m.state.broken and m.state.star == 15, "스페어 클릭 뒤: 고장 %s, 강수 %d" % [m.state.broken, m.state.star])
 	_check(p._result.text.contains("스페어"), "수리 결과가 안 보임: '%s'" % p._result.text)
+
+	# 4-2) 퍼질 수 있는 강수(18강): 강화 비용만 있으면 막힘, 스페어값까지 있어야 눌림
+	m.state.star = 18
+	m.state.money = Economy.enhance_cost(b, 18)
+	await _frames(1)
+	_check(p._enhance_button.disabled, "18강: 스페어값 없이 강화 버튼이 눌림 상태")
+	_check(p._reserve.visible and p._reserve.text.contains(Fmt.money(Economy.spare_price(b, 18))),
+			"18강: 스페어값 줄이 이상함: '%s'" % p._reserve.text)
+	_check(p._wait.visible and p._wait.text.begins_with("강화 비용 부족"), "18강: '강화 비용 부족'이 없음: '%s'" % p._wait.text)
+	var before_block: int = m.state.press_count()
+	_click(p._enhance_button.get_global_rect().get_center())
+	await _frames(2)
+	_check(not m.enhancing and m.state.press_count() == before_block, "18강: 막힌 버튼을 눌렀더니 강화가 시작됨")
+	# 패널이 가장 길어지는 경우(퍼질 수 있는 강수 + 돈 모자람 + 결과 줄)에도 창 안에 다 들어오나
+	p.show_result("실패", Color.GRAY)
+	await _frames(2)
+	_check(p.get_global_rect().position.y >= 0.0, "패널 위쪽이 창 밖으로 잘림: 위쪽 y = %.0f" % p.get_global_rect().position.y)
+	m.state.money = Economy.enhance_need(b, 18)
+	await _frames(1)
+	_check(not p._enhance_button.disabled and not p._wait.visible, "18강: 비용 + 스페어값이 있는데 버튼이 막힘")
 
 	# 5) 강화 버튼을 진짜로 클릭 → 뜸 → 결과 반영, 통계
 	m.state.money = 1e12

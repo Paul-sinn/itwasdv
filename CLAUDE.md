@@ -95,7 +95,8 @@ python "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\tools\de
 - Godot 좌표와 Windows 좌표는 원점이 다르다 (주 모니터 왼쪽 위가 Windows 0,0)
 
 ## 현재 작업
-`docs/PROTOTYPE_V0.md` 0~6단계 구현 끝. 남은 것 (사용자):
+`docs/PROTOTYPE_V0.md` 0~6단계 구현 끝. 플레이 테스트 끝 ("아니오" 1개, 결과는 `docs/IDEAS.md`).
+퍼짐 구간 "스페어값 남겨야 강화 가능" 규칙 넣음. 남은 것:
 - 5단계 2시간 켜두기 확인 (`tests/soak_desktop.ps1`)
-- 플레이 테스트 (지시서 맨 아래 5문항). "아니오" 2개 이상이면 `feel.gd`·`cost_hours`부터 고친다
-- `docs/IDEAS.md`의 [결정 필요] 항목 (고장 + 스페어값 부족이면 갇힘)
+- 플레이 테스트 4번 "거슬림 / 생각한 UI 구조와 다름" → 사용자가 생각한 구조를 듣고 정하기
+- 다음 지시서 (사용자는 튜닝(큐브)을 넣고 싶어 함)
