@@ -163,7 +163,7 @@ func _run() -> void:
 	m.state.money = Economy.enhance_cost(b, 18)
 	await _frames(1)
 	_check(p._enhance_button.disabled, "18강: 스페어값 없이 강화 버튼이 눌림 상태")
-	_check(p._reserve.visible and p._reserve.text.contains(Fmt.money(Economy.spare_price(b, 18))),
+	_check(p._reserve.visible and p._reserve.text.contains(Fmt.money(Economy.spare_price(b))),
 			"18강: 스페어값 줄이 이상함: '%s'" % p._reserve.text)
 	_check(p._wait.visible and p._wait.text.begins_with("강화 비용 부족"), "18강: '강화 비용 부족'이 없음: '%s'" % p._wait.text)
 	var before_block: int = m.state.press_count()

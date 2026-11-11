@@ -13,7 +13,9 @@ func test_answer_values() -> void:
 	check_eq(Economy.enhance_cost(b, 10), 1037.0, "10→11강 비용")
 	check_eq(Economy.enhance_cost(b, 17), 45490.0, "17→18강 비용")
 	check_eq(Economy.enhance_cost(b, 19), 122318.0, "19→20강 비용")
-	check_eq(Economy.spare_price(b, 18), 133438.0, "18강에서 퍼졌을 때 스페어")
+	check_eq(Economy.spare_price(b), 50000.0, "스페어 (고정 금액)")
+	# 20강부터 수익이 1강마다 1.3배 → 비용도 "그 강수 수익의 N시간치"라 같이 오른다
+	check_eq(Economy.enhance_cost(b, 20), roundf(25.0 * 1000.0 * pow(1.1, 19) * 1.3), "20→21강 비용")
 
 
 ## 퍼질 수 있는 강수(18강~)에서는 강화 비용 + 스페어값이 있어야 누를 수 있음
@@ -21,20 +23,28 @@ func test_spare_reserve() -> void:
 	for star in b.max_star:
 		var cost := Economy.enhance_cost(b, star)
 		if b.destroy[star] > 0.0:
-			check_eq(Economy.spare_reserve(b, star), Economy.spare_price(b, star), "%d강: 남겨둘 스페어값" % star)
-			check_eq(Economy.enhance_need(b, star), cost + Economy.spare_price(b, star), "%d강: 필요한 돈" % star)
+			check_eq(Economy.spare_reserve(b, star), Economy.spare_price(b), "%d강: 남겨둘 스페어값" % star)
+			check_eq(Economy.enhance_need(b, star), cost + Economy.spare_price(b), "%d강: 필요한 돈" % star)
 		else:
 			check_eq(Economy.spare_reserve(b, star), 0.0, "%d강: 안 퍼지는데 스페어값을 남기라고 함" % star)
 			check_eq(Economy.enhance_need(b, star), cost, "%d강: 필요한 돈이 비용과 다름" % star)
 	check_eq(Economy.spare_reserve(b, 17), 0.0, "17강은 안 퍼짐")
-	check_eq(Economy.enhance_need(b, 18), 77839.0 + 133438.0, "18강: 비용 77,839 + 스페어 133,438")
+	check_eq(Economy.enhance_need(b, 18), 77839.0 + 50000.0, "18강: 비용 77,839 + 스페어 50,000")
 
 
 func test_hourly_income() -> void:
 	check_near(Economy.hourly_income(b, 0), 1000.0, 1e-9, "0강 시간당 수익")
 	check_near(Economy.hourly_income(b, 1), 1100.0, 1e-9, "1강 시간당 수익")
 	check_near(Economy.hourly_income(b, 2), 1210.0, 1e-9, "2강 시간당 수익")
-	check_near(Economy.hourly_income(b, 30), 1000.0 * pow(1.1, 30), 1e-6, "30강 시간당 수익")
+	# 19강까지 1.1배씩, 20강부터 1.3배씩
+	var h19 := 1000.0 * pow(1.1, 19)
+	check_near(Economy.hourly_income(b, 19), h19, 1e-6, "19강 시간당 수익 (1.1배 구간 끝)")
+	check_near(Economy.hourly_income(b, 20), h19 * 1.3, 1e-6, "20강 시간당 수익 (여기부터 1.3배)")
+	check_near(Economy.hourly_income(b, 21), h19 * 1.3 * 1.3, 1e-6, "21강 시간당 수익")
+	check_near(Economy.hourly_income(b, 30), h19 * pow(1.3, 11), 1e-4, "30강 시간당 수익")
+	for star in range(1, b.max_star + 1):
+		var ratio := Economy.hourly_income(b, star) / Economy.hourly_income(b, star - 1)
+		check_near(ratio, 1.3 if star >= 20 else 1.1, 1e-9, "%d강: 한 강 오를 때 배수" % star)
 
 
 ## 배송 시간이 제각각이어도(트럭이 빨라져도) 1시간 동안 번 돈 = 시간당 수익

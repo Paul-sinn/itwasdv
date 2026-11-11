@@ -28,7 +28,9 @@ DAYS = 30
 
 # ---------- 1. 수익 (모든 가격의 기준) ----------
 BASE_HOURLY = 1000        # +0강 트럭 1대가 1시간에 버는 돈
-STAR_MULT = 1.10          # 엔진 1강마다 수익 x1.10
+STAR_MULT = 1.10          # 엔진 1강마다 수익 x1.10 (HIGH_FROM_STAR 전까지)
+STAR_MULT_HIGH = 1.30     # HIGH_FROM_STAR강부터는 1강마다 x1.30 (수익이 확 오르는 구간)
+HIGH_FROM_STAR = 20       # 이 강수가 되는 순간부터 STAR_MULT_HIGH (19→20강부터)
 DRIVER_CUT = 0.8          # 부캐 트럭은 기사 월급 떼고 80%
 OFFLINE_CAP_HOURS = 8     # 꺼둔 동안 최대 8시간치
 OFFLINE_RATE = 0.5        # 꺼둔 동안은 50%
@@ -57,7 +59,7 @@ COST_HOURS = [.02, .03, .04, .05, .07, .10, .13, .17, .22, .30,     # 0~9   (1~1
               14, 20,                                               # 18~19
               25, 35, 45, 60, 80,                                   # 20~24
               100, 130, 160, 200, 250]                              # 25~29
-SPARE_HOURS = 24          # 스페어 엔진 = 퍼지기 직전 강수 트럭의 24시간치 수익
+SPARE_PRICE = 50000       # 스페어 엔진 = 강수와 상관없는 고정 금액
 # 튜닝(큐브) 1번 비용 = +0강 트럭 몇 시간치 (등급별)
 TUNE_GRADES = ["일반", "레어", "에픽", "전설"]
 TUNE_BONUS = [0.0, 0.10, 0.25, 0.50]
@@ -137,7 +139,8 @@ def load_balance(path=BALANCE_PATH):
 
 load_balance()
 
-INC = [BASE_HOURLY * STAR_MULT ** s for s in range(MAX_STAR + 1)]
+INC = [BASE_HOURLY * STAR_MULT ** min(s, HIGH_FROM_STAR - 1)
+       * STAR_MULT_HIGH ** max(0, s - (HIGH_FROM_STAR - 1)) for s in range(MAX_STAR + 1)]
 COST = [COST_HOURS[s] * INC[s] for s in range(MAX_STAR)]
 TUNE_COST = [h * BASE_HOURLY for h in TUNE_COST_HOURS]
 
@@ -238,7 +241,7 @@ class Player:
 
     # ---------- 강화 ----------
     def spare_price(self, star):
-        return SPARE_HOURS * INC[star]
+        return SPARE_PRICE   # 고정 금액 (star는 안 씀)
 
     def repair(self):
         for t in self.trucks:
@@ -305,7 +308,8 @@ class Player:
                 if R.d[t.star] > 0 and self.careful and self.spares == 0 and self.protect == 0:
                     need += self.spare_price(t.star)
                 if need <= self.wallet:
-                    v = INC[t.star] * (1 + TUNE_BONUS[t.tune]) * cut * (STAR_MULT - 1) * R.p[t.star] / cost
+                    gain = INC[t.star + 1] / INC[t.star] - 1   # 한 강 오를 때 수익 증가 비율 (20강부터 커짐)
+                    v = INC[t.star] * (1 + TUNE_BONUS[t.tune]) * cut * gain * R.p[t.star] / cost
                     if best is None or v > best[0]:
                         best = (v, "engine", i)
             if t.tune < 3 and TUNE_COST[t.tune] <= self.wallet:
@@ -388,8 +392,9 @@ def price_table(rules):
     for s in [0, 5, 10, 12, 15, 17, 18, 19, 20, 21, 22, 25, 27, 29]:
         print(f"  {s:>2}→{s + 1:<2}강 | {rules.p[s] * 100:5.1f}% | {rules.d[s] * 100:4.1f}% "
               f"| {COST[s]:>12,.0f} | {COST_HOURS[s]:>8.2f}시간      | {1 / rules.p[s]:5.1f}번")
-    print(f"\n  스페어 엔진: 18강에서 퍼지면 {SPARE_HOURS * INC[18]:,.0f} / "
-          f"22강 {SPARE_HOURS * INC[22]:,.0f} / 25강 {SPARE_HOURS * INC[25]:,.0f}")
+    print(f"\n  스페어 엔진: 고정 {SPARE_PRICE:,.0f} (18강 수익 {SPARE_PRICE / INC[18]:.1f}시간치 / "
+          f"22강 {SPARE_PRICE / INC[22]:.1f}시간치 / 25강 {SPARE_PRICE / INC[25]:.1f}시간치)")
+    print("  시간당 수익: " + " / ".join(f"{s}강 {INC[s]:,.0f}" for s in [0, 10, 18, 19, 20, 22, 25, 30]))
     print("  튜닝 1번: " + " / ".join(f"{g}→{TUNE_GRADES[i + 1]} {TUNE_COST[i]:,.0f} "
                                     f"(등급업 {TUNE_UP_CHANCE[i] * 100:.1f}%)"
                                     for i, g in enumerate(TUNE_GRADES[:3])))

@@ -9,7 +9,7 @@ const Economy = preload("res://scripts/core/economy.gd")
 var money: float = 0.0
 var star: int = 0
 var broken: bool = false          ## 고장 엔진: 트럭 멈춤, 수익 0, 강화 불가
-var star_before_break: int = 0    ## 퍼지기 직전 강수 (스페어 가격 계산용)
+var star_before_break: int = 0    ## 퍼지기 직전 강수 (기록용. 스페어 가격은 이제 고정 금액이라 안 씀)
 
 # 통계 (강화 버튼을 눌러서 나온 결과만 센다)
 var success_count: int = 0
@@ -29,9 +29,9 @@ func current_hourly(b: Balance) -> float:
 	return Economy.hourly_income(b, star)
 
 
-## 지금 스페어 엔진 가격 (퍼지기 직전 강수 기준)
+## 지금 스페어 엔진 가격 (고정 금액)
 func spare_price(b: Balance) -> float:
-	return Economy.spare_price(b, star_before_break)
+	return Economy.spare_price(b)
 
 
 func can_buy_spare(b: Balance) -> bool:

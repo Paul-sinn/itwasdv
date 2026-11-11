@@ -50,6 +50,13 @@ func test_bad_values_are_reported() -> void:
 	check(_has_error(b, "engine.success[5] 가 숫자가 아님"), "숫자 아닌 칸을 못 찾음")
 	note("찾은 문제: " + " / ".join(b.errors))
 
+	var d2 := real_balance_dict()
+	d2["income"]["high_from_star"] = 20.5
+	d2["engine"].erase("spare_price")
+	var b2: Balance = Balance.from_dict(d2)
+	check(_has_error(b2, "income.high_from_star"), "정수가 아닌 high_from_star를 못 찾음")
+	check(_has_error(b2, "engine.spare_price 이 없음"), "빠진 spare_price를 못 찾음")
+
 
 func test_bad_max_star_is_reported() -> void:
 	var d := real_balance_dict()

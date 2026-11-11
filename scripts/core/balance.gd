@@ -16,7 +16,9 @@ var errors: PackedStringArray = PackedStringArray()
 
 # --- income ---
 var base_hourly: float          ## 0강 트럭의 시간당 수익
-var star_mult: float            ## 1강마다 시간당 수익에 곱하는 수
+var star_mult: float            ## 1강마다 시간당 수익에 곱하는 수 (high_from_star 전까지)
+var star_mult_high: float       ## high_from_star강부터 1강마다 곱하는 수 (수익이 확 오르는 구간)
+var high_from_star: int         ## 이 강수가 되는 순간부터 star_mult_high를 곱함 (예: 20 → 19→20강부터)
 var offline_cap_hours: float    ## 꺼둔 동안 최대 몇 시간치까지 쌓이나
 var offline_rate: float         ## 꺼둔 동안 수익 비율 (0.5 = 절반)
 
@@ -26,7 +28,7 @@ var success: PackedFloat64Array     ## success[강수] = 그 강수에서 강화
 var destroy: PackedFloat64Array     ## destroy[강수] = 그 강수에서 퍼질 확률
 var cost_hours: PackedFloat64Array  ## cost_hours[강수] = 강화 1번 비용 (그 강수 시간당 수익의 몇 시간치)
 var broken_drop_to: int         ## 퍼지면 내려가는 강수
-var spare_hours: float          ## 스페어 엔진 = 퍼지기 직전 강수 시간당 수익의 몇 시간치
+var spare_price: float          ## 스페어 엔진 가격 (강수와 상관없는 고정 금액, 원)
 
 
 func is_ok() -> bool:
@@ -74,6 +76,8 @@ static func from_dict(d: Dictionary) -> RefCounted:
 	var engine: Dictionary = d["engine"]
 	b.base_hourly = float(income["base_hourly"])
 	b.star_mult = float(income["star_mult"])
+	b.star_mult_high = float(income["star_mult_high"])
+	b.high_from_star = int(income["high_from_star"])
 	b.offline_cap_hours = float(income["offline_cap_hours"])
 	b.offline_rate = float(income["offline_rate"])
 	b.max_star = int(engine["max_star"])
@@ -81,7 +85,7 @@ static func from_dict(d: Dictionary) -> RefCounted:
 	b.destroy = PackedFloat64Array(engine["destroy"])
 	b.cost_hours = PackedFloat64Array(engine["cost_hours"])
 	b.broken_drop_to = int(engine["broken_drop_to"])
-	b.spare_hours = float(engine["spare_hours"])
+	b.spare_price = float(engine["spare_price"])
 	return b
 
 
@@ -101,11 +105,14 @@ static func validate(d: Dictionary) -> PackedStringArray:
 	# --- income ---
 	_check_number(income, "income", "base_hourly", errs, "0보다 커야 함", func(v): return v > 0.0)
 	_check_number(income, "income", "star_mult", errs, "0보다 커야 함", func(v): return v > 0.0)
+	_check_number(income, "income", "star_mult_high", errs, "0보다 커야 함", func(v): return v > 0.0)
+	_check_number(income, "income", "high_from_star", errs, "1 이상의 정수여야 함",
+			func(v): return v >= 1.0 and v == floorf(v))
 	_check_number(income, "income", "offline_cap_hours", errs, "0 이상이어야 함", func(v): return v >= 0.0)
 	_check_number(income, "income", "offline_rate", errs, "0~1 사이여야 함", func(v): return v >= 0.0 and v <= 1.0)
 
 	# --- engine ---
-	_check_number(engine, "engine", "spare_hours", errs, "0 이상이어야 함", func(v): return v >= 0.0)
+	_check_number(engine, "engine", "spare_price", errs, "0 이상이어야 함", func(v): return v >= 0.0)
 	var max_ok := _check_number(engine, "engine", "max_star", errs, "1 이상의 정수여야 함",
 			func(v): return v >= 1.0 and v == floorf(v))
 	if not max_ok:

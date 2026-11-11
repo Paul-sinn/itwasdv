@@ -10,9 +10,13 @@ const Balance = preload("res://scripts/core/balance.gd")
 const SECONDS_PER_HOUR := 3600.0
 
 
-## 시간당 수익 = base_hourly × star_mult ^ 강수
+## 시간당 수익: 1강 오를 때마다 star_mult배, high_from_star강부터는 star_mult_high배.
+##   high_from_star = 20이면: 19강까지 = base_hourly × star_mult ^ 강수
+##                           20강부터 = (19강 수익) × star_mult_high ^ (강수 - 19)
 static func hourly_income(b: Balance, star: int) -> float:
-	return b.base_hourly * pow(b.star_mult, star)
+	var low_steps := mini(star, b.high_from_star - 1)
+	var high_steps := maxi(0, star - (b.high_from_star - 1))
+	return b.base_hourly * pow(b.star_mult, low_steps) * pow(b.star_mult_high, high_steps)
 
 
 ## 강화 1번 비용 = cost_hours[강수] × 시간당 수익(강수). 원 단위 반올림.
@@ -22,17 +26,17 @@ static func enhance_cost(b: Balance, star: int) -> float:
 	return roundf(b.cost_hours[star] * hourly_income(b, star))
 
 
-## 스페어 엔진 가격 = spare_hours × 시간당 수익(퍼지기 직전 강수). 원 단위 반올림.
-static func spare_price(b: Balance, star_before_break: int) -> float:
-	return roundf(b.spare_hours * hourly_income(b, star_before_break))
+## 스페어 엔진 가격: 강수와 상관없는 고정 금액 (balance.json engine.spare_price). 원 단위 반올림.
+static func spare_price(b: Balance) -> float:
+	return roundf(b.spare_price)
 
 
 ## 강화 버튼을 누를 때 남겨둬야 하는 스페어값.
-## 퍼질 수 있는 강수(destroy > 0)면 "여기서 퍼졌을 때의 스페어 가격", 아니면 0.
+## 퍼질 수 있는 강수(destroy > 0)면 스페어 가격, 아니면 0.
 ## (퍼져도 스페어는 반드시 살 수 있게 → 수익 0으로 영영 갇히는 일이 없음)
 static func spare_reserve(b: Balance, star: int) -> float:
 	if b.destroy[star] > 0.0:
-		return spare_price(b, star)
+		return spare_price(b)
 	return 0.0
 
 

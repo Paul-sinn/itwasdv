@@ -112,7 +112,8 @@ func test_destroy_then_spare() -> void:
 
 	# 돈 모자라면 스페어 못 삼
 	var price := s.spare_price(b)
-	check_eq(price, Economy.spare_price(b, 20), "스페어 가격이 20강 기준이 아님")
+	check_eq(price, Economy.spare_price(b), "스페어 가격이 고정 금액이 아님")
+	check_eq(price, 50000.0, "스페어 가격")
 	s.money = price - 1.0
 	check(not s.buy_spare(b), "돈이 모자란데 스페어를 삼")
 	check(s.broken, "스페어를 못 샀는데 고장이 풀림")
