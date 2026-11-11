@@ -42,22 +42,23 @@ winget으로 설치됨. 실행 파일 폴더:
 - `Godot_v4.6.3-stable_win64_console.exe`: 출력이 터미널에 찍히는 실행용 (아래 `<GODOT_CONSOLE>`)
 - 렌더러: Compatibility (OpenGL). 2D만 쓰고, 하루 종일 켜두는 게임이라 가벼운 쪽
 
-명령은 저장소 폴더(`project.godot` 있는 곳)에서 실행.
 **PowerShell에서는 경로 앞에 `&`를 꼭 붙인다.** (안 붙이면 "Unexpected token" 오류)
+**`--path` 뒤에는 프로젝트 폴더 전체 경로를 쓴다.** `--path .`은 터미널이 지금 있는 폴더라서,
+바깥 폴더(`itwasdeliverd`)에서 실행하면 "File not found" 오류가 난다.
 
-PowerShell (사용자 터미널) — 그대로 복사해서 붙여 넣기:
+PowerShell (사용자 터미널): 어느 폴더에서든 그대로 복사해서 붙여 넣기
 ```powershell
 # 테스트 (전부 통과면 마지막 줄 "테스트 N개 중 N개 통과")
-& "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path . -s tests/run_tests.gd
+& "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -s tests/run_tests.gd
 
 # 편집기 열기
-& "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64.exe" --path . --editor
+& "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64.exe" --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" --editor
 
 # 게임 실행 (메인 씬은 2단계에서 정함)
-& "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64.exe" --path .
+& "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64.exe" --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv"
 
 # 시뮬
-python tools/delivery_sim.py
+python "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\tools\delivery_sim.py"
 ```
 
 그 밖에:
