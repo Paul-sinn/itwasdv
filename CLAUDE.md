@@ -51,6 +51,9 @@ PowerShell (사용자 터미널): 어느 폴더에서든 그대로 복사해서 
 # 테스트 (전부 통과면 마지막 줄 "테스트 N개 중 N개 통과")
 & "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -s tests/run_tests.gd
 
+# 띠 1시간 수익 확인 (2단계 완료 기준. 화면 없이 게임 1시간을 몇 초 만에 돌림)
+& "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" --fixed-fps 60 -s tests/check_band_hour.gd
+
 # 편집기 열기
 & "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64.exe" --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" --editor
 
@@ -67,4 +70,4 @@ python "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\tools\de
 - Git Bash에서는 `&` 없이 경로를 따옴표로 감싸서 실행
 
 ## 현재 작업
-`docs/PROTOTYPE_V0.md`를 순서대로. 1단계(계산 코드) 끝남 → 다음은 2단계(띠 화면).
+`docs/PROTOTYPE_V0.md`를 순서대로. 2단계(띠 화면) 끝남 → 다음은 3단계(차고 패널과 강화).
