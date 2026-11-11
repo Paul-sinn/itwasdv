@@ -45,6 +45,9 @@ winget으로 설치됨. 실행 파일 폴더:
 **PowerShell에서는 경로 앞에 `&`를 꼭 붙인다.** (안 붙이면 "Unexpected token" 오류)
 **`--path` 뒤에는 프로젝트 폴더 전체 경로를 쓴다.** `--path .`은 터미널이 지금 있는 폴더라서,
 바깥 폴더(`itwasdeliverd`)에서 실행하면 "File not found" 오류가 난다.
+**`.ps1` 파일은 `powershell -ExecutionPolicy Bypass -File "<경로>"`로 실행한다.** 이 PC는 기본 설정이
+스크립트 파일 실행을 막아서 `& "<경로>.ps1"`로는 "스크립트를 실행할 수 없으므로" 오류가 난다.
+(Bypass는 그 한 번만 허용. PC 설정은 안 바뀜)
 
 PowerShell (사용자 터미널): 어느 폴더에서든 그대로 복사해서 붙여 넣기
 ```powershell
@@ -61,10 +64,10 @@ PowerShell (사용자 터미널): 어느 폴더에서든 그대로 복사해서 
 & "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -s tests/check_save.gd
 
 # 투명 창 클릭 통과 확인 (5단계. 진짜 창을 몇 초 띄움. 마우스는 안 건드림)
-& "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\tests\check_desktop.ps1"
+powershell -ExecutionPolicy Bypass -File "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\tests\check_desktop.ps1"
 
 # 오래 켜두기 확인 (5단계. 기본 2시간, 1분마다 메모리·GDI 기록. 짧게는 끝에 -minutes 10)
-& "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\tests\soak_desktop.ps1"
+powershell -ExecutionPolicy Bypass -File "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\tests\soak_desktop.ps1"
 
 # 편집기 열기
 & "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64.exe" --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" --editor

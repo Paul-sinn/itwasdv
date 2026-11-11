@@ -4,7 +4,8 @@
 #            GDI/USER 숫자가 계속 늘지 않나, 메모리가 계속 늘지 않나 (아래 표)
 #
 # 실행 (PowerShell):
-#   & "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\tests\soak_desktop.ps1"
+#   powershell -ExecutionPolicy Bypass -File "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\tests\soak_desktop.ps1"
+#   (그냥 & "경로.ps1" 로 하면 이 PC 기본 설정이 스크립트 실행을 막아서 오류가 남)
 #   (짧게: 위 명령 끝에 -minutes 10)
 param([int]$minutes = 120)
 $proj = Split-Path -Parent $PSScriptRoot

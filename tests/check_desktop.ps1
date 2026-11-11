@@ -3,7 +3,8 @@
 # (마우스를 움직이거나 클릭하지는 않음)
 #
 # 실행 (PowerShell):
-#   & "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\tests\check_desktop.ps1"
+#   powershell -ExecutionPolicy Bypass -File "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\tests\check_desktop.ps1"
+#   (그냥 & "경로.ps1" 로 하면 이 PC 기본 설정이 스크립트 실행을 막아서 오류가 남)
 $proj = Split-Path -Parent $PSScriptRoot
 $G = "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe"
 Add-Type @"
