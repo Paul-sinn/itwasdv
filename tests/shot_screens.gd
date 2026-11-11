@@ -9,8 +9,9 @@ const Save = preload("res://scripts/core/save.gd")
 const Enhance = preload("res://scripts/core/enhance.gd")
 const Economy = preload("res://scripts/core/economy.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
-const DesktopWindow = preload("res://scripts/ui/desktop_window.gd")
+const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
 const TEST_SAVE := "user://test_town_shot.json"
+const TEST_SETTINGS := "user://test_town_settings.cfg"
 const FULL_SIZES := [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(1920, 1080), Vector2i(3440, 1440)]
 
 var vp: SubViewport
@@ -23,7 +24,11 @@ func _initialize() -> void:
 		print("[멈춤] 화면 없는 실행(--headless)에서는 사진을 못 찍음")
 		quit(1)
 		return
-	DesktopWindow.make_plain_window(root)   # 투명 창으로 안 띄움
+	# 투명 창으로 안 띄움 (screen_mode도 --windowed면 평범한 창으로 바꾸지만, 그 전에 먼저)
+	root.borderless = false
+	root.always_on_top = false
+	root.transparent = false
+	root.transparent_bg = false
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--out="):
 			out_dir = a.substr(6)
@@ -42,6 +47,7 @@ func _run() -> void:
 	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	root.add_child(vp)
 	Save.delete_file(TEST_SAVE)
+	(ScreenMode as Object).set("settings_path", TEST_SETTINGS)   # 진짜 설정 파일을 안 건드리게 (창 담당 약속)
 	m = load("res://scenes/main.tscn").instantiate()
 	m.save_path = TEST_SAVE
 	vp.add_child(m)
@@ -115,6 +121,7 @@ func _run() -> void:
 		await _shot("full_settings_1280x720")
 
 	Save.delete_file(TEST_SAVE)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SETTINGS))
 	print("사진 저장: ", out_dir)
 	quit(0)
 

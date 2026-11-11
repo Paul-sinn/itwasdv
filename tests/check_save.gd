@@ -15,6 +15,8 @@ const GameState = preload("res://scripts/core/game_state.gd")
 const Economy = preload("res://scripts/core/economy.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const TEST_SAVE := "user://test_town_save.json"
+const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
+const TEST_SETTINGS := "user://test_town_settings.cfg"   ## 진짜 설정 파일 말고 (읽기만 하지만 따로)
 const HOUR := 3600
 
 var fails := PackedStringArray()
@@ -28,6 +30,7 @@ func _initialize() -> void:
 func _run() -> void:
 	await process_frame
 	root.size = Feel.SMALL_SIZE
+	(ScreenMode as Object).set("settings_path", TEST_SETTINGS)   # screen_mode.gd에 settings_path가 없으면 아무 일 없음
 	Save.delete_file(TEST_SAVE)
 
 	# 1) 껐다 켜도 상태 유지 (끌 때 저장 → 다시 켬)

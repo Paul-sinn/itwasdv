@@ -19,6 +19,7 @@ const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
 const TEST_SAVE := "user://test_town_garage.json"
+const TEST_SETTINGS := "user://test_town_settings.cfg"   ## [설정]에서 고른 값이 저장되는 곳 (진짜 설정 말고)
 const FULL_SIZES := [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(1920, 1080), Vector2i(3440, 1440)]
 const WINDOWED_SIZES := [Vector2i(1280, 720), Vector2i(1366, 768), Vector2i(1500, 1000), Vector2i(2200, 800), Vector2i(1280, 1300)]
 const MAX_RECTS := 30
@@ -36,6 +37,9 @@ func _initialize() -> void:
 func _run() -> void:
 	await process_frame
 	root.size = Feel.SMALL_SIZE
+	# 진짜 설정 파일(user://settings.cfg)을 안 건드리게 (screen_mode.gd의 settings_path. 없으면 아무 일 없음)
+	(ScreenMode as Object).set("settings_path", TEST_SETTINGS)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SETTINGS))
 	m = load(MAIN_SCENE).instantiate()
 	Save.delete_file(TEST_SAVE)
 	m.save_path = TEST_SAVE   # 진짜 저장 파일은 건드리지 않음
@@ -192,6 +196,10 @@ func _run() -> void:
 	_check(p._result.get_theme_font_size("font_size") > Feel.PANEL_TEXT_SIZE, "결과 글자가 v0 패널보다 크지 않음")
 	_check(p._title.get_theme_font_size("font_size") > Feel.PANEL_TITLE_SIZE, "차고 제목이 v0 패널보다 크지 않음")
 	_check(p._stats.text.contains("누른 횟수 %d" % m.state.press_count()), "통계 줄이 안 맞음: '%s'" % p._stats.text)
+	# 흔들림 연출(진짜 시간)이 끝날 때까지 기다림. 흔들리는 동안은 화면 전체가 조금씩 밀려 있음
+	await create_timer(maxf(Feel.DESTROY_SHAKE_DURATION, Feel.FAIL_SHAKE_DURATION) + 0.1, true, false, true).timeout
+	await _frames(2)
+	_check(m.position == Vector2.ZERO and m._panel_shake == Vector2.ZERO, "흔들림이 끝났는데 제자리로 안 돌아옴")
 
 	# 8) 여러 창 크기에서 차고가 가장 길 때 / 고장일 때 / 30강일 때 다 들어오나
 	for size in FULL_SIZES:
@@ -249,6 +257,7 @@ func _run() -> void:
 			"F3 뒤 처음 상태가 아님: ★%d %.1f원 %d번" % [m.state.star, m.state.money, m.state.press_count()])
 
 	Save.delete_file(TEST_SAVE)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SETTINGS))
 	print("확인 %d개 중 %d개 통과" % [checks, checks - fails.size()])
 	for f in fails:
 		print("  [실패] " + f)

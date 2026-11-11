@@ -11,6 +11,8 @@ const MAIN_SCENE := "res://scenes/main.tscn"
 const Save = preload("res://scripts/core/save.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const TEST_SAVE := "user://test_town_hour.json"
+const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
+const TEST_SETTINGS := "user://test_town_settings.cfg"   ## 진짜 설정 파일 말고 (읽기만 하지만 따로)
 const GAME_SECONDS := 3600.0
 const TOLERANCE := 0.01
 ## 강수가 오르면 트럭이 빨라져도 수익은 같아야 함. switch = 몇 프레임마다 작은 ↔ 큰 화면을 오가나 (0 = 안 오감)
@@ -43,6 +45,7 @@ func _initialize() -> void:
 func _start() -> void:
 	# 화면 없이(--headless) 띄우면 창이 64x64 → 작은 화면 크기로 맞춘다
 	root.size = Feel.SMALL_SIZE
+	(ScreenMode as Object).set("settings_path", TEST_SETTINGS)   # screen_mode.gd에 settings_path가 없으면 아무 일 없음
 	_main = load(MAIN_SCENE).instantiate()
 	Save.delete_file(TEST_SAVE)
 	_main.save_path = TEST_SAVE   # 진짜 저장 파일은 건드리지 않음
