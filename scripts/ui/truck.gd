@@ -21,6 +21,48 @@ var _trip_elapsed := 0.0
 var _smoke: Array[Vector2] = []   ## 연기 덩이들: (x 흔들림, 나온 뒤 지난 초)
 var _smoke_timer := 0.0
 
+# 강화 연출 (진짜 시간 기준)
+var _shake_left := 0.0
+var _shake_total := 0.0
+var _shake_px := 0.0
+var _shake_offset := Vector2.ZERO
+var _boost_mult := 1.0
+var _boost_left := 0.0
+var _boost_total := 0.0
+
+
+## 엔진 떨림: seconds 동안 px 세기로 (끝으로 갈수록 ENGINE_SHAKE_GROW배까지 세짐)
+func shake(seconds: float, px: float) -> void:
+	_shake_left = seconds
+	_shake_total = seconds
+	_shake_px = px
+
+
+## 순간 가속: mult배 빨라졌다가 seconds 동안 원래대로 (보이는 것만. 수익은 시간 기준이라 그대로)
+func boost(mult: float, seconds: float) -> void:
+	_boost_mult = mult
+	_boost_left = seconds
+	_boost_total = seconds
+
+
+## 번쩍임: 하얗게 빛났다가 돌아옴
+func flash(seconds: float) -> void:
+	modulate = Color(2.5, 2.5, 2.5)
+	var tw := create_tween().set_ignore_time_scale(true)
+	tw.tween_property(self, "modulate", Color.WHITE, seconds)
+
+
+## 퍼짐 순간 연기 한꺼번에
+func smoke_burst(count: int) -> void:
+	for i in count:
+		_smoke.append(Vector2(randf_range(-10.0, 10.0), randf_range(0.0, 0.5)))
+
+
+func _boost_factor() -> float:
+	if _boost_left <= 0.0:
+		return 1.0
+	return lerpf(1.0, _boost_mult, _boost_left / _boost_total)
+
 
 ## 왕복 구간 정하기 (창 크기가 바뀔 때마다 불림)
 func set_track(x_from: float, x_to: float, y: float) -> void:
@@ -38,7 +80,7 @@ func speed() -> float:
 	var distance := _x_to - _x_from
 	if not running or distance < 1.0:
 		return 0.0
-	return distance / Feel.one_way_seconds(star)
+	return distance / Feel.one_way_seconds(star) * _boost_factor()
 
 
 ## 클릭 판정용 사각형 (트럭의 부모 기준 좌표)
@@ -48,17 +90,32 @@ func click_rect() -> Rect2:
 
 
 func _process(delta: float) -> void:
-	_update_smoke(delta)
+	# 연출은 진짜 시간으로 (F2 배속이어도 같은 빠르기), 이동은 게임 시간으로
+	var real := delta / Engine.time_scale if Engine.time_scale > 0.0 else delta
+	_update_effects(real)
+	_update_smoke(real)
 	if running:
 		_move(delta)
 	queue_redraw()
+
+
+func _update_effects(real: float) -> void:
+	if _shake_left > 0.0:
+		_shake_left = maxf(0.0, _shake_left - real)
+		var k := 1.0 - _shake_left / _shake_total   # 0 → 1
+		var px := _shake_px * lerpf(1.0, Feel.ENGINE_SHAKE_GROW, k)
+		_shake_offset = Vector2(randf_range(-px, px), randf_range(-px, px) * 0.5)
+	else:
+		_shake_offset = Vector2.ZERO
+	if _boost_left > 0.0:
+		_boost_left = maxf(0.0, _boost_left - real)
 
 
 func _move(delta: float) -> void:
 	var distance := _x_to - _x_from
 	if distance < 1.0:
 		return
-	var speed := distance / Feel.one_way_seconds(star)
+	var speed := distance / Feel.one_way_seconds(star) * _boost_factor()
 	var t := delta
 	# 한 프레임이 길어도(배속 등) 남은 시간을 끝까지 써서 정확히 움직인다
 	while t > 0.0:
@@ -97,13 +154,14 @@ func _update_smoke(delta: float) -> void:
 		while _smoke_timer <= 0.0:
 			_smoke_timer += Feel.SMOKE_INTERVAL
 			_smoke.append(Vector2(randf_range(-3.0, 3.0), 0.0))
-	for i in _smoke.size():
+	for i in range(_smoke.size() - 1, -1, -1):
 		_smoke[i].y += delta
-	while not _smoke.is_empty() and _smoke[0].y >= Feel.SMOKE_LIFE:
-		_smoke.pop_front()
+		if _smoke[i].y >= Feel.SMOKE_LIFE:
+			_smoke.remove_at(i)
 
 
 func _draw() -> void:
+	draw_set_transform(_shake_offset)
 	var w := Feel.TRUCK_SIZE.x
 	var h := Feel.TRUCK_SIZE.y
 	var box_color := Feel.COLOR_TRUCK_BOX if running else Feel.COLOR_TRUCK_STOPPED

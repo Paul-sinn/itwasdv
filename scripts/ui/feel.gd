@@ -80,6 +80,28 @@ const COLOR_DANGER := Color(1.0, 0.30, 0.25)
 const COLOR_SUCCESS := Color(0.45, 0.95, 0.55)
 const COLOR_FAIL := Color(0.62, 0.62, 0.62)
 
+# --- 강화 연출 (시제품의 핵심. 숫자만 바꿔서 손맛 조절) ---
+# 모든 연출은 진짜 시간 기준 (F2 배속을 켜도 같은 빠르기)
+const SUSPENSE_SAFE := 0.4            ## 결과 나오기 전 뜸: 퍼짐 확률 0인 강수 (초)
+const SUSPENSE_DANGER := 1.0          ## 결과 나오기 전 뜸: 퍼질 수 있는 강수 (초)
+const ENGINE_SHAKE_PX := 2.5          ## 퍼짐 구간 뜸 동안 트럭(엔진) 떨림 세기 (픽셀)
+const ENGINE_SHAKE_GROW := 2.0        ## 떨림이 뜸 끝으로 갈수록 몇 배까지 세지나
+
+const FLASH_DURATION := 0.35          ## 성공 번쩍임이 사라지는 시간
+const FLASH_ALPHA := 0.75             ## 번쩍임 처음 밝기 (0~1)
+const STAR_POP_SCALE := 1.7           ## 성공 시 ★ 숫자가 커지는 배수
+const STAR_POP_DURATION := 0.45       ## 커졌다 돌아오는 시간
+const BOOST_MULT := 3.5               ## 성공 시 트럭 순간 가속 배수
+const BOOST_DURATION := 0.9           ## 가속이 원래대로 줄어드는 시간
+
+const FAIL_SHAKE_PX := 6.0            ## 실패 시 패널 흔들림
+const FAIL_SHAKE_DURATION := 0.3
+
+const DESTROY_SHAKE_PX := 12.0        ## 퍼짐 시 화면 흔들림
+const DESTROY_SHAKE_DURATION := 0.7
+const DESTROY_SMOKE_BURST := 14       ## 퍼짐 순간 한 번에 나오는 연기 덩이 수
+const DESTROY_TEXT_SIZE := 30         ## 빨간 "엔진 퍼짐!" 글자 크기
+
 # --- 복귀 팝업 ---
 const POPUP_WIDTH := 380.0
 const POPUP_MAIN_SIZE := 18      ## "자리 비운 N시간 동안 +금액"

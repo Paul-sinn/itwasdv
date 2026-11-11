@@ -8,6 +8,7 @@ const Enhance = preload("res://scripts/core/enhance.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
+const Band = preload("res://scripts/ui/band.gd")
 
 signal enhance_pressed
 signal spare_pressed
@@ -24,6 +25,8 @@ var _enhance_button: Button
 var _spare_button: Button
 var _result: Label
 var _stats: Label
+var _flash: ColorRect
+var _busy := false   ## 강화 결과를 기다리는 중 (뜸)
 
 
 func _ready() -> void:
@@ -39,6 +42,7 @@ func _ready() -> void:
 	add_child(box)
 
 	_title = _label(box, Feel.PANEL_TITLE_SIZE, Feel.COLOR_STAR)
+	_title.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN   # 글자 폭만큼만 (커질 때 기준점이 글자에 맞게)
 	_broken_label = _label(box, Feel.PANEL_DANGER_SIZE, Feel.COLOR_DANGER)
 	_broken_label.text = "엔진 고장 - 운행 정지"
 	_income = _label(box, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
@@ -55,6 +59,35 @@ func _ready() -> void:
 	_result = _label(box, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
 	_result.visible = false
 	_stats = _label(box, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
+
+	# 성공 번쩍임 (패널 위에 겹쳐 놓은 하얀 판, 평소엔 투명)
+	_flash = ColorRect.new()
+	_flash.color = Color(1, 1, 1, 0)
+	_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_flash)
+
+
+# ---------------- 강화 연출 ----------------
+
+## 뜸 시작: 버튼 잠그고 "강화 중…"
+func begin_suspense() -> void:
+	_busy = true
+	_enhance_button.disabled = true
+	_enhance_button.text = "강화 중…"
+	clear_result()
+
+
+func end_suspense() -> void:
+	_busy = false
+	_enhance_button.text = "강화"
+
+
+## 성공: 번쩍 + 제목 ★ 숫자 커졌다 돌아옴
+func celebrate() -> void:
+	_flash.color = Color(1, 1, 1, Feel.FLASH_ALPHA)
+	var tw := create_tween().set_ignore_time_scale(true)
+	tw.tween_property(_flash, "color:a", 0.0, Feel.FLASH_DURATION)
+	Band.pop(_title, Vector2(0.0, 0.5))   # 왼쪽 끝 기준 → 패널 밖으로 안 삐져나감
 
 
 ## 상태에 맞게 글자와 버튼을 고친다 (열려 있는 동안 매 프레임)
@@ -91,7 +124,7 @@ func refresh(b: Balance, s: GameState) -> void:
 		_danger.text = "퍼질 확률 %s" % Fmt.percent(c["destroy"])
 		_cost.text = "비용 %s원" % Fmt.money(cost)
 		_wait.text = Fmt.wait_text(Economy.seconds_to_afford(cost, s.money, s.current_hourly(b)))
-		_enhance_button.disabled = not can
+		_enhance_button.disabled = not can or _busy
 		_set_visible([_income, _chances, _cost, _enhance_button], [_spare_button])
 		_danger.visible = danger
 		_wait.visible = not can
@@ -104,9 +137,10 @@ func refresh(b: Balance, s: GameState) -> void:
 
 
 ## 방금 일어난 일을 한 줄로 (6단계에서 연출을 붙일 자리)
-func show_result(text: String, color: Color) -> void:
+func show_result(text: String, color: Color, font_size: int = Feel.PANEL_TEXT_SIZE) -> void:
 	_result.text = text
 	_result.add_theme_color_override("font_color", color)
+	_result.add_theme_font_size_override("font_size", font_size)
 	_result.visible = true
 
 

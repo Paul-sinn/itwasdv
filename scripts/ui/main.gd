@@ -43,6 +43,10 @@ var _measure_hourly := 0.0
 var _debug_label: Label
 var _last_cheat := ""
 var _panel_center_x := 0.0   ## 패널을 연 순간 트럭 가운데 x
+var _panel_shake := Vector2.ZERO   ## 실패 연출: 패널 흔들림
+
+## 강화 뜸 중 (결과 기다리는 중). 이때는 강화 버튼을 또 눌러도 무시
+var enhancing := false
 
 
 func _ready() -> void:
@@ -195,15 +199,20 @@ func _notification(what: int) -> void:
 ## 지금 보이는 것들의 사각형 (창 좌표). 투명 창에서는 이것만 그려지고 클릭을 받는다.
 func visible_rects() -> Array:
 	var pad := band.truck.speed() * Engine.time_scale * Feel.CLICK_REGION_INTERVAL * 2.0 + 4.0
-	var out := []
+	# 흔들림 연출 중이면 흔들리는 만큼 넉넉하게 (잘려 보이지 않게)
+	var shake := position.length() + _panel_shake.length()
+	var rects := []
 	for r: Rect2 in band.visible_rects(pad):
-		out.append(Rect2(r.position + band.position, r.size))
+		rects.append(Rect2(r.position + band.position, r.size))
 	if _debug_label.visible:
-		out.append(Rect2(band.position + _debug_label.position, _debug_label.get_combined_minimum_size()).grow(Feel.TEXT_OUTLINE_SIZE))
+		rects.append(Rect2(band.position + _debug_label.position, _debug_label.get_combined_minimum_size()).grow(Feel.TEXT_OUTLINE_SIZE))
 	if panel.visible:
-		out.append(panel.get_rect())
+		rects.append(panel.get_rect())
 	if popup.visible:
-		out.append(popup.get_rect())
+		rects.append(popup.get_rect())
+	var out := []
+	for r: Rect2 in rects:
+		out.append(Rect2(r.position + position, r.size).grow(shake))
 	return out
 
 
@@ -229,21 +238,51 @@ func _place_panel() -> void:
 	var w := panel.size.x
 	var x := clampf(_panel_center_x - w / 2.0, Feel.PANEL_EDGE, maxf(Feel.PANEL_EDGE, view.x - w - Feel.PANEL_EDGE))
 	var y := band.position.y - Feel.PANEL_GAP - panel.size.y
-	panel.position = Vector2(x, y)
+	panel.position = Vector2(x, y) + _panel_shake
 
 
+## 강화 버튼: 뜸 → 굴리기(enhance.gd) → 결과 연출
+## 굴리기는 뜸이 끝난 뒤에 한다 (뜸 동안 꺼도 돈이 안 빠짐)
 func _on_enhance_pressed() -> void:
+	if enhancing or Enhance.block_reason(state, balance) != Enhance.Block.NONE:
+		return
+	enhancing = true
+	var danger: bool = Enhance.chances(balance, state.star)["destroy"] > 0.0
+	panel.begin_suspense()
+	var wait := Feel.SUSPENSE_DANGER if danger else Feel.SUSPENSE_SAFE
+	if danger:
+		band.truck.shake(wait, Feel.ENGINE_SHAKE_PX)
+	await get_tree().create_timer(wait, true, false, true).timeout   # 배속과 상관없이 진짜 시간
+
 	var star_before := state.star
-	match Enhance.try_enhance(state, balance, rng):
+	var result := Enhance.try_enhance(state, balance, rng)
+	panel.end_suspense()
+	match result:
 		Enhance.Result.SUCCESS:
 			panel.show_result("성공!  ★%d → ★%d" % [star_before, state.star], Feel.COLOR_SUCCESS)
+			panel.celebrate()
+			band.pop_star()
+			band.truck.flash(Feel.FLASH_DURATION)
+			band.truck.boost(Feel.BOOST_MULT, Feel.BOOST_DURATION)
 		Enhance.Result.FAIL:
-			panel.show_result("실패 (★%d 그대로)" % state.star, Feel.COLOR_FAIL)
+			panel.show_result("실패", Feel.COLOR_FAIL)
+			_shake(func(o): _panel_shake = o, Feel.FAIL_SHAKE_PX, Feel.FAIL_SHAKE_DURATION)
 		Enhance.Result.DESTROY:
-			panel.show_result("엔진 퍼짐!  ★%d → ★%d, 운행 정지" % [star_before, state.star], Feel.COLOR_DANGER)
-		Enhance.Result.BLOCKED:
-			pass
+			panel.show_result("엔진 퍼짐!", Feel.COLOR_DANGER, Feel.DESTROY_TEXT_SIZE)
+			band.truck.running = false
+			band.truck.smoke_burst(Feel.DESTROY_SMOKE_BURST)
+			_shake(func(o): position = o, Feel.DESTROY_SHAKE_PX, Feel.DESTROY_SHAKE_DURATION)
 	panel.refresh(balance, state)
+	enhancing = false
+
+
+## 흔들기: seconds 동안 px 세기로 시작해 0으로 줄어드는 떨림을 setter에 넣는다 (진짜 시간)
+func _shake(setter: Callable, px: float, seconds: float) -> void:
+	var jitter := func(t: float) -> void:
+		setter.call(Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * px * (1.0 - t))
+	var tw := create_tween().set_ignore_time_scale(true)
+	tw.tween_method(jitter, 0.0, 1.0, seconds)
+	tw.tween_callback(func(): setter.call(Vector2.ZERO))
 
 
 func _on_spare_pressed() -> void:

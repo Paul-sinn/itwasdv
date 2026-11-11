@@ -76,14 +76,23 @@ func _run() -> void:
 	_check(not m.state.broken and m.state.star == 15, "스페어 클릭 뒤: 고장 %s, 강수 %d" % [m.state.broken, m.state.star])
 	_check(p._result.text.contains("스페어"), "수리 결과가 안 보임: '%s'" % p._result.text)
 
-	# 5) 강화 버튼을 진짜로 클릭 → 결과 반영, 통계
+	# 5) 강화 버튼을 진짜로 클릭 → 뜸 → 결과 반영, 통계
 	m.state.money = 1e12
 	await _frames(1)
-	for i in 20:
+	for i in 5:
 		if m.state.broken:
 			break
+		var before: int = m.state.press_count()
 		_click(p._enhance_button.get_global_rect().get_center())
 		await _frames(1)
+		_check(m.enhancing and p._enhance_button.disabled, "%d번째: 누른 뒤 뜸(버튼 잠김)이 없음" % i)
+		_check(m.state.press_count() == before, "%d번째: 뜸이 끝나기 전에 결과가 나옴" % i)
+		_click(p._enhance_button.get_global_rect().get_center())   # 뜸 중에 또 눌러도 무시돼야 함
+		var waited := 0
+		while m.enhancing and waited < 600:
+			await process_frame
+			waited += 1
+		_check(m.state.press_count() == before + 1, "%d번째: 한 번 눌렀는데 횟수가 %d 늘어남" % [i, m.state.press_count() - before])
 	_check(m.state.press_count() > 0, "강화 버튼을 눌렀는데 횟수가 0")
 	_check(p._result.text != "", "강화 결과가 안 보임")
 	_check(p._stats.text.contains("누른 횟수 %d" % m.state.press_count()), "통계 줄이 안 맞음: '%s'" % p._stats.text)

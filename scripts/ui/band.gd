@@ -62,6 +62,21 @@ func set_hud(money: float, hourly: float, star: int) -> void:
 	_income_label.text = "시간당 %s원" % Fmt.money(hourly)
 
 
+## 성공 연출: ★ 숫자가 커졌다 돌아옴
+func pop_star() -> void:
+	pop(_star_label)
+
+
+## 글자를 커졌다 돌아오게 (garage_panel.gd 제목에도 씀)
+## pivot: 어디를 기준으로 커지나 (0.5, 0.5 = 가운데, 0, 0.5 = 왼쪽 끝에서 오른쪽으로)
+static func pop(c: Control, pivot := Vector2(0.5, 0.5)) -> void:
+	c.pivot_offset_ratio = pivot
+	c.scale = Vector2.ONE * Feel.STAR_POP_SCALE
+	var tw := c.create_tween().set_ignore_time_scale(true)
+	tw.tween_property(c, "scale", Vector2.ONE, Feel.STAR_POP_DURATION) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
 ## 배송 완료: 트럭 위로 "+금액"이 떠올랐다가 사라짐
 func show_payout(amount: float) -> void:
 	var label := make_label(Feel.PAYOUT_FONT_SIZE, Feel.COLOR_PAYOUT)
@@ -86,7 +101,9 @@ func visible_rects(truck_pad_x: float) -> Array:
 	out.append(Rect2(Feel.DEPOT_X, Feel.GROUND_Y - Feel.DEPOT_SIZE.y, Feel.DEPOT_SIZE.x, Feel.DEPOT_SIZE.y).grow(o))
 	var hx := _house_x()
 	out.append(Rect2(hx - 5, Feel.GROUND_Y - Feel.HOUSE_SIZE.y - 18, Feel.HOUSE_SIZE.x + 10, Feel.HOUSE_SIZE.y + 18))
-	out.append(Rect2(_hud.position, _hud.get_combined_minimum_size()).grow(o))
+	# ★ 숫자가 커졌다 돌아올 때 잘리지 않게 넉넉하게
+	var pop_room := Feel.HUD_FONT_SIZE * (Feel.STAR_POP_SCALE - 1.0)
+	out.append(Rect2(_hud.position, _hud.get_combined_minimum_size()).grow(o + pop_room))
 	out.append(Rect2(0, Feel.GROUND_Y, width, 2))
 	# 트럭 + 위로 올라가는 연기 자리
 	var smoke_up := Feel.SMOKE_RISE + Feel.SMOKE_SIZE.y
