@@ -141,7 +141,8 @@ func _remember_big_window() -> void:
 	if not (_full and _big_window):
 		return
 	var win := get_window()
-	_big_maximized = win.mode == Window.MODE_MAXIMIZED
+	if win.mode == Window.MODE_WINDOWED or win.mode == Window.MODE_MAXIMIZED:   # 최소화돼 있으면 전에 기억한 대로
+		_big_maximized = win.mode == Window.MODE_MAXIMIZED
 	if win.mode == Window.MODE_WINDOWED:
 		_big_rect = Rect2i(win.position, win.size)
 
