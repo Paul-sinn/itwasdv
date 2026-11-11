@@ -26,6 +26,17 @@ func test_random01_is_0_to_under_1() -> void:
 	note("100만 번 뽑은 범위: %.8f ~ %.8f" % [lo, hi])
 
 
+## 화면에 보여줄 확률 세 개: 합이 1, 실패 = 1 - 성공 - 퍼짐
+func test_chances_for_display() -> void:
+	for star in b.max_star:
+		var c := Enhance.chances(b, star)
+		check_near(c["success"] + c["fail"] + c["destroy"], 1.0, 1e-9, "%d강 확률 합" % star)
+		check_eq(c["success"], b.success[star], "%d강 성공" % star)
+		check_eq(c["destroy"], b.destroy[star], "%d강 퍼짐" % star)
+	var c18 := Enhance.chances(b, 18)
+	check_near(c18["fail"], 0.75, 1e-9, "18강 실패(유지)")
+
+
 ## 경계값: 18강 (성공 0.2, 퍼짐 0.05)
 func test_decide_boundaries() -> void:
 	var S := Enhance.Result.SUCCESS

@@ -38,6 +38,13 @@ func test_delivery_pay_adds_up_to_hourly() -> void:
 		check_near(earned, hourly, hourly * 1e-9, "%d강 1시간 배송 합계" % star)
 
 
+func test_seconds_to_afford() -> void:
+	check_eq(Economy.seconds_to_afford(100.0, 100.0, 1000.0), 0.0, "딱 맞으면 0초")
+	check_eq(Economy.seconds_to_afford(100.0, 500.0, 1000.0), 0.0, "돈이 많으면 0초")
+	check_near(Economy.seconds_to_afford(1000.0, 500.0, 1000.0), 1800.0, 1e-9, "500원 모자람, 시간당 1000 → 30분")
+	check(is_inf(Economy.seconds_to_afford(1000.0, 0.0, 0.0)), "수익 0이면 영원히(INF)")
+
+
 func test_offline_earnings() -> void:
 	var star := 10
 	var hourly := Economy.hourly_income(b, star)

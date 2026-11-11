@@ -33,7 +33,17 @@ static func delivery_pay(b: Balance, star: int, trip_seconds: float) -> float:
 	return hourly_income(b, star) / SECONDS_PER_HOUR * trip_seconds
 
 
-## 꺼둔 동안 쌓인 돈 = 시간당 수익 × min(꺼둔 시간, offline_cap_hours) × offline_rate
+## 지금 돈으로 price를 사려면 몇 초 더 벌어야 하나.
+## 이미 살 수 있으면 0. 버는 돈이 0이면(고장 등) INF(영원히 못 모음).
+static func seconds_to_afford(price: float, money: float, hourly: float) -> float:
+	if money >= price:
+		return 0.0
+	if hourly <= 0.0:
+		return INF
+	return (price - money) / hourly * SECONDS_PER_HOUR
+
+
+## 꺼둔 동안 쌓인 돈 =시간당 수익 × min(꺼둔 시간, offline_cap_hours) × offline_rate
 ## - 고장 상태였으면 0
 ## - 꺼둔 시간이 음수(컴퓨터 시계가 거꾸로 감)면 0
 static func offline_earnings(b: Balance, star: int, broken: bool, seconds_away: float) -> float:

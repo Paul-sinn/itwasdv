@@ -47,6 +47,33 @@ const COLOR_DIM := Color(0.65, 0.68, 0.72)
 const COLOR_DEBUG := Color(0.60, 0.80, 1.00)
 const COLOR_ERROR := Color(1.0, 0.45, 0.45)
 
+# --- 고장 연기 ---
+const SMOKE_INTERVAL := 0.22     ## 연기 한 덩이 나오는 간격 (초)
+const SMOKE_LIFE := 1.6          ## 한 덩이가 사라지기까지 (초)
+const SMOKE_RISE := 30.0         ## 사라질 때까지 올라가는 거리 (픽셀)
+const SMOKE_SIZE := Vector2(4.0, 10.0)  ## 처음 반지름 → 마지막 반지름
+const COLOR_SMOKE := Color(0.55, 0.55, 0.58, 0.75)
+
+# --- 차고 패널 ---
+const TRUCK_CLICK_PADDING := 8.0 ## 트럭 클릭 판정을 이만큼 넉넉하게 (픽셀)
+const PANEL_WIDTH := 360.0
+const PANEL_GAP := 8.0           ## 띠 위쪽과 패널 사이 간격
+const PANEL_EDGE := 8.0          ## 창 가장자리와 최소 간격
+const PANEL_PADDING := 14.0
+const PANEL_BORDER := 2
+const PANEL_BORDER_DANGER := 4   ## 퍼질 수 있을 때 테두리 두께
+const PANEL_RADIUS := 8
+const PANEL_TITLE_SIZE := 20
+const PANEL_TEXT_SIZE := 14
+const PANEL_DANGER_SIZE := 22    ## "퍼질 확률 N%" 크게
+const PANEL_SMALL_SIZE := 11     ## 맨 아래 통계
+const PANEL_BUTTON_SIZE := 18
+const COLOR_PANEL_BG := Color(0.10, 0.11, 0.14, 0.97)
+const COLOR_PANEL_BORDER := Color(0.40, 0.44, 0.52)
+const COLOR_DANGER := Color(1.0, 0.30, 0.25)
+const COLOR_SUCCESS := Color(0.45, 0.95, 0.55)
+const COLOR_FAIL := Color(0.62, 0.62, 0.62)
+
 # --- 치트 (디버그 실행일 때만) ---
 const CHEAT_TIME_SCALE := 60.0   ## F2: 시간 몇 배속
 

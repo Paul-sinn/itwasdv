@@ -7,6 +7,7 @@ const TEST_FILES := [
 	"res://tests/test_balance.gd",
 	"res://tests/test_economy.gd",
 	"res://tests/test_enhance.gd",
+	"res://tests/test_fmt.gd",
 ]
 
 

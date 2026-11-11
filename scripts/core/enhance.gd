@@ -23,6 +23,14 @@ static func random01(rng: RandomNumberGenerator) -> float:
 	return rng.randi() / RANDI_RANGE
 
 
+## 화면에 보여줄 확률 세 개: { "success", "fail", "destroy" } (합 = 1)
+## 실패(유지) = 1 - 성공 - 퍼짐
+static func chances(b: Balance, star: int) -> Dictionary:
+	var s := b.success[star]
+	var d := b.destroy[star]
+	return { "success": s, "fail": maxf(0.0, 1.0 - s - d), "destroy": d }
+
+
 ## 난수 r(0 이상 1 미만) 하나로 결과를 정한다.
 ##   r < success                → 성공
 ##   r < success + destroy      → 퍼짐

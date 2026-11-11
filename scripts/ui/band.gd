@@ -23,6 +23,7 @@ func _ready() -> void:
 	var hud := HBoxContainer.new()
 	hud.position = Vector2(Feel.DEPOT_X + Feel.DEPOT_SIZE.x + 16, 6)
 	hud.add_theme_constant_override("separation", 18)
+	hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(hud)
 	_star_label = _make_label(Feel.HUD_FONT_SIZE, Feel.COLOR_STAR)
 	_money_label = _make_label(Feel.HUD_FONT_SIZE, Feel.COLOR_TEXT)
