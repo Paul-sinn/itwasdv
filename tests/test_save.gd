@@ -1,4 +1,4 @@
-## save.gd: 저장 파일 쓰고 읽기, 깨진 파일 (형식 3 모양. 백업·옛 형식 옮기기는 C2)
+## save.gd: 저장 형식 3 쓰고 읽기, 깨진 파일, 백업 3개, 옛 형식 남기기
 extends "res://tests/test_base.gd"
 
 const Balance = preload("res://scripts/core/balance.gd")
@@ -6,9 +6,41 @@ const GameState = preload("res://scripts/core/game_state.gd")
 const TruckState = preload("res://scripts/core/truck_state.gd")
 const Save = preload("res://scripts/core/save.gd")
 
-const PATH := "user://test_unit_save.json"
+# 옛 형식 파일이 "같은 폴더/save.v2.json"으로 가서, 진짜 저장 폴더와 겹치지 않게 시험용 폴더를 씀
+const DIR := "user://test_unit_save"
+const PATH := DIR + "/save.json"
+const OLD_KEPT := DIR + "/save.v2.json"
 
 var b: Balance = Balance.load_file()
+
+
+## 시험 폴더를 비운다 (본 파일·임시·백업·.broken·옛 형식)
+func _clean() -> void:
+	DirAccess.make_dir_recursive_absolute(DIR)
+	Save.delete_file(PATH)
+	for p in [PATH + ".broken", OLD_KEPT]:
+		if FileAccess.file_exists(p):
+			DirAccess.remove_absolute(p)
+
+
+func _write_text(path: String, text: String) -> void:
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string(text)
+	f.close()
+
+
+func _save_with_money(money: int) -> void:
+	var s := _sample_state()
+	s.money = money
+	Save.write_file(PATH, s, 1794000000)
+
+
+## 그 파일에 적힌 돈 (백업 확인용)
+func _money_in(path: String):
+	if not FileAccess.file_exists(path):
+		return null
+	var r := Save.from_dict(JSON.parse_string(FileAccess.get_file_as_string(path)), b)
+	return r["state"].money if r["status"] == Save.Status.OK else null
 
 
 func _sample_state() -> GameState:
@@ -31,7 +63,7 @@ func _sample_state() -> GameState:
 
 
 func test_write_then_read_same() -> void:
-	Save.delete_file(PATH)
+	_clean()
 	var s := _sample_state()
 	var when := 1794000000
 	check_eq(Save.write_file(PATH, s, when), OK, "쓰기")
@@ -48,8 +80,9 @@ func test_write_then_read_same() -> void:
 	check_eq([t.star, t.lap_clock, t.lap_delivered], [22, 37.25, 3], "트럭 0 단계·바퀴")
 	check_eq([t.success_count, t.fail_count, t.destroy_count], [40, 77, 3], "트럭 0 통계")
 	check_eq([got.truck(1).star, got.truck(1).lap_clock], [5, 0.1], "트럭 1")
+	check_eq([r["recovered"], r["old_kept"]], [false, ""], "보통 읽기: 복구·옛 형식 아님")
 	check(not FileAccess.file_exists(PATH + ".tmp"), "임시 파일이 남음")
-	Save.delete_file(PATH)
+	_clean()
 
 
 func test_format_3_dict() -> void:
@@ -64,20 +97,148 @@ func test_format_3_dict() -> void:
 
 
 func test_no_file_is_new_game() -> void:
-	Save.delete_file(PATH)
-	check_eq(Save.read_file(PATH, b)["status"], Save.Status.NONE, "파일 없음 → 새 게임")
+	_clean()
+	var r := Save.read_file(PATH, b)
+	check_eq(r["status"], Save.Status.NONE, "파일 없음 → 새 게임")
+	check_eq([r["recovered"], r["old_kept"]], [false, ""], "파일 없음: 복구·옛 형식 아님")
 
 
+## 백업이 없을 때 깨진 파일 → BROKEN, .broken으로 남김
 func test_broken_json_is_new_game_and_kept() -> void:
-	Save.delete_file(PATH)
-	var f := FileAccess.open(PATH, FileAccess.WRITE)
-	f.store_string("{ \"money\": 10, ")
-	f.close()
+	_clean()
+	_write_text(PATH, "{ \"money\": 10, ")
 	var r := Save.read_file(PATH, b)
 	check_eq(r["status"], Save.Status.BROKEN, "깨진 JSON")
+	check(not r["recovered"], "백업이 없는데 복구됐다고 나옴")
 	check(FileAccess.file_exists(PATH + ".broken"), "깨진 파일을 .broken으로 안 남김")
 	check(not FileAccess.file_exists(PATH), "깨진 파일이 그대로 남음")
-	DirAccess.remove_absolute(PATH + ".broken")
+	_clean()
+
+
+## 돈이 2^53(약 9007조)을 넘어도 정확히 왕복 (JSON 숫자는 끝자리가 틀려져서 글자로 씀)
+func test_big_money_round_trip() -> void:
+	_clean()
+	for money in [9_000_000_000_000_001, 9_100_000_000_000_001, 9_007_199_254_740_993, 0, 1]:
+		_save_with_money(money)
+		var r := Save.read_file(PATH, b)
+		check_eq(r["status"], Save.Status.OK, "돈 %d 읽기 (%s)" % [money, r["error"]])
+		if r["state"] != null:
+			check_eq(r["state"].money, money, "돈 %d 왕복" % money)
+	check_eq(Save.to_dict(_sample_state(), 0)["money"], "123456789", "돈은 글자로 씀")
+	_clean()
+
+
+## 돈 칸: 글자·숫자 둘 다 받음. 음수·소수·이상한 글자는 깨진 저장, 18자리 넘으면 자름
+func test_money_text_or_number() -> void:
+	var good := Save.to_dict(_sample_state(), 1794000000)
+	var ok_cases := [["5000", 5000], [5000, 5000], [5000.0, 5000], ["0", 0], ["0005", 5],
+			["9223372036854775808", Save.MAX_MONEY], ["99999999999999999999", Save.MAX_MONEY], [1e30, Save.MAX_MONEY]]
+	for c in ok_cases:
+		var d := good.duplicate(true)
+		d["money"] = c[0]
+		var r := Save.from_dict(d, b)
+		check_eq(r["status"], Save.Status.OK, "money = %s 읽기 (%s)" % [c[0], r["error"]])
+		if r["state"] != null:
+			check_eq(r["state"].money, c[1], "money = %s" % [c[0]])
+	for bad in ["-5", "+5", "12a", "", "1e3", "5.0", -1, 10.5]:
+		var d := good.duplicate(true)
+		d["money"] = bad
+		check_eq(Save.from_dict(d, b)["status"], Save.Status.BROKEN, "money = %s 를 못 걸러냄" % [bad])
+
+
+## 4번 저장하면 본 파일 = 4번째, bak1~3 = 3·2·1번째 (가장 최근이 bak1). 5번째에 1번째가 밀려남
+func test_backups_keep_last_three() -> void:
+	_clean()
+	for money in [1, 2, 3, 4]:
+		_save_with_money(money)
+	check_eq([_money_in(PATH), _money_in(PATH + ".bak1"), _money_in(PATH + ".bak2"), _money_in(PATH + ".bak3")],
+			[4, 3, 2, 1], "4번 저장: 본·bak1·bak2·bak3")
+	_save_with_money(5)
+	check_eq([_money_in(PATH), _money_in(PATH + ".bak1"), _money_in(PATH + ".bak2"), _money_in(PATH + ".bak3")],
+			[5, 4, 3, 2], "5번 저장: 가장 오래된 것이 밀려남")
+	check(not FileAccess.file_exists(PATH + ".bak4"), "bak4가 생김")
+	check(not FileAccess.file_exists(PATH + ".tmp"), "임시 파일이 남음")
+	_clean()
+
+
+## 본 파일이 깨지면 .broken으로 옮기고 bak1에서 살림 (recovered)
+func test_broken_main_recovers_from_bak1() -> void:
+	_clean()
+	for money in [1, 2, 3]:
+		_save_with_money(money)
+	_write_text(PATH, "{ 깨진 파일")
+	var r := Save.read_file(PATH, b)
+	check_eq(r["status"], Save.Status.OK, "백업에서 못 살림")
+	check(r["recovered"], "recovered 가 안 켜짐")
+	check(r["error"].contains("JSON 형식이 깨짐"), "본 파일이 깨진 이유가 error에 없음: %s" % r["error"])
+	if r["state"] != null:
+		check_eq(r["state"].money, 2, "bak1(바로 전 저장)에서 살림")
+	check_eq(FileAccess.get_file_as_string(PATH + ".broken"), "{ 깨진 파일", "깨진 본 파일을 .broken으로 안 남김")
+	# 살린 뒤 다음 저장: 본 파일이 없으니 백업은 그대로 (살린 bak1이 밀려나지 않음)
+	_save_with_money(10)
+	check_eq([_money_in(PATH), _money_in(PATH + ".bak1"), _money_in(PATH + ".bak2")], [10, 2, 1], "살린 뒤 저장")
+	_clean()
+
+
+## bak1도 깨졌으면 다음 백업, 옛 형식 백업은 건너뜀
+func test_recovers_from_next_backup() -> void:
+	_clean()
+	for money in [1, 2, 3, 4]:
+		_save_with_money(money)
+	_write_text(PATH, "")
+	_write_text(PATH + ".bak1", "[1, 2")
+	_write_text(PATH + ".bak2", JSON.stringify({ "version": 2, "money": 99.0 }))
+	var r := Save.read_file(PATH, b)
+	check_eq(r["status"], Save.Status.OK, "bak3에서 못 살림")
+	check(r["recovered"], "recovered 가 안 켜짐")
+	if r["state"] != null:
+		check_eq(r["state"].money, 1, "bak1 깨짐, bak2 옛 형식 → bak3에서 살림")
+	_clean()
+
+
+## 본 파일·백업 전부 깨지면 BROKEN (새 게임)
+func test_all_broken_is_new_game() -> void:
+	_clean()
+	for money in [1, 2, 3, 4]:
+		_save_with_money(money)
+	for p in [PATH, PATH + ".bak1", PATH + ".bak2", PATH + ".bak3"]:
+		_write_text(p, "{")
+	var r := Save.read_file(PATH, b)
+	check_eq(r["status"], Save.Status.BROKEN, "전부 깨졌는데 BROKEN이 아님")
+	check(not r["recovered"], "전부 깨졌는데 recovered")
+	check(r["state"] == null, "전부 깨졌는데 상태가 있음")
+	check(FileAccess.file_exists(PATH + ".broken"), "깨진 본 파일을 .broken으로 안 남김")
+	_clean()
+
+
+## 형식 1·2 파일: 변환하지 않고 같은 폴더 save.v2.json으로 옮기고 새 게임(NONE)
+func test_old_format_is_kept_aside() -> void:
+	for version in [1, 2]:
+		_clean()
+		var old := JSON.stringify({
+			"version": version, "saved_at_utc": "2026-11-10T09:30:00", "money": 5000.5, "star": 17,
+			"broken": false, "star_before_break": 0, "success_count": 20, "fail_count": 30, "destroy_count": 0,
+		})
+		_write_text(PATH, old)
+		var r := Save.read_file(PATH, b)
+		check_eq(r["status"], Save.Status.NONE, "형식 %d → 새 게임" % version)
+		check_eq(r["old_kept"], OLD_KEPT, "형식 %d: 옮긴 경로" % version)
+		check(not r["recovered"], "형식 %d: recovered 가 켜짐" % version)
+		check(not FileAccess.file_exists(PATH), "형식 %d: 본 파일이 그대로 남음" % version)
+		check_eq(FileAccess.get_file_as_string(OLD_KEPT), old, "형식 %d: save.v2.json 내용이 원래 파일과 다름" % version)
+		check(not FileAccess.file_exists(PATH + ".broken"), "형식 %d: 깨진 파일로 취급함" % version)
+	_clean()
+
+
+## F3 치트: 백업까지 지움
+func test_delete_removes_backups() -> void:
+	_clean()
+	for money in [1, 2, 3, 4]:
+		_save_with_money(money)
+	Save.delete_file(PATH)
+	for p in [PATH, PATH + ".tmp", PATH + ".bak1", PATH + ".bak2", PATH + ".bak3"]:
+		check(not FileAccess.file_exists(p), "%s 가 남음" % p.get_file())
+	check_eq(Save.read_file(PATH, b)["status"], Save.Status.NONE, "지운 뒤 새 게임")
 
 
 func test_bad_values_are_broken() -> void:
@@ -136,10 +297,14 @@ func test_out_of_range_is_clamped() -> void:
 
 
 func test_tmp_left_over_is_recovered() -> void:
-	# 바꿔 끼우는 순간 꺼져서 .tmp 만 남은 경우
-	Save.delete_file(PATH)
-	Save.write_file(PATH, _sample_state(), 1794000000)
+	# 백업으로 돌린 뒤 바꿔 끼우는 순간 꺼져서 본 파일 없이 .tmp 만 남은 경우
+	_clean()
+	_save_with_money(1)
+	_save_with_money(2)
 	DirAccess.rename_absolute(PATH, PATH + ".tmp")
 	var r := Save.read_file(PATH, b)
 	check_eq(r["status"], Save.Status.OK, ".tmp 에서 못 살림")
-	Save.delete_file(PATH)
+	if r["state"] != null:
+		check_eq(r["state"].money, 2, ".tmp(가장 최근)를 씀")
+	check(not r["recovered"], ".tmp는 백업 복구가 아님")
+	_clean()

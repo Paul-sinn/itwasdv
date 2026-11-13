@@ -3,9 +3,15 @@
 ## 파일 모양 (JSON, 손으로 고쳐도 됨):
 ##   saved_at_utc  저장한 시각. 세계 표준시(UTC) "YYYY-MM-DDTHH:MM:SS"
 ##                 → 꺼둔 동안 수익 확인할 때 이걸 3시간 전 / 20시간 전 / 미래로 고친다
-##   money, spares, spare_drop_carry
+##   money         글자("123456789"). JSON 숫자는 2^53(약 9007조)을 넘으면 끝자리가 틀려져서 글자로 쓴다.
+##                 읽을 때는 숫자(손으로 고친 파일)도 받는다
+##   spares, spare_drop_carry
 ##   trucks [ { star, lap_clock, lap_delivered, success_count, fail_count, destroy_count } ]
 ## 모르는 키는 버리고 범위 밖 값은 자른다. 음수 돈·스페어, 빠진 칸, 틀린 모양은 깨진 저장.
+##
+## 백업: 쓸 때마다 지금 파일을 path.bak1(가장 최근) → bak2 → bak3 으로 돌린다.
+## 본 파일이 깨졌으면 path.broken 으로 옮기고 bak1 → bak2 → bak3 중 읽히는 첫 파일로 살린다.
+## 형식 1·2 파일(v2까지)은 변환하지 않고 같은 폴더 save.v2.json 으로 옮겨 남긴 뒤 새 게임.
 extends RefCounted
 
 const Balance = preload("res://scripts/core/balance.gd")
@@ -17,8 +23,12 @@ const FORMAT_VERSION := 3   ## 1: v0·v1 / 2: 튜닝(v2) / 3: 한 바퀴 경제�
 
 enum Status { OK, NONE, BROKEN }   ## 읽음 / 저장 파일 없음(새 게임) / 깨짐(새 게임)
 
+const BACKUPS := 3
+const OLD_FILE_NAME := "save.v2.json"   ## 형식 1·2 파일을 옮겨 두는 이름 (본 파일과 같은 폴더)
+
 const TRUCK_COUNTS := ["success_count", "fail_count", "destroy_count"]
 const MAX_WHOLE := 1 << 53   # JSON 숫자가 정확한 정수로 왕복하는 한계
+const MAX_MONEY := 999_999_999_999_999_999   ## 돈 글자 18자리까지. 넘으면 이 값으로 자름 (to_int가 넘치면 음수로 돌아감)
 
 
 ## 상태 → 저장할 묶음
@@ -36,14 +46,14 @@ static func to_dict(s: GameState, saved_at_unix: int) -> Dictionary:
 	return {
 		"version": FORMAT_VERSION,
 		"saved_at_utc": Time.get_datetime_string_from_unix_time(saved_at_unix),
-		"money": s.money,
+		"money": str(s.money),
 		"spares": s.spares,
 		"spare_drop_carry": s.spare_drop_carry,
 		"trucks": trucks,
 	}
 
 
-## 저장 묶음 → 상태. 결과: { status, state, saved_at, error }
+## 저장 묶음 → 상태. 결과: { status, state, saved_at, error, recovered, old_kept } (read_file과 같은 모양)
 static func from_dict(d, b: Balance) -> Dictionary:
 	if typeof(d) != TYPE_DICTIONARY:
 		return _broken("맨 바깥이 { } 묶음이 아님")
@@ -56,11 +66,14 @@ static func from_dict(d, b: Balance) -> Dictionary:
 		return _broken("saved_at_utc 모양이 틀림: %s (예: 2026-11-10T09:30:00)" % when)
 
 	var s := GameState.new()
-	for key in ["money", "spares"]:
-		var n = _whole(d.get(key), 0, MAX_WHOLE)
-		if n == null:
-			return _broken("%s 가 0 이상 정수가 아님: %s" % [key, d.get(key)])
-		s.set(key, n)
+	var money = _money(d.get("money"))
+	if money == null:
+		return _broken("money 가 0 이상 정수(글자)가 아님: %s" % [d.get("money")])
+	s.money = money
+	var spares = _whole(d.get("spares"), 0, MAX_WHOLE)
+	if spares == null:
+		return _broken("spares 가 0 이상 정수가 아님: %s" % [d.get("spares")])
+	s.spares = spares
 	var carry = d.get("spare_drop_carry")
 	if not _is_finite_number(carry):
 		return _broken("spare_drop_carry 가 숫자가 아님: %s" % [carry])
@@ -84,61 +97,105 @@ static func from_dict(d, b: Balance) -> Dictionary:
 			t.set(key, clampi(floori(td[key]), 0, MAX_WHOLE))
 		s.trucks.append(t)
 
-	return { "status": Status.OK, "state": s, "saved_at": saved_at, "error": "" }
+	return _result(Status.OK, s, saved_at)
 
 
-## 파일에 쓴다. 다 쓴 다음에 바꿔 끼워서, 쓰다가 꺼져도 원래 파일이 깨지지 않게.
+## 파일에 쓴다. 임시 파일에 다 쓴 다음, 지금 파일을 백업으로 돌리고 바꿔 끼운다 (쓰다가 꺼져도 안 깨지게).
 static func write_file(path: String, s: GameState, saved_at_unix: int) -> Error:
 	var tmp := path + ".tmp"
 	var f := FileAccess.open(tmp, FileAccess.WRITE)
 	if f == null:
 		return FileAccess.get_open_error()
-	f.store_string(JSON.stringify(to_dict(s, saved_at_unix), "  ", false, true))
+	var written := f.store_string(JSON.stringify(to_dict(s, saved_at_unix), "  ", false, true))
 	f.close()
+	if not written:
+		DirAccess.remove_absolute(tmp)   # 덜 쓴 파일로 본 파일·백업을 밀어내지 않음
+		return ERR_FILE_CANT_WRITE
+	# 본 파일이 없으면(깨져서 .broken으로 옮긴 뒤 등) 백업을 그대로 둔다
 	if FileAccess.file_exists(path):
-		DirAccess.remove_absolute(path)
+		for k in range(BACKUPS, 1, -1):
+			if FileAccess.file_exists(_bak(path, k - 1)):
+				_move(_bak(path, k - 1), _bak(path, k))
+		_move(path, _bak(path, 1))
 	return DirAccess.rename_absolute(tmp, path)
 
 
-## 파일에서 읽는다. 결과: { status, state, saved_at, error }
-## 깨진 파일은 path + ".broken" 으로 옮겨 둔다 (원인 볼 수 있게).
+## 파일에서 읽는다. 결과: { status, state, saved_at, error, recovered, old_kept }
+##   recovered = 본 파일이 깨져서 백업에서 살림 (status OK, error에 본 파일이 깨진 이유)
+##   old_kept  = 옛 형식 파일을 옮겨 둔 경로 (status NONE). 없으면 ""
+## 백업까지 전부 안 읽히면 BROKEN (새 게임).
 static func read_file(path: String, b: Balance) -> Dictionary:
+	# 바꿔 끼우는 순간 꺼졌으면 .tmp 만 남아 있을 수 있음
+	if not FileAccess.file_exists(path) and FileAccess.file_exists(path + ".tmp"):
+		DirAccess.rename_absolute(path + ".tmp", path)
 	if not FileAccess.file_exists(path):
-		# 바꿔 끼우는 순간 꺼졌으면 .tmp 만 남아 있을 수 있음
-		if FileAccess.file_exists(path + ".tmp"):
-			DirAccess.rename_absolute(path + ".tmp", path)
-		else:
-			return { "status": Status.NONE, "state": null, "saved_at": 0, "error": "" }
-	var f := FileAccess.open(path, FileAccess.READ)
-	if f == null:
-		return _keep_broken(path, _broken("파일을 열 수 없음 (오류 %d)" % FileAccess.get_open_error()))
-	var text := f.get_as_text()
-	f.close()
-	var json := JSON.new()
-	if json.parse(text) != OK:
-		return _keep_broken(path, _broken("JSON 형식이 깨짐 (%d번째 줄: %s)" % [json.get_error_line() + 1, json.get_error_message()]))
-	var result := from_dict(json.data, b)
-	if result["status"] == Status.BROKEN:
-		return _keep_broken(path, result)
-	return result
+		return _result(Status.NONE)
+	var main := _read_one(path, b)
+	if main["status"] == Status.OK:
+		return main
+	if main.has("old"):
+		var keep := path.get_base_dir().path_join(OLD_FILE_NAME)
+		_move(path, keep)
+		var r := _result(Status.NONE)
+		r["old_kept"] = keep
+		return r
+	_move(path, path + ".broken")
+	for k in range(1, BACKUPS + 1):
+		var r := _read_one(_bak(path, k), b)
+		if r["status"] == Status.OK:
+			r["recovered"] = true
+			r["error"] = main["error"]
+			return r
+	return main
 
 
+## 본 파일·임시 파일·백업을 지운다 (치트 F3). .broken과 옛 형식 파일은 남긴다.
 static func delete_file(path: String) -> void:
-	for p in [path, path + ".tmp"]:
+	var paths := [path, path + ".tmp"]
+	for k in range(1, BACKUPS + 1):
+		paths.append(_bak(path, k))
+	for p in paths:
 		if FileAccess.file_exists(p):
 			DirAccess.remove_absolute(p)
 
 
-static func _keep_broken(path: String, result: Dictionary) -> Dictionary:
-	var keep := path + ".broken"
-	if FileAccess.file_exists(keep):
-		DirAccess.remove_absolute(keep)
-	DirAccess.rename_absolute(path, keep)
-	return result
+## 파일 하나를 읽어 상태로. 옛 형식(version 1·2)이면 status NONE + "old" 칸
+static func _read_one(p: String, b: Balance) -> Dictionary:
+	if not FileAccess.file_exists(p):
+		return _broken("파일이 없음: %s" % p)
+	var f := FileAccess.open(p, FileAccess.READ)
+	if f == null:
+		return _broken("파일을 열 수 없음 (오류 %d)" % FileAccess.get_open_error())
+	var text := f.get_as_text()
+	f.close()
+	var json := JSON.new()
+	if json.parse(text) != OK:
+		return _broken("JSON 형식이 깨짐 (%d번째 줄: %s)" % [json.get_error_line() + 1, json.get_error_message()])
+	var d = json.data
+	if typeof(d) == TYPE_DICTIONARY and _is_number(d.get("version")) and float(d["version"]) < FORMAT_VERSION:
+		var r := _result(Status.NONE)
+		r["old"] = true
+		return r
+	return from_dict(d, b)
+
+
+static func _bak(path: String, k: int) -> String:
+	return "%s.bak%d" % [path, k]
+
+
+## from에서 to로 옮긴다 (to에 파일이 있으면 지우고)
+static func _move(from: String, to: String) -> void:
+	if FileAccess.file_exists(to):
+		DirAccess.remove_absolute(to)
+	DirAccess.rename_absolute(from, to)
+
+
+static func _result(status: Status, state: GameState = null, saved_at: int = 0, error: String = "") -> Dictionary:
+	return { "status": status, "state": state, "saved_at": saved_at, "error": error, "recovered": false, "old_kept": "" }
 
 
 static func _broken(why: String) -> Dictionary:
-	return { "status": Status.BROKEN, "state": null, "saved_at": 0, "error": why }
+	return _result(Status.BROKEN, null, 0, why)
 
 
 ## "YYYY-MM-DDTHH:MM:SS" → 유닉스 시각(초). 틀린 모양이면 -1.
@@ -167,6 +224,19 @@ static func _is_number(v) -> bool:
 
 static func _is_finite_number(v) -> bool:
 	return _is_number(v) and is_finite(float(v))
+
+
+## 돈: 글자("123", 쓸 때 모양)나 숫자(손으로 고친 파일). 0 이상 정수가 아니면 null. MAX_MONEY 넘으면 자름
+static func _money(v):
+	if typeof(v) == TYPE_STRING:
+		var text: String = v
+		if not text.is_valid_int() or text.begins_with("-") or text.begins_with("+"):
+			return null
+		var digits := text.lstrip("0")
+		return MAX_MONEY if digits.length() > 18 else digits.to_int()
+	if not _is_finite_number(v) or float(v) < 0.0 or float(v) != floorf(float(v)):
+		return null
+	return MAX_MONEY if float(v) >= float(MAX_MONEY) else int(v)
 
 
 ## lo~hi 사이 정수면 int, 아니면 null
