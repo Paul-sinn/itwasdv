@@ -91,8 +91,8 @@ func set_ui_scale(s: float) -> void:
 	_scale = s
 	if _choose == null:
 		return
-	add_theme_constant_override("separation", int(roundf(6.0 * s)))
-	_parts_row.add_theme_constant_override("separation", int(roundf(6.0 * s)))
+	add_theme_constant_override("separation", int(roundf(Feel.PANEL_GAP_SMALL * s)))
+	_parts_row.add_theme_constant_override("separation", int(roundf(Feel.PANEL_GAP_SMALL * s)))
 	_choose.add_theme_constant_override("separation", int(roundf(Feel.SETTING_COLUMN_GAP * s)))
 	for c: Control in _font_sizes:
 		c.add_theme_font_size_override("font_size", _px(_font_sizes[c]))
@@ -148,7 +148,7 @@ func show_roll_result(_part: String, before: int, after: int, pity: bool) -> voi
 	if after > before:
 		_result.text = tr("SETTING_RESULT_PITY" if pity else "SETTING_RESULT_UP") % [grade_name(before), grade_name(after)]
 		_result.add_theme_color_override("font_color", Feel.SETTING_GRADE_COLORS[after])
-		Town.pop(_new_grade, Vector2(0.0, 0.5))
+		Town.pop(_new_grade, Feel.POP_PIVOT_LEFT)
 	else:
 		_result.text = tr("SETTING_RESULT_SAME")
 		_result.add_theme_color_override("font_color", Feel.COLOR_TEXT)

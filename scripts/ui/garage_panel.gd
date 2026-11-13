@@ -121,9 +121,9 @@ func set_ui_scale(s: float) -> void:
 	custom_minimum_size.x = Feel.PANEL_WIDTH * s
 	_style.set_corner_radius_all(int(roundf(Feel.PANEL_RADIUS * s)))
 	_style.set_content_margin_all(Feel.PANEL_PADDING * s)
-	_box.add_theme_constant_override("separation", int(roundf(8.0 * s)))
-	_engine_box.add_theme_constant_override("separation", int(roundf(6.0 * s)))
-	_tabs.add_theme_constant_override("separation", int(roundf(6.0 * s)))
+	_box.add_theme_constant_override("separation", int(roundf(Feel.PANEL_GAP * s)))
+	_engine_box.add_theme_constant_override("separation", int(roundf(Feel.PANEL_GAP_SMALL * s)))
+	_tabs.add_theme_constant_override("separation", int(roundf(Feel.PANEL_GAP_SMALL * s)))
 	for c: Control in _font_sizes:
 		c.add_theme_font_size_override("font_size", _px(_font_sizes[c]))
 	_result.add_theme_font_size_override("font_size", _px(_result_size))
@@ -175,7 +175,7 @@ func end_suspense() -> void:
 ## 성공: 번쩍 + 제목 "+N" 커졌다 돌아옴
 func celebrate() -> void:
 	flash(Color(1, 1, 1, Feel.FLASH_ALPHA), Feel.FLASH_DURATION)
-	Town.pop(_title, Vector2(0.0, 0.5))   # 왼쪽 끝 기준 → 패널 밖으로 안 삐져나감
+	Town.pop(_title, Feel.POP_PIVOT_LEFT)
 
 
 ## 차고 전체가 color로 번쩍였다가 사라짐 (강화 성공 하양, 세팅 등급업은 등급 색)

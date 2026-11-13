@@ -124,7 +124,7 @@ func click_rect() -> Rect2:
 	var w := Feel.TRUCK_SIZE.x * k
 	var h := _height() * k
 	var shake_room := _shake_px * Feel.ENGINE_SHAKE_GROW * k if _shake_left > 0.0 else 0.0
-	var flame_room := Feel.FLAME_LENGTH * 1.1 * k if boosting or _flame_left > 0.0 else 0.0
+	var flame_room := Feel.FLAME_LENGTH * Feel.FLAME_FLICKER_MAX * k if _flaming() else 0.0
 	return Rect2(position.x - w / 2.0, position.y - h, w, h).grow(Feel.TRUCK_CLICK_PADDING + shake_room + flame_room)
 
 
@@ -139,6 +139,30 @@ func smoke_rect() -> Rect2:
 	var local := Rect2(o.x - side, o.y - up, side * 2.0, up + Feel.SMOKE_SIZE.y)
 	local.position += Vector2(-Feel.TRUCK_SIZE.x / 2.0, -_height())
 	return Rect2(position + local.position * k, local.size * k).grow(Feel.TRUCK_CLICK_PADDING)
+
+
+## 불꽃이 가장 길 때 차지하는 사각형 (동네 노드 좌표). 불꽃이 없으면 크기 0 (확인용)
+func flame_rect() -> Rect2:
+	if not _flaming():
+		return Rect2()
+	var k := view_zoom * Feel.TOWN_TRUCK_SCALE
+	var pts := _flame_points(Feel.FLAME_LENGTH * Feel.FLAME_FLICKER_MAX, Feel.FLAME_WIDTH)
+	var local := Rect2(pts[0], Vector2.ZERO).expand(pts[1]).expand(pts[2])
+	local.position += _shake_offset + Vector2(-Feel.TRUCK_SIZE.x / 2.0, -_height())
+	return Rect2(position + local.position * k, local.size * k)
+
+
+## 불꽃이 나오나: 오버부스트 바퀴 동안, 강화 성공 순간
+func _flaming() -> bool:
+	return boosting or _flame_left > 0.0
+
+
+## 불꽃 세모: 짐칸 뒤(보는 쪽 반대)로 length만큼 뻗음 (트럭 그림 왼쪽 위 기준)
+func _flame_points(length: float, width: float) -> PackedVector2Array:
+	var back := 0.0 if _face > 0 else Feel.TRUCK_SIZE.x
+	var out := -1.0 if _face > 0 else 1.0
+	var y := Feel.TRUCK_SIZE.y * Feel.FLAME_Y
+	return PackedVector2Array([Vector2(back, y - width / 2.0), Vector2(back + out * length, y), Vector2(back, y + width / 2.0)])
 
 
 ## 바퀴 바닥부터 짐칸 위까지 높이 (트럭 자기 좌표)
@@ -218,14 +242,10 @@ func _draw() -> void:
 	draw_circle(Vector2(w * 0.78, h + wr * 0.6), wr, Feel.COLOR_WHEEL)
 
 	# 불꽃: 짐칸 뒤(보는 쪽 반대)로 뻗는 세모 두 겹 (오버부스트 바퀴 동안, 강화 성공 순간)
-	if boosting or _flame_left > 0.0:
-		var back := 0.0 if _face > 0 else w
-		var out := -1.0 if _face > 0 else 1.0
-		var y := h * 0.7
-		var hw := Feel.FLAME_WIDTH / 2.0
-		var len := Feel.FLAME_LENGTH * randf_range(0.8, 1.1)   # 깜빡이는 느낌
-		draw_colored_polygon(PackedVector2Array([Vector2(back, y - hw), Vector2(back + out * len, y), Vector2(back, y + hw)]), Feel.COLOR_FLAME)
-		draw_colored_polygon(PackedVector2Array([Vector2(back, y - hw * 0.5), Vector2(back + out * len * 0.55, y), Vector2(back, y + hw * 0.5)]), Feel.COLOR_FLAME_CORE)
+	if _flaming():
+		var len := Feel.FLAME_LENGTH * randf_range(Feel.FLAME_FLICKER_MIN, Feel.FLAME_FLICKER_MAX)   # 깜빡이는 느낌
+		draw_colored_polygon(_flame_points(len, Feel.FLAME_WIDTH), Feel.COLOR_FLAME)
+		draw_colored_polygon(_flame_points(len * Feel.FLAME_CORE_LENGTH, Feel.FLAME_WIDTH * Feel.FLAME_CORE_WIDTH), Feel.COLOR_FLAME_CORE)
 
 	# 연기: 엔진(운전석) 위에서 올라가며 커지고 흐려짐
 	var origin := _smoke_origin()

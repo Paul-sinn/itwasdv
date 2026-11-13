@@ -28,6 +28,8 @@ const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
 const TEST_SAVE := "user://test_town_setting.json"
 const TEST_SETTINGS := "user://test_town_settings.cfg"
 const RICH := 1000000000   ## 돌리기에 넉넉한 돈
+## 돌리기 결과를 고정 (④가 운에 달리지 않게: 이 seed면 등급업 전에 천장 +1을 2번 넘게 봄)
+const SEED := 20261113
 
 var fails := PackedStringArray()
 var checks := 0
@@ -45,7 +47,8 @@ func _run() -> void:
 	Save.delete_file(TEST_SAVE)
 	var b := Balance.load_file()
 	var m := await _launch()
-	Engine.time_scale = 0.0
+	Engine.time_scale = 0.0   # 시간이 멈추면 배송 굴리기도 없음 → 아래 돌리기만 rng를 씀
+	m.rng.seed = SEED
 	var p = m.panel
 	var st = p.setting
 	var t = m.state.truck(0)
@@ -165,8 +168,8 @@ func _run() -> void:
 	await _until_rolled(m)
 	await _frames(3)
 	var pity_text: String = st.result_text()
-	_report(ceil_ok and upgraded and pity_text == tr("SETTING_RESULT_PITY") % [st.grade_name(0), st.grade_name(1)],
-			"④ 천장 숫자가 돌릴 때마다 +1 (%d번), 등급업 뒤 새 등급 기준으로, 천장 도달 알림 '%s'" % [steps, pity_text])
+	_report(ceil_ok and steps >= 2 and upgraded and pity_text == tr("SETTING_RESULT_PITY") % [st.grade_name(0), st.grade_name(1)],
+			"④ 천장 숫자가 돌릴 때마다 +1 (%d번 확인, 2번 이상이어야 함), 등급업 뒤 새 등급 기준으로, 천장 도달 알림 '%s'" % [steps, pity_text])
 
 	# ⑦ 고르는 화면(ECU)에서 껐다 켜도 다시 뜸
 	m.notification(Node.NOTIFICATION_WM_CLOSE_REQUEST)   # 창 닫기 = 저장

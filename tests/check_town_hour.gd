@@ -3,6 +3,7 @@
 ##    "+돈" 글자 수 = 계산 쪽 배송 이벤트 수 = 번 돈 ÷ 배송 1건 돈, 화면 트럭이 계산 쪽 바퀴 진행을 따라가나
 ## ④ 화면 트럭 속도가 +30에서도 feel.gd 상한을 안 넘나
 ## v4: 오버부스트(ECU 프로토타입 3줄 24%)가 걸린 바퀴마다 "오버부스트!" 글자, 1시간 돈이 평균 시간당 수입과 맞나
+##     작은 화면 트럭 뒤 불꽃(오버부스트·강화 성공)이 가장 길 때도 보이는 곳(main.visible_rects) 안인가
 ## 진짜 게임 화면(main.tscn)을 작은 화면 크기로 띄우고, F2와 같은 60배속 측정을 켠 뒤 1시간치를 돌린다.
 ##
 ## 실행 (--fixed-fps 60 + 60배속 = 한 프레임에 게임 1초 → 몇 초 만에 끝남):
@@ -38,6 +39,8 @@ var _switches := 0
 var _max_speed_ratio := 0.0   ## 화면 트럭 속도 ÷ 상한 중 가장 큰 값
 var _max_lag := 0.0           ## 화면 트럭이 있어야 할 자리보다 가장 많이 뒤처진 거리 (설계 좌표 픽셀)
 var _start_counts := {}
+var _flame_frames := 0        ## 작은 화면에서 불꽃이 나온 프레임 수
+var _flame_out := 0           ## 그중 가장 긴 불꽃이 보이는 곳 밖으로 나간 프레임 수
 
 
 func _initialize() -> void:
@@ -74,6 +77,8 @@ func _start() -> void:
 	_case_frames = 0
 	_max_speed_ratio = 0.0
 	_max_lag = 0.0
+	_flame_frames = 0
+	_flame_out = 0
 	var town = _main.town
 	_start_counts = { "shown": town.payouts_shown, "boosts": town.boosts_shown, "parcels": _main.parcels_total, "boost_events": _main.boosts_found }
 	_main._toggle_fast_time()   # F2 누른 것과 같음: 60배속 + 측정 시작
@@ -91,6 +96,13 @@ func _on_frame() -> void:
 	var truck = _main.town.truck
 	_max_speed_ratio = maxf(_max_speed_ratio, truck.speed() / truck.speed_cap())
 	_max_lag = maxf(_max_lag, truck.lag())
+	# 작은 화면은 보이는 곳 사각형 밖이 안 그려짐 → 가장 긴 불꽃(창 안쪽 부분)이 사각형 하나 안에 들어가나
+	var flame: Rect2 = truck.flame_rect()
+	if flame.has_area() and not _main.is_full():
+		_flame_frames += 1
+		var v := Rect2(flame.position + _main.town.position + _main.position, flame.size).intersection(Rect2(Vector2.ZERO, Vector2(root.size)))
+		if v.has_area() and not _main.visible_rects().any(func(r: Rect2): return r.encloses(v)):
+			_flame_out += 1
 	var every: int = CASES[_case]["switch"]
 	if every > 0 and _case_frames % every == 0:
 		if _main.is_full():
@@ -125,6 +137,9 @@ func _on_frame() -> void:
 		var boosts: int = town.boosts_shown - _start_counts["boosts"]
 		var boost_events: int = _main.boosts_found - _start_counts["boost_events"]
 		_report(boosts == boost_events and boosts > 0, "%s 오버부스트 24%%: '오버부스트!' 글자 %d개 = 이벤트 %d번" % [what, boosts, boost_events])
+	if CASES[_case].get("flame", false) or CASES[_case].get("overboost", false):
+		_report(_flame_frames > 0 and _flame_out == 0,
+				"%s: 작은 화면 불꽃이 가장 길 때도 보이는 곳 안 (불꽃 %d프레임 확인, 밖으로 나감 %d번)" % [what, _flame_frames, _flame_out])
 	if t.star == b.max_star:
 		_report(_max_speed_ratio <= 1.0 + 1e-6 and _max_speed_ratio > 0.0,
 				"%s: ④ 화면 트럭 속도가 상한(feel.gd TOWN_DRIVE_SECONDS_MIN)을 안 넘음 (상한의 최대 %.2f배)" % [what, _max_speed_ratio])

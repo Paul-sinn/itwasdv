@@ -10,6 +10,11 @@ const WHEEL_RADIUS := 4.5
 # --- 트럭 불꽃 (강화 성공 순간, 오버부스트 걸린 바퀴 동안. 트럭 자기 좌표) ---
 const FLAME_LENGTH := 16.0        ## 짐칸 뒤로 뻗는 불꽃 길이
 const FLAME_WIDTH := 7.0
+const FLAME_FLICKER_MIN := 0.8    ## 깜빡일 때 길이 배수 (가장 짧을 때)
+const FLAME_FLICKER_MAX := 1.1    ## 깜빡일 때 길이 배수 (가장 길 때. 보이는 곳 여유도 이걸로)
+const FLAME_Y := 0.7              ## 불꽃 높이 (짐칸 위에서부터 짐칸 높이의 몇 배)
+const FLAME_CORE_LENGTH := 0.55   ## 안쪽 밝은 불꽃 길이 (바깥 불꽃의 몇 배)
+const FLAME_CORE_WIDTH := 0.5     ## 안쪽 밝은 불꽃 굵기 (바깥 불꽃의 몇 배)
 const COLOR_FLAME := Color(1.0, 0.55, 0.15, 0.9)
 const COLOR_FLAME_CORE := Color(1.0, 0.92, 0.45, 0.95)
 
@@ -66,6 +71,8 @@ const COLOR_SMOKE := Color(0.40, 0.40, 0.43, 0.85)  ## 작은 화면에서도 �
 const TRUCK_CLICK_PADDING := 4.0 ## 트럭 둘레 "보이는 곳" 여유 (픽셀)
 const PANEL_WIDTH := 360.0
 const PANEL_PADDING := 14.0
+const PANEL_GAP := 8.0           ## 차고 줄 사이 간격
+const PANEL_GAP_SMALL := 6.0     ## 칸 안 줄 사이·[엔진 강화] [세팅] 칸 버튼 사이·부품 버튼 사이 간격
 const PANEL_BORDER := 2
 const PANEL_BORDER_DANGER := 4   ## 퍼질 수 있을 때 테두리 두께
 const PANEL_RADIUS := 8
@@ -93,6 +100,7 @@ const FLASH_DURATION := 0.35          ## 성공 번쩍임이 사라지는 시간
 const FLASH_ALPHA := 0.75             ## 번쩍임 처음 밝기 (0~1)
 const STAR_POP_SCALE := 1.7           ## 성공 시 "+N" 숫자가 커지는 배수
 const STAR_POP_DURATION := 0.45       ## 커졌다 돌아오는 시간
+const POP_PIVOT_LEFT := Vector2(0.0, 0.5)  ## 차고 글자가 커질 때 기준점: 왼쪽 끝 (패널 밖으로 안 삐져나감)
 const BOOST_DURATION := 0.9           ## 성공 시 트럭 뒤 불꽃이 나오는 시간
 
 const FAIL_SHAKE_PX := 6.0            ## 실패 시 차고 흔들림

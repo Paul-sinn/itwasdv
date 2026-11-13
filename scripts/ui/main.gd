@@ -472,7 +472,7 @@ func _open_pending_setting() -> void:
 			return
 
 
-# ---------------- 클릭 · 치트 키 ----------------# ---------------- 클릭 · 치트 키 ----------------
+# ---------------- 클릭 · 치트 키 ----------------
 
 func _unhandled_input(event: InputEvent) -> void:
 	if state == null:
