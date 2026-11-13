@@ -1,7 +1,6 @@
-## 트럭 그림: 꼬불길 위에서 target(집 번호, -1 = 물류센터) 쪽으로 달려가 거기서 기다린다.
-## 어디로 갈지는 main.gd가 계산 쪽 바퀴 진행(TruckState)을 보고 정한다 (물류센터 → 집1 → … → 마지막 집 → 물류센터).
-## 돈·배송은 여기서 하지 않는다 ("+돈"은 계산 쪽 배송 이벤트에 맞춰 town.gd가 띄움).
-## 빠르기는 연출일 뿐: 강화 단계에 따라 빨라지다가 feel.gd TOWN_DRIVE_SECONDS_MIN(상한)에서 멈춘다.
+## 트럭 그림: 계산 쪽 한 바퀴 진행(follow(0~1))을 따라 물류센터 → 마지막 집 → (돌아서) 물류센터를 돈다.
+## 돈·배송은 여기서 하지 않는다 ("+돈"은 계산 쪽 배송 이벤트가 올 때 town.gd가 트럭에서 가까운 집에 띄움).
+## 빠르기는 계산 쪽을 따르되(강화·세팅으로 빨라짐) feel.gd TOWN_DRIVE_SECONDS_MIN(상한)보다 빨리 돌지 않는다.
 ##
 ## 움직임은 동네 설계 좌표(길 위 거리)로 하고, 그릴 때만 view_origin + 점 × view_zoom 으로 옮긴다.
 ## 그래서 작은 화면 ↔ 전체 화면을 오가도 트럭은 길 위 같은 자리에서 계속 간다.
@@ -13,8 +12,7 @@ const Route = preload("res://scripts/ui/route.gd")
 const CAB_RATIO := 0.32      ## 운전석 폭 / 트럭 폭
 const SMOKE_SPREAD := 10.0   ## 퍼짐 연기가 처음 옆으로 흩어지는 폭 (트럭 자기 좌표)
 
-var star := 0          ## 강화 단계 (빠르기에만 씀)
-var target := -1       ## 갈 곳: 집 번호(0부터), -1 = 물류센터
+var boosting := false  ## 오버부스트가 걸린 바퀴 (트럭 뒤 불꽃)
 
 var view_origin := Vector2.ZERO   ## 동네 설계 좌표 (0,0)이 동네 노드 안에서 어디에 오나
 var view_zoom := 1.0              ## 동네 확대 배수
@@ -22,6 +20,8 @@ var view_zoom := 1.0              ## 동네 확대 배수
 var _route: Route
 var _stops := PackedFloat64Array()   ## 집마다 길 위 거리 (물류센터에서 가까운 순)
 var _s := 0.0          ## 지금 길 위 거리 (0 = 물류센터 앞)
+var _goal := 0.0       ## 있어야 할 길 위 거리 (follow로 정함)
+var _moved_speed := 0.0   ## 지난 프레임에 실제로 움직인 속도 (설계 좌표 픽셀/초, 확인용)
 var _face := 1         ## 그림이 보는 쪽: 1 = 오른쪽, -1 = 왼쪽
 
 var _smoke: Array[Vector2] = []   ## 퍼짐 연기 덩이들: (x 흔들림, 나온 뒤 지난 초)
@@ -31,9 +31,7 @@ var _shake_left := 0.0
 var _shake_total := 0.0
 var _shake_px := 0.0
 var _shake_offset := Vector2.ZERO
-var _boost_mult := 1.0
-var _boost_left := 0.0
-var _boost_total := 0.0
+var _flame_left := 0.0   ## 강화 성공 불꽃 남은 초 (진짜 시간)
 
 
 ## 달릴 길과 집 자리를 정한다 (처음 한 번). 트럭은 물류센터 앞에서 출발.
@@ -41,6 +39,7 @@ func set_route(route: Route, stops: PackedFloat64Array) -> void:
 	_route = route
 	_stops = stops
 	_s = 0.0
+	_goal = 0.0
 	place()
 
 
@@ -66,11 +65,24 @@ func shake(seconds: float, px: float) -> void:
 	_shake_px = px
 
 
-## 순간 가속: mult배 빨라졌다가 seconds 동안 원래대로 (보이는 것만. 상한은 안 넘음)
-func boost(mult: float, seconds: float) -> void:
-	_boost_mult = mult
-	_boost_left = seconds
-	_boost_total = seconds
+## 강화 성공: seconds 동안 트럭 뒤 불꽃 (보이는 것만)
+func boost(seconds: float) -> void:
+	_flame_left = seconds
+
+
+## 한 바퀴 중 어디쯤 있어야 하나: 0 = 물류센터, 0.5 = 마지막 집(돌아서는 곳), 1 = 다시 물류센터
+func follow(phase: float) -> void:
+	var d := clampf(phase, 0.0, 1.0) * _loop_length()
+	_goal = d if d <= _loop_length() / 2.0 else _loop_length() - d
+
+
+## 트럭에서(가야 할 자리에서) 가장 가까운 집 번호
+func nearest_house() -> int:
+	var best := 0
+	for i in _stops.size():
+		if absf(_stops[i] - _goal) < absf(_stops[best] - _goal):
+			best = i
+	return best
 
 
 ## 번쩍임: 하얗게 빛났다가 돌아옴
@@ -86,27 +98,14 @@ func smoke_burst(count: int) -> void:
 		_smoke.append(Vector2(randf_range(-SMOKE_SPREAD, SMOKE_SPREAD), randf_range(0.0, 0.5)))
 
 
-func _boost_factor() -> float:
-	if _boost_left <= 0.0:
-		return 1.0
-	return lerpf(1.0, _boost_mult, _boost_left / _boost_total)
-
-
 ## 한 바퀴 길이 (물류센터 → 마지막 집 → 물류센터)
 func _loop_length() -> float:
 	return 2.0 * _stops[_stops.size() - 1] if _stops.size() > 0 else 0.0
 
 
-## 설계 좌표 기준 속도 (픽셀/초, 배속 곱하기 전). 순간 가속을 더해도 상한(TOWN_DRIVE_SECONDS_MIN)까지
-func _drive_speed() -> float:
-	return _loop_length() / maxf(Feel.TOWN_DRIVE_SECONDS_MIN, Feel.town_drive_seconds(star) / _boost_factor())
-
-
-## 달릴 때 화면에서 움직이는 속도 (픽셀/초, 배속 곱하기 전)
+## 지난 프레임에 실제로 움직인 속도 (픽셀/초, 배속 곱하기 전). 보이는 곳 여유 계산에 씀
 func speed() -> float:
-	if _route == null or _loop_length() < 1.0:
-		return 0.0
-	return _drive_speed() * view_zoom
+	return _moved_speed * view_zoom
 
 
 ## 화면 트럭 속도 상한 (픽셀/초, 배속 곱하기 전. 확인용)
@@ -114,14 +113,9 @@ func speed_cap() -> float:
 	return _loop_length() / Feel.TOWN_DRIVE_SECONDS_MIN * view_zoom
 
 
-## 집 house 앞(또는 -1 = 물류센터)에 서 있나
-func is_at(house: int) -> bool:
-	return absf(_s - _spot(house)) < 0.5
-
-
-## 집 번호(-1 = 물류센터) → 길 위 거리
-func _spot(house: int) -> float:
-	return _stops[clampi(house, 0, _stops.size() - 1)] if house >= 0 and _stops.size() > 0 else 0.0
+## 있어야 할 자리보다 얼마나 뒤처졌나 (설계 좌표 픽셀. 확인용)
+func lag() -> float:
+	return absf(_goal - _s)
 
 
 ## 트럭 그림이 차지하는 사각형 (동네 노드 좌표). 떨림·여유 포함
@@ -130,7 +124,8 @@ func click_rect() -> Rect2:
 	var w := Feel.TRUCK_SIZE.x * k
 	var h := _height() * k
 	var shake_room := _shake_px * Feel.ENGINE_SHAKE_GROW * k if _shake_left > 0.0 else 0.0
-	return Rect2(position.x - w / 2.0, position.y - h, w, h).grow(Feel.TRUCK_CLICK_PADDING + shake_room)
+	var flame_room := Feel.FLAME_LENGTH * 1.1 * k if boosting or _flame_left > 0.0 else 0.0
+	return Rect2(position.x - w / 2.0, position.y - h, w, h).grow(Feel.TRUCK_CLICK_PADDING + shake_room + flame_room)
 
 
 ## 연기가 퍼지는 사각형 (동네 노드 좌표). 연기가 없으면 크기 0
@@ -182,19 +177,18 @@ func _update_effects(real: float) -> void:
 		_shake_offset = Vector2(randf_range(-px, px), randf_range(-px, px) * 0.5)
 	else:
 		_shake_offset = Vector2.ZERO
-	if _boost_left > 0.0:
-		_boost_left = maxf(0.0, _boost_left - real)
+	_flame_left = maxf(0.0, _flame_left - real)
 
 
-## target 쪽으로 달리고, 닿으면 거기서 기다린다 (길은 한 줄이라 앞뒤로만 감)
+## 있어야 할 자리 쪽으로 (상한 속도까지만). 길은 한 줄이라 앞뒤로만 감
 func _move(delta: float) -> void:
-	if _route == null or _loop_length() < 1.0:
+	_moved_speed = 0.0
+	if _route == null or _loop_length() < 1.0 or _s == _goal or delta <= 0.0:
 		return
-	var goal := _spot(target)
-	if _s == goal:
-		return
-	var dir := signf(goal - _s)
-	_s = move_toward(_s, goal, _drive_speed() * delta)
+	var dir := signf(_goal - _s)
+	var before := _s
+	_s = move_toward(_s, _goal, _loop_length() / Feel.TOWN_DRIVE_SECONDS_MIN * delta)
+	_moved_speed = absf(_s - before) / delta
 	var d := _route.direction_at(_s) * dir
 	if absf(d.x) > 0.3:
 		_face = 1 if d.x > 0.0 else -1
@@ -222,6 +216,16 @@ func _draw() -> void:
 	draw_rect(Rect2(cab_x, h * 0.3, cab_w, h * 0.7), Feel.COLOR_TRUCK_CAB)
 	draw_circle(Vector2(w * 0.22, h + wr * 0.6), wr, Feel.COLOR_WHEEL)
 	draw_circle(Vector2(w * 0.78, h + wr * 0.6), wr, Feel.COLOR_WHEEL)
+
+	# 불꽃: 짐칸 뒤(보는 쪽 반대)로 뻗는 세모 두 겹 (오버부스트 바퀴 동안, 강화 성공 순간)
+	if boosting or _flame_left > 0.0:
+		var back := 0.0 if _face > 0 else w
+		var out := -1.0 if _face > 0 else 1.0
+		var y := h * 0.7
+		var hw := Feel.FLAME_WIDTH / 2.0
+		var len := Feel.FLAME_LENGTH * randf_range(0.8, 1.1)   # 깜빡이는 느낌
+		draw_colored_polygon(PackedVector2Array([Vector2(back, y - hw), Vector2(back + out * len, y), Vector2(back, y + hw)]), Feel.COLOR_FLAME)
+		draw_colored_polygon(PackedVector2Array([Vector2(back, y - hw * 0.5), Vector2(back + out * len * 0.55, y), Vector2(back, y + hw * 0.5)]), Feel.COLOR_FLAME_CORE)
 
 	# 연기: 엔진(운전석) 위에서 올라가며 커지고 흐려짐
 	var origin := _smoke_origin()

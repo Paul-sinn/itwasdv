@@ -16,7 +16,9 @@ const MAIN_SCENE := "res://scenes/main.tscn"
 const CSV_PATH := "res://locale/strings.csv"
 const UI_DIR := "res://scripts/ui/"
 const LOG_CALLS := ["push_warning(", "push_error(", "print("]   ## 화면이 아니라 로그
+const Balance = preload("res://scripts/core/balance.gd")
 const Save = preload("res://scripts/core/save.gd")
+const Setting = preload("res://scripts/core/setting.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
@@ -43,6 +45,14 @@ func _run() -> void:
 	await process_frame
 	_check_csv()
 	var code_keys := _check_code()
+	# 세팅 이름 키는 balance.json의 id로 만들어 씀 (setting_tab.gd): 부품·옵션·등급마다 있어야 함
+	var b := Balance.load_file()
+	for g in Setting.max_grade(b) + 1:
+		code_keys["SETTING_GRADE_%d" % g] = true
+	for part: String in Setting.part_ids(b):
+		code_keys["SETTING_PART_" + part.to_upper()] = true
+		for op in Setting.option_chances(b, part, Setting.max_grade(b)):
+			code_keys["SETTING_OPT_" + String(op).to_upper()] = true
 	_check_keys(code_keys)
 	_check_money()
 	await _check_screen_ko()
@@ -95,7 +105,7 @@ func _check_code() -> Dictionary:
 		for i in lines.size():
 			var is_log := LOG_CALLS.any(func(c): return lines[i].contains(c))
 			for s in _string_literals(lines[i]):
-				if _key_like.search(s) != null:
+				if _key_like.search(s) != null and not s.ends_with("_"):   # "SETTING_PART_" 같은 앞부분은 빼고
 					keys[s] = true
 				if not is_log and _hangul.search(s) != null:
 					hangul.append("%s:%d \"%s\"" % [file, i + 1, s])
@@ -130,7 +140,7 @@ func _check_keys(keys: Dictionary) -> void:
 				bad.append("%s %s → '%s'" % [locale, key, got])
 	for x in bad:
 		print("    " + x)
-	_report(bad.is_empty() and keys.size() > 10, "코드가 쓰는 키 %d개가 ko·en 모두 번역됨 (ja는 en으로)" % keys.size())
+	_report(bad.is_empty() and keys.size() > 10, "코드가 쓰는 키 %d개(세팅 부품·옵션·등급 이름 포함)가 ko·en 모두 번역됨 (ja는 en으로)" % keys.size())
 	var unused := PackedStringArray()
 	for key: String in _csv:
 		if not keys.has(key):

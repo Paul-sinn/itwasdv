@@ -8,13 +8,15 @@
 ##   큰 화면: 왼쪽에 같은 동네를 크게 + 오른쪽에 차고 + [설정] [작게] 버튼
 ##     큰 화면은 전체 화면 또는 창 모드(사용자가 [설정]에서 고름). 창 모드는 창 크기가 수시로 바뀜
 ##     → 창 크기가 바뀔 때마다 _layout() (최소 1280x720에서도 안 깨지게)
-## v3: 돈은 정수. 화면 트럭은 연출이고, 갈 곳만 계산 쪽 바퀴 진행(TruckState)에서 정한다 (_truck_target)
+## v3: 돈은 정수. 화면 트럭은 연출이고, 자리만 계산 쪽 바퀴 진행(TruckState)에서 정한다 (_lap_phase)
+## v4: 차고 [세팅] 칸 → Setting.try_roll / Setting.choose (굴리기·고르기는 scripts/core/setting.gd)
 extends Control
 
 const Balance = preload("res://scripts/core/balance.gd")
 const Enhance = preload("res://scripts/core/enhance.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Save = preload("res://scripts/core/save.gd")
+const Setting = preload("res://scripts/core/setting.gd")
 const Trip = preload("res://scripts/core/trip.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
@@ -50,6 +52,7 @@ var offline_report := {}
 var earned_total := 0
 var parcels_total := 0
 var spares_found := 0
+var boosts_found := 0
 
 # F2 배속 측정: 배속을 켠 순간부터 게임 시간과 번 돈을 잰다
 var _measuring := false
@@ -63,9 +66,11 @@ var _ui_scale := 1.0               ## 전체 화면 글자·간격 배수 (창 �
 var _panel_spot := Vector2.ZERO    ## 차고 오른쪽 위 모서리 (흔들림 빼고)
 var _panel_shake := Vector2.ZERO   ## 실패 연출: 차고 흔들림
 
-## 강화 뜸 중 (결과 기다리는 중). 이때는 강화 버튼을 또 눌러도 무시
+## 강화 뜸 중 (결과 기다리는 중). 이때는 강화·돌리기 버튼을 또 눌러도 무시
 var enhancing := false
-## 뜸(강화 결과 나오기 전 기다림) 길이 배수. 확인 스크립트가 여러 번 누를 때만 줄임 (1 = 그대로)
+## 세팅 돌리기 뜸 중. 이때도 강화·돌리기 버튼을 또 눌러도 무시
+var rolling := false
+## 뜸(결과 나오기 전 기다림) 길이 배수. 확인 스크립트가 여러 번 누를 때만 줄임 (1 = 그대로)
 var suspense_scale := 1.0
 
 
@@ -100,6 +105,9 @@ func _ready() -> void:
 	add_child(panel)
 	panel.enhance_pressed.connect(_on_enhance_pressed)
 	panel.spare_pressed.connect(_on_spare_pressed)
+	panel.setting.roll_pressed.connect(_on_roll_pressed)
+	panel.setting.choose_pressed.connect(_on_choose_pressed)
+	_open_pending_setting()
 
 	small_button = Button.new()
 	small_button.text = tr("SMALL_ESC")
@@ -209,20 +217,24 @@ func _place_panel() -> void:
 
 func _process(delta: float) -> void:
 	var t := state.truck(TRUCK)
-	var house := 0
-	for e in Trip.advance(state, balance, TRUCK, delta, rng):
-		if e["type"] == "parcel":
-			house = town.house_for(e["house"], Trip.cargo(balance, t))
-			town.show_payout(house, e["pay"])
-			earned_total += e["pay"]
-			parcels_total += 1
-			if _measuring:
-				_measure_earned += e["pay"]
-		else:   # "spare": 바로 앞 배송에서 나옴 → 같은 집에
-			town.show_spare(house)
-			spares_found += 1
-	town.truck.star = t.star
-	town.truck.target = _truck_target(t)
+	var events := Trip.advance(state, balance, TRUCK, delta, rng)
+	town.truck.follow(_lap_phase(t))
+	town.truck.boosting = t.boost_lap
+	var house := town.truck.nearest_house()   # "+돈"은 트럭(있어야 할 자리)에서 가장 가까운 집에
+	for e in events:
+		match e["type"]:
+			"parcel":
+				town.show_payout(house, e["pay"])
+				earned_total += e["pay"]
+				parcels_total += 1
+				if _measuring:
+					_measure_earned += e["pay"]
+			"spare":   # 바로 앞 배송에서 나옴 → 같은 집에
+				town.show_spare(house)
+				spares_found += 1
+			"boost":   # 이 바퀴는 오버부스트 (트럭 뒤 불꽃은 boosting으로 바퀴 내내)
+				town.show_boost()
+				boosts_found += 1
 	town.set_hud(state.money, t.star)
 	if panel.visible:
 		panel.refresh(balance, state)
@@ -238,13 +250,11 @@ func _process(delta: float) -> void:
 		_update_debug_label()
 
 
-## 화면 트럭이 갈 곳: 짐 싣는 중이거나 다 돌고 돌아가는 중이면 물류센터(-1), 아니면 다음 배송 집.
-## 트럭은 거기 먼저 가서 기다리고, "+돈"은 계산 쪽 배송 이벤트가 올 때 뜬다
-func _truck_target(t) -> int:
-	var n := Trip.cargo(balance, t)
-	if t.lap_delivered >= n or (t.lap_delivered == 0 and t.lap_clock < balance.load_seconds):
-		return -1
-	return town.house_for(t.lap_delivered, n)
+## 화면 트럭이 한 바퀴 중 어디쯤 있어야 하나 (0 = 물류센터 → 0.5 = 마지막 집 → 1 = 물류센터).
+## 짐 싣는 동안은 0, 그 뒤 바퀴 끝까지 고르게. 지금 바퀴 길이는 계산 쪽 Trip.lap_seconds (오버부스트 반영)
+func _lap_phase(t) -> float:
+	var drive := Trip.lap_seconds(balance, t) - balance.load_seconds
+	return clampf((t.lap_clock - balance.load_seconds) / maxf(drive, 0.001), 0.0, 1.0)
 
 
 # ---------------- 저장 · 꺼둔 동안 수익 ----------------
@@ -329,8 +339,11 @@ func visible_rects() -> Array:
 	if popup.visible:
 		rects.append(popup.get_rect())
 	var out := []
+	var win := Rect2(Vector2.ZERO, view)   # 창 밖은 어차피 안 보임 → 잘라 냄 (연기·트럭 여유가 창 끝에서 넘칠 때)
 	for r: Rect2 in rects:
-		out.append(Rect2(r.position + town.position + position, r.size).grow(shake))
+		var v := Rect2(r.position + town.position + position, r.size).grow(shake).intersection(win)
+		if v.has_area():
+			out.append(v)
 	return out
 
 
@@ -358,7 +371,7 @@ func _on_style_picked(style: ScreenMode.FullStyle) -> void:
 ## 강화 버튼: 뜸 → 굴리기(enhance.gd) → 결과 연출 → 저장
 ## 굴리기는 뜸이 끝난 뒤에 한다 (뜸 동안 꺼도 돈이 안 빠짐)
 func _on_enhance_pressed() -> void:
-	if enhancing or Enhance.block_reason(state, balance, TRUCK) != Enhance.Block.NONE:
+	if enhancing or rolling or Enhance.block_reason(state, balance, TRUCK) != Enhance.Block.NONE:
 		return
 	enhancing = true
 	var danger := Enhance.needs_spare(balance, state.truck(TRUCK).star)
@@ -379,7 +392,7 @@ func _on_enhance_pressed() -> void:
 			panel.celebrate()
 			town.pop_star()
 			town.truck.flash(Feel.FLASH_DURATION)
-			town.truck.boost(Feel.BOOST_MULT, Feel.BOOST_DURATION)
+			town.truck.boost(Feel.BOOST_DURATION)
 		Enhance.Result.FAIL:
 			panel.show_result(tr("RESULT_FAIL"), Feel.COLOR_FAIL)
 			_shake(func(o): _panel_shake = o, Feel.FAIL_SHAKE_PX * fx, Feel.FAIL_SHAKE_DURATION)
@@ -413,7 +426,53 @@ func _on_spare_pressed() -> void:
 	panel.refresh(balance, state)
 
 
-# ---------------- 클릭 · 치트 키 ----------------
+# ---------------- 세팅 돌리기 ----------------
+
+## [돌리기]: 짧은 뜸 → 굴리기(setting.gd) → 예전 것 / 새 것 고르는 화면 → 저장
+## 굴리기는 뜸이 끝난 뒤에 한다 (뜸 동안 꺼도 돈이 안 빠짐)
+func _on_roll_pressed(part: String) -> void:
+	if enhancing or rolling or Setting.block_reason(state, balance, TRUCK, part) != Setting.Block.NONE:
+		return
+	rolling = true
+	panel.setting.begin_suspense()
+	await get_tree().create_timer(Feel.SETTING_SUSPENSE * suspense_scale, true, false, true).timeout   # 진짜 시간
+
+	var before: int = state.truck(TRUCK).part(part)["grade"]
+	var r := Setting.try_roll(state, balance, TRUCK, part, rng)
+	panel.setting.end_suspense()
+	if r["ok"]:
+		var after: int = state.truck(TRUCK).part(part)["pending"]["grade"]
+		panel.setting.show_roll_result(part, before, after, r["pity"])
+		if r["grade_up"]:
+			var c: Color = Feel.SETTING_GRADE_COLORS[after]
+			c.a = Feel.SETTING_FLASH_ALPHA
+			panel.flash(c, Feel.SETTING_FLASH_DURATION)
+		_save()   # 돌린 직후 저장 (고르기 전에 꺼도 다음에 고름)
+	panel.refresh(balance, state)
+	rolling = false
+
+
+## 예전 것 / 새 것 고르기 → 저장
+func _on_choose_pressed(part: String, take_new: bool) -> void:
+	if rolling or state.truck(TRUCK).part(part)["pending"] == null:
+		return
+	Setting.choose(state, TRUCK, part, take_new)
+	panel.setting.show_choice(take_new)
+	_save()   # 고른 직후 저장
+	panel.refresh(balance, state)
+
+
+## 고르다 만 부품이 있으면 차고를 [세팅] 칸 그 부품으로 열어 둔다 (껐다 켜도 고르는 화면이 다시 뜸)
+func _open_pending_setting() -> void:
+	var t := state.truck(TRUCK)
+	for part in Setting.part_ids(balance):
+		if t.settings.has(part) and t.part(part)["pending"] != null:
+			panel.show_tab(panel.Tab.SETTING)
+			panel.setting.select(part)
+			return
+
+
+# ---------------- 클릭 · 치트 키 ----------------# ---------------- 클릭 · 치트 키 ----------------
 
 func _unhandled_input(event: InputEvent) -> void:
 	if state == null:
@@ -480,6 +539,7 @@ func _cheat_reset() -> void:
 	parcels_total = 0
 	spares_found = 0
 	panel.clear_result()
+	panel.setting.clear_result()
 	popup.visible = false
 	_save()
 	_last_cheat = tr("CHEAT_RESET")

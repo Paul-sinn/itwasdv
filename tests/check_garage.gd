@@ -92,7 +92,7 @@ func _run() -> void:
 	_key(KEY_F3)
 	await _frames(1)
 	t = m.state.truck(0)
-	_check(t.star == 0 and m.state.spares == 0 and m.state.money < Trip.parcel_pay(b) * 2, "작은 화면 F3: 처음 상태가 아님")
+	_check(t.star == 0 and m.state.spares == 0 and m.state.money < Trip.parcel_pay(b, t) * 2, "작은 화면 F3: 처음 상태가 아님")
 	_check(m.screen.mode == ScreenMode.Mode.SMALL and not p.visible, "치트 키를 눌렀더니 작은 화면이 아니게 됨")
 
 	# 1-3) 복귀 팝업: 작은 화면 위, 480x220 안. [확인]은 팝업만 닫음 (큰 화면으로 안 감)
@@ -291,7 +291,7 @@ func _run() -> void:
 	await _frames(1)
 	t = m.state.truck(0)
 	# 돈: 그 한 프레임 사이에 배송이 끝나 몇 원 받았을 수 있음
-	_check(t.star == 0 and m.state.money < Trip.parcel_pay(b) * 2 and m.state.spares == 0 and t.success_count + t.fail_count + t.destroy_count == 0,
+	_check(t.star == 0 and m.state.money < Trip.parcel_pay(b, t) * 2 and m.state.spares == 0 and t.success_count + t.fail_count + t.destroy_count == 0,
 			"F3 뒤 처음 상태가 아님: +%d %d원 스페어 %d개" % [t.star, m.state.money, m.state.spares])
 
 	Save.delete_file(TEST_SAVE)

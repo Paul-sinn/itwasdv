@@ -1,7 +1,8 @@
 ## 차고: 전체 화면 오른쪽에 크게 보인다 (작은 화면에서는 안 보임).
 ## 크기는 set_ui_scale()로 정한다 (1 = v0 패널 크기).
 ## v3: 트럭 0의 엔진 강화 + 스페어 엔진(들고 있는 개수, 언제든 구매). 고장 상태는 없음 (퍼지면 스페어를 써서 +15)
-## 보여주기만 한다. 버튼을 누르면 신호만 보내고, 실제 강화·구매는 main.gd → scripts/core 가 한다.
+## v4: 위쪽 [엔진 강화] / [세팅] 두 칸 (처음엔 [엔진 강화]). [세팅] 칸은 setting_tab.gd
+## 보여주기만 한다. 버튼을 누르면 신호만 보내고, 실제 강화·구매·돌리기는 main.gd → scripts/core 가 한다.
 extends PanelContainer
 
 const Balance = preload("res://scripts/core/balance.gd")
@@ -12,13 +13,23 @@ const Trip = preload("res://scripts/core/trip.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const Town = preload("res://scripts/ui/town.gd")
+const SettingTab = preload("res://scripts/ui/setting_tab.gd")
 
 signal enhance_pressed
 signal spare_pressed
 
 const TRUCK := 0   ## 지금은 트럭 1대 (고르는 탭은 v7)
 
+enum Tab { ENGINE, SETTING }
+
+var engine_tab_button: Button    ## 위쪽 [엔진 강화]
+var setting_tab_button: Button   ## 위쪽 [세팅]
+var setting: SettingTab          ## [세팅] 칸
+
 var _style: StyleBoxFlat
+var _tabs: HBoxContainer
+var _engine_box: VBoxContainer   ## [엔진 강화] 칸
+var _tab := Tab.ENGINE
 var _title: Label
 var _spares: Label    ## "스페어 엔진 N개"
 var _income: Label
@@ -48,9 +59,27 @@ func _ready() -> void:
 	_style.set_content_margin_all(Feel.PANEL_PADDING)
 	add_theme_stylebox_override("panel", _style)
 
+	_box = VBoxContainer.new()
+	add_child(_box)
+
+	# 위쪽 두 칸 고르기
+	_tabs = HBoxContainer.new()
+	_box.add_child(_tabs)
+	var group := ButtonGroup.new()
+	engine_tab_button = _button(_tabs, tr("GARAGE_TAB_ENGINE"), Feel.SETTING_TAB_SIZE)
+	setting_tab_button = _button(_tabs, tr("GARAGE_TAB_SETTING"), Feel.SETTING_TAB_SIZE)
+	for b in [engine_tab_button, setting_tab_button]:
+		b.toggle_mode = true
+		b.button_group = group
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.add_theme_color_override("font_pressed_color", Feel.COLOR_STAR)
+		b.add_theme_color_override("font_hover_pressed_color", Feel.COLOR_STAR)
+	engine_tab_button.pressed.connect(func(): show_tab(Tab.ENGINE))
+	setting_tab_button.pressed.connect(func(): show_tab(Tab.SETTING))
+
 	var e := VBoxContainer.new()
-	_box = e
-	add_child(e)
+	_engine_box = e
+	_box.add_child(e)
 	_title = _label(e, Feel.PANEL_TITLE_SIZE, Feel.COLOR_STAR)
 	_title.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN   # 글자 폭만큼만 (커질 때 기준점이 글자에 맞게)
 	_title.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -72,11 +101,15 @@ func _ready() -> void:
 	clear_result()
 	_stats = _label(e, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
 
+	setting = SettingTab.new()
+	_box.add_child(setting)
+
 	# 성공 번쩍임 (패널 위에 겹쳐 놓은 하얀 판, 평소엔 투명)
 	_flash = ColorRect.new()
 	_flash.color = Color(1, 1, 1, 0)
 	_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_flash)
+	show_tab(Tab.ENGINE)
 	set_ui_scale(_scale)
 
 
@@ -88,10 +121,13 @@ func set_ui_scale(s: float) -> void:
 	custom_minimum_size.x = Feel.PANEL_WIDTH * s
 	_style.set_corner_radius_all(int(roundf(Feel.PANEL_RADIUS * s)))
 	_style.set_content_margin_all(Feel.PANEL_PADDING * s)
-	_box.add_theme_constant_override("separation", int(roundf(6.0 * s)))
+	_box.add_theme_constant_override("separation", int(roundf(8.0 * s)))
+	_engine_box.add_theme_constant_override("separation", int(roundf(6.0 * s)))
+	_tabs.add_theme_constant_override("separation", int(roundf(6.0 * s)))
 	for c: Control in _font_sizes:
 		c.add_theme_font_size_override("font_size", _px(_font_sizes[c]))
 	_result.add_theme_font_size_override("font_size", _px(_result_size))
+	setting.set_ui_scale(s)
 	reset_size()
 
 
@@ -103,9 +139,22 @@ func _px(base: float) -> int:
 	return maxi(1, int(roundf(base * _scale)))
 
 
-## 강화 뜸 중 (이때는 강화 버튼 잠김)
+## [엔진 강화] / [세팅] 칸 바꾸기
+func show_tab(t: Tab) -> void:
+	_tab = t
+	_engine_box.visible = t == Tab.ENGINE
+	setting.visible = t == Tab.SETTING
+	engine_tab_button.set_pressed_no_signal(t == Tab.ENGINE)
+	setting_tab_button.set_pressed_no_signal(t == Tab.SETTING)
+
+
+func current_tab() -> Tab:
+	return _tab
+
+
+## 강화나 돌리기 뜸 중 (이때는 강화·돌리기 버튼 둘 다 잠김)
 func is_busy() -> bool:
-	return _busy
+	return _busy or setting.is_busy()
 
 
 # ---------------- 강화 연출 ----------------
@@ -125,10 +174,15 @@ func end_suspense() -> void:
 
 ## 성공: 번쩍 + 제목 "+N" 커졌다 돌아옴
 func celebrate() -> void:
-	_flash.color = Color(1, 1, 1, Feel.FLASH_ALPHA)
-	var tw := create_tween().set_ignore_time_scale(true)
-	tw.tween_property(_flash, "color:a", 0.0, Feel.FLASH_DURATION)
+	flash(Color(1, 1, 1, Feel.FLASH_ALPHA), Feel.FLASH_DURATION)
 	Town.pop(_title, Vector2(0.0, 0.5))   # 왼쪽 끝 기준 → 패널 밖으로 안 삐져나감
+
+
+## 차고 전체가 color로 번쩍였다가 사라짐 (강화 성공 하양, 세팅 등급업은 등급 색)
+func flash(color: Color, seconds: float) -> void:
+	_flash.color = color
+	var tw := create_tween().set_ignore_time_scale(true)
+	tw.tween_property(_flash, "color:a", 0.0, seconds)
 
 
 ## 상태에 맞게 글자와 버튼을 고친다 (열려 있는 동안 매 프레임)
@@ -146,7 +200,7 @@ func refresh(b: Balance, s: GameState) -> void:
 		_income.text = tr("GARAGE_HOURLY") % Fmt.money(int(now))
 		_set_visible([_income], [_chances, _danger, _danger_note, _cost, _wait, _enhance_button])
 	else:
-		var c := Enhance.chances(b, t.star)
+		var c := Enhance.chances_for(b, t)
 		var cost := Economy.enhance_cost(b, t.star)
 		var block := Enhance.block_reason(s, b, TRUCK)
 		_income.text = tr("GARAGE_HOURLY_NEXT") % [Fmt.money(int(now)), Fmt.money(int(Trip.hourly_income_at(b, t, t.star + 1)))]
@@ -167,12 +221,16 @@ func refresh(b: Balance, s: GameState) -> void:
 		_danger_note.visible = danger
 		_wait.visible = block != Enhance.Block.NONE
 
-	# 퍼질 수 있는 단계면 빨간 테두리
+	# 퍼질 수 있는 단계면 빨간 테두리 ([엔진 강화] 칸을 볼 때만. 세팅하다가 놀라지 않게)
+	danger = danger and _tab == Tab.ENGINE
 	_style.border_color = Feel.COLOR_DANGER if danger else Feel.COLOR_PANEL_BORDER
 	_style.set_border_width_all(_px(Feel.PANEL_BORDER_DANGER if danger else Feel.PANEL_BORDER))
 
 	_stats.text = tr("GARAGE_STATS") % [
 		t.success_count + t.fail_count + t.destroy_count, t.success_count, t.fail_count, t.destroy_count]
+
+	if setting.visible:
+		setting.refresh(b, s, _busy)
 
 
 ## 방금 일어난 일을 한 줄로 (+ 아래 작은 설명). font_size는 v0 패널 기준 (배수는 여기서 곱함)

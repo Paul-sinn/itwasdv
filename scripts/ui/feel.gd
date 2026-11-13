@@ -7,8 +7,11 @@ extends RefCounted
 const TRUCK_SIZE := Vector2(44, 22)
 const WHEEL_RADIUS := 4.5
 
-# --- 트럭 속도 (눈에 보이는 연출일 뿐. 돈은 계산 쪽 Trip.advance가 정함) ---
-const TRIP_SPEEDUP_PER_STAR := 0.93  ## 강화 1단계마다 달리는 시간에 곱하는 수 (작을수록 빨라짐)
+# --- 트럭 불꽃 (강화 성공 순간, 오버부스트 걸린 바퀴 동안. 트럭 자기 좌표) ---
+const FLAME_LENGTH := 16.0        ## 짐칸 뒤로 뻗는 불꽃 길이
+const FLAME_WIDTH := 7.0
+const COLOR_FLAME := Color(1.0, 0.55, 0.15, 0.9)
+const COLOR_FLAME_CORE := Color(1.0, 0.92, 0.45, 0.95)
 
 # --- "+금액" 떠오르기 (작은 화면 기준. 전체 화면에서는 동네 글자 배수만큼 커짐) ---
 const PAYOUT_RISE := 24.0        ## 위로 올라가는 거리 (픽셀)
@@ -90,8 +93,7 @@ const FLASH_DURATION := 0.35          ## 성공 번쩍임이 사라지는 시간
 const FLASH_ALPHA := 0.75             ## 번쩍임 처음 밝기 (0~1)
 const STAR_POP_SCALE := 1.7           ## 성공 시 "+N" 숫자가 커지는 배수
 const STAR_POP_DURATION := 0.45       ## 커졌다 돌아오는 시간
-const BOOST_MULT := 3.5               ## 성공 시 트럭 순간 가속 배수
-const BOOST_DURATION := 0.9           ## 가속이 원래대로 줄어드는 시간
+const BOOST_DURATION := 0.9           ## 성공 시 트럭 뒤 불꽃이 나오는 시간
 
 const FAIL_SHAKE_PX := 6.0            ## 실패 시 차고 흔들림
 const FAIL_SHAKE_DURATION := 0.3
@@ -111,12 +113,8 @@ const CHEAT_TIME_SCALE := 60.0   ## F2: 시간 몇 배속
 
 # --- v1: 작은 화면 동네 (동네 담당. 이 칸과 위쪽 기존 칸을 고친다) ---
 const TOWN_HOUSES := 5            ## 꼬불길 가의 집 수 (사용자 결정 2026-11-10). 배송 N건은 이 집들에 나눠 대응
-## 집 앞·물류센터에서 서 있는 시간은 따로 없다: 트럭이 다음 배송 집에 먼저 가서 계산 쪽 배송 완료("+돈")를 기다린다
-
-## +0일 때 물류센터 → 마지막 집 → 물류센터 한 바퀴를 쉬지 않고 달리는 초.
-## 단계마다 TRIP_SPEEDUP_PER_STAR 배씩 빨라지다가 TOWN_DRIVE_SECONDS_MIN에서 멈춤 (= 화면 트럭 속도 상한).
-## 계산 쪽 한 바퀴보다 빨라야 트럭이 집에 먼저 닿아 "+돈"을 기다린다 (balance 숫자가 바뀌면 같이 볼 것)
-const TOWN_DRIVE_SECONDS_BASE := 60.0
+## 화면 트럭은 계산 쪽 한 바퀴 진행을 따라 물류센터 → 마지막 집 → 물류센터를 돈다 (짐 싣는 동안은 물류센터).
+## 그래서 강화·세팅으로 빨라지면 같이 빨라지고, 한 바퀴를 이 초보다 빨리 돌지는 않는다 (= 화면 트럭 속도 상한)
 const TOWN_DRIVE_SECONDS_MIN := 8.0
 
 ## 동네 설계 크기 = 작은 화면 크기. 아래 좌표는 전부 이 안 (왼쪽 위가 0,0).
@@ -151,13 +149,25 @@ const SETTINGS_WIDTH := 300.0     ## [설정] 화면 폭 (v0 패널 크기 기�
 const FULL_TOWN_TEXT_MAX := 2.5   ## 동네를 확대해도 동네 글자("+N"·돈·+금액)는 이 배수(× 화면 배수)까지만
 
 
-## 이 단계에서 한 바퀴(물류센터 → 마지막 집 → 물류센터) 쉬지 않고 달리는 초
-static func town_drive_seconds(star: int) -> float:
-	return maxf(TOWN_DRIVE_SECONDS_MIN, TOWN_DRIVE_SECONDS_BASE * pow(TRIP_SPEEDUP_PER_STAR, star))
-
-
 # --- v3: 스페어 엔진 ---
 const SPARE_FONT_SIZE := 15       ## 배송 중 스페어 엔진을 받았을 때 "스페어 엔진 +1" 글자 (작은 화면 기준)
 const SPARE_RISE := 34.0
 const SPARE_DURATION := 2.2
 const COLOR_SPARE := Color(1.0, 0.80, 0.15)
+const BOOST_FONT_SIZE := 15       ## 오버부스트가 걸린 바퀴를 출발할 때 "오버부스트!" 글자
+const BOOST_RISE := 30.0
+const BOOST_DURATION_TEXT := 1.6
+
+# --- v4: 세팅 돌리기 (차고 [세팅] 칸. 크기는 v0 패널 기준) ---
+## 등급 색: 순정 회색 / 스트리트 초록 / 스포츠 파랑 / 레이싱 보라 / 프로토타입 금색
+const SETTING_GRADE_COLORS: Array[Color] = [
+	Color(0.70, 0.72, 0.76), Color(0.45, 0.85, 0.45), Color(0.35, 0.62, 1.00), Color(0.74, 0.45, 1.00), Color(1.00, 0.78, 0.20),
+]
+const COLOR_SETTING_JUNK := Color(0.52, 0.54, 0.58)   ## 잡옵 줄 (효과 없음)
+const COLOR_SETTING_NEW := Color(0.55, 0.95, 0.55)    ## "새로 나온 것" 칸 제목
+const SETTING_TAB_SIZE := 16          ## [엔진 강화] [세팅] 칸 글자
+const SETTING_LINE_SIZE := 14         ## 옵션 한 줄
+const SETTING_SUSPENSE := 0.35        ## 돌리기 결과 나오기 전 뜸 (초, 진짜 시간)
+const SETTING_FLASH_ALPHA := 0.45     ## 등급업 번쩍임 처음 밝기 (등급 색)
+const SETTING_FLASH_DURATION := 0.5
+const SETTING_COLUMN_GAP := 10        ## 고르는 화면 두 칸 사이

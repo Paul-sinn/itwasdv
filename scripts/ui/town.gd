@@ -1,5 +1,5 @@
 ## v1 동네: 꼬불꼬불한 길 하나, 길가에 집 TOWN_HOUSES채, 길 끝(시작점)에 물류센터, 트럭,
-## 구석 강화 단계("+N")·돈, 집 앞 "+금액"·"스페어 엔진 +1".
+## 구석 강화 단계("+N")·돈, 집 앞 "+금액"·"스페어 엔진 +1", 트럭 위 "오버부스트!".
 ## 동네 설계 좌표(feel.gd TOWN_SIZE = 작은 화면 크기)로 만들고, 전체 화면에서는 같은 동네를 통째로 확대한다.
 ## 길·집·트럭은 확대해서 그리고(선명함), 글자는 확대 배수에 맞춘 글자 크기로 따로 놓는다.
 ## 그리기만 한다. 돈·배송은 main.gd → scripts/core/trip.gd (배송 이벤트가 오면 show_payout)
@@ -17,8 +17,8 @@ var origin := Vector2.ZERO   ## 동네 설계 좌표 (0,0)이 이 노드 안 어
 var text_scale := 1.0        ## 동네 글자 배수 (작은 화면 1, 전체 화면은 확대 배수를 따르되 상한 있음)
 var show_ground := false     ## 동네 바닥을 칠할까 (전체 화면에서만. 투명 작은 화면은 바탕화면이 보여야 함)
 var payouts_shown := 0       ## 지금까지 띄운 "+금액" 수 (확인용)
-var payouts_at_truck := 0    ## 그중 트럭이 그 집 앞에 서 있을 때 뜬 수 (확인용)
 var spares_shown := 0        ## 지금까지 띄운 "스페어 엔진 +1" 수 (확인용)
+var boosts_shown := 0        ## 지금까지 띄운 "오버부스트!" 수 (확인용)
 
 var _houses: Array[Vector2] = []     ## 집 자리 (길 가운데 선 위, 설계 좌표)
 var _hud: HBoxContainer
@@ -100,10 +100,6 @@ func set_hud(money: int, star: int) -> void:
 	_money_label.text = tr("MONEY") % Fmt.money(money)
 
 
-## 계산 쪽 배송 번호(0~cargo-1) → 화면 집 번호. 짐이 집 수보다 많으면 앞에서부터 나눠 맡음
-func house_for(parcel_house: int, cargo: int) -> int:
-	return clampi(parcel_house * _houses.size() / maxi(cargo, 1), 0, _houses.size() - 1)
-
 
 ## 성공 연출: "+N" 숫자가 커졌다 돌아옴
 func pop_star() -> void:
@@ -113,25 +109,34 @@ func pop_star() -> void:
 ## 집 앞: "+금액"이 떠올랐다가 사라짐 (계산 쪽 배송 이벤트가 올 때)
 func show_payout(house: int, amount: int) -> void:
 	payouts_shown += 1
-	if truck.is_at(house):
-		payouts_at_truck += 1
-	_float_text(house, "+" + Fmt.money(amount), Feel.PAYOUT_FONT_SIZE, Feel.COLOR_PAYOUT, Feel.PAYOUT_RISE, Feel.PAYOUT_DURATION)
+	_float_text(_house_spot(house), "+" + Fmt.money(amount), Feel.PAYOUT_FONT_SIZE, Feel.COLOR_PAYOUT, Feel.PAYOUT_RISE, Feel.PAYOUT_DURATION)
 
 
 ## 배송하다 스페어 엔진을 받음: "스페어 엔진 +1" (더 크게, 금색, 더 오래)
 func show_spare(house: int) -> void:
 	spares_shown += 1
-	_float_text(house, tr("TOWN_SPARE"), Feel.SPARE_FONT_SIZE, Feel.COLOR_SPARE, Feel.SPARE_RISE, Feel.SPARE_DURATION)
+	_float_text(_house_spot(house), tr("TOWN_SPARE"), Feel.SPARE_FONT_SIZE, Feel.COLOR_SPARE, Feel.SPARE_RISE, Feel.SPARE_DURATION)
 
 
-func _float_text(house: int, text: String, font_size: int, color: Color, rise_px: float, seconds: float) -> void:
+## 오버부스트가 걸린 바퀴 출발: 트럭 위에 "오버부스트!"
+func show_boost() -> void:
+	boosts_shown += 1
+	var at := (truck.position - origin) / zoom   # 동네 설계 좌표
+	_float_text(at, tr("TOWN_BOOST"), Feel.BOOST_FONT_SIZE, Feel.COLOR_FLAME, Feel.BOOST_RISE, Feel.BOOST_DURATION_TEXT)
+
+
+func _house_spot(house: int) -> Vector2:
+	return _houses[clampi(house, 0, _houses.size() - 1)]
+
+
+## spot(동네 설계 좌표, 길 가운데 선 위) 위쪽에서 글자가 떠올랐다가 사라짐
+func _float_text(spot: Vector2, text: String, font_size: int, color: Color, rise_px: float, seconds: float) -> void:
 	var label := make_label(font_size, color)
 	_set_font(label, font_size)
 	label.text = text
 	add_child(label)   # 트리에 넣은 뒤에 크기를 재야 글자 폭이 맞음
 	label.reset_size()
 	var rise := rise_px * text_scale
-	var spot := _houses[clampi(house, 0, _houses.size() - 1)]
 	var top := to_view(spot) - Vector2(0, Feel.TOWN_HOUSE_SIZE.y + Feel.TOWN_ROOF_HEIGHT) * zoom
 	# 동네 밖으로 안 나가게 (작은 화면은 창 = 동네라 밖은 안 보임): 옆으로는 안쪽에, 다 올라가도 위쪽 안에
 	var box := area()
