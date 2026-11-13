@@ -61,6 +61,11 @@ var abilities: Dictionary = {}     ## 능력치 id → 찍은 포인트 (없으�
 ## trip.gd: advance 이벤트에 추가
 ##   { "type": "tip", "pay": int }  (바로 앞 배송에서 팁이 나옴. 돈은 이미 더해짐)
 ## apply_offline 결과: "xp" 가 노하우만큼 0보다 클 수 있음 (지금은 늘 0). 팁은 "money"에 평균값으로 포함
+## (2026-11-13 QA 뒤 약속에 넣음. C1이 만든 것을 화면·확인 스크립트가 써도 됨)
+static func tip_chance(b: Balance, s: GameState, i: int) -> float    ## 팁 확률 (기본 + 친절, 트럭 0만 친절)
+static func tip_pay(b: Balance, s: GameState, i: int) -> int         ## 팁 1번 금액
+static func spare_chance(b: Balance, s: GameState, i: int) -> float  ## 배송 1건의 스페어 드랍 확률 (정비 지식 포함)
+## Trip.lap_seconds / avg_lap_seconds / parcel_pay / lap_income / hourly_income(_at) 의 인자는 (b, s: GameState, i: int[, star])
 ```
 
 - 능력치는 `i == 0`(내 트럭)일 때만 계산에 들어간다. `Trip`의 함수 인자가 바뀌면(예: state가 필요해짐) 보고에 "바뀐 약속" 표로 적는다. 화면이 부르는 `Trip.hourly_income`, `Trip.parcel_pay` 등이 능력치를 반영해야 한다 (화면의 "시간당 수입"이 실제와 같게).
