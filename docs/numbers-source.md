@@ -9,3 +9,6 @@
 | 날짜 | 시트 탭 | balance.json 키 | 지시서 | 메모 |
 |---|---|---|---|---|
 | 2026-11-13 | 강화 단계 (B1, E4:E33) | `engine.base_power`, `engine.power_gain` | PROTOTYPE_V3 | 성공·퍼짐 확률은 이미 json에 있어서 안 옮김 (시트와 다름 → QUESTIONS Q1) |
+| 2026-11-13 | 세팅 규칙 (B2, B10, B11) | `setting.lines_by_grade`, `setting.cost_cut_cap`, `setting.engine_guard_cap` | PROTOTYPE_V4 | |
+| 2026-11-13 | 세팅 등급업 (B5:C8) | `setting.up_chance`, `setting.ceiling` | PROTOTYPE_V4 | 명장 1.5배(B1)는 v6 |
+| 2026-11-13 | 세팅 옵션 수치 (D2:H4, D7:H8, A8) | `setting.options.*.values`, `setting.overboost_seconds`, `setting.overboost_mult` | PROTOTYPE_V4 | 장거리 속도·정비비 감소(터보·타이어)는 v7. 옵션 가중치·돌리기 비용은 시트에 없어 임시값 |
