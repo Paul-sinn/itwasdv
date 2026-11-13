@@ -1,10 +1,11 @@
-## save.gd: 저장 형식 5 쓰고 읽기(세팅, 레벨·창고·퀘스트), 형식 3·4 읽기, 깨진 파일, 백업 3개, 옛 형식 남기기
+## save.gd: 저장 형식 6 쓰고 읽기(세팅, 레벨·창고·퀘스트, 지금 바퀴 건수), 형식 3·4·5 읽기, 깨진 파일, 백업 3개, 옛 형식 남기기
 extends "res://tests/test_base.gd"
 
 const Balance = preload("res://scripts/core/balance.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const TruckState = preload("res://scripts/core/truck_state.gd")
 const Save = preload("res://scripts/core/save.gd")
+const Trip = preload("res://scripts/core/trip.gd")
 
 # 옛 형식 파일이 "같은 폴더/save.v2.json"으로 가서, 진짜 저장 폴더와 겹치지 않게 시험용 폴더를 씀
 const DIR := "user://test_unit_save"
@@ -56,6 +57,7 @@ func _sample_state() -> GameState:
 	t.fail_count = 77
 	t.destroy_count = 3
 	t.boost_lap = true
+	t.lap_cargo = 22
 	var box := t.part("cargo_box")
 	box["grade"] = 2
 	box["lines"] = ["speed", "cargo", "junk_ride"]
@@ -111,6 +113,7 @@ func test_write_then_read_same() -> void:
 	check_eq([t.success_count, t.fail_count, t.destroy_count], [40, 77, 3], "트럭 0 통계")
 	check_eq([got.truck(1).star, got.truck(1).lap_clock], [5, 0.1], "트럭 1")
 	check_eq(t.boost_lap, true, "오버부스트 바퀴")
+	check_eq([t.lap_cargo, got.truck(1).lap_cargo], [22, 0], "지금 바퀴 건수 (트럭 1은 아직 안 굴림)")
 	check_eq(t.settings, s.truck(0).settings, "세팅 (pending 포함)")
 	check_eq(t.part("cargo_box")["pending"], { "grade": 3, "lines": ["cargo", "cargo", "fuel_cut"] }, "고르는 중인 새 상태")
 	check_eq(t.part("ecu")["pending"], null, "ECU pending 없음")
@@ -121,9 +124,9 @@ func test_write_then_read_same() -> void:
 	_clean()
 
 
-func test_format_5_dict() -> void:
+func test_format_6_dict() -> void:
 	var d := Save.to_dict(_sample_state(), 1794000000)
-	check_eq(d["version"], 5, "저장 형식")
+	check_eq(d["version"], 6, "저장 형식")
 	var keys := d.keys()
 	keys.sort()
 	check_eq(keys, ["ability_points", "driver_level", "driver_xp", "milestones_done", "money", "night_level", "parcels_total",
@@ -131,7 +134,72 @@ func test_format_5_dict() -> void:
 			"spares_bought", "trucks", "version", "warehouse_level"], "저장 칸")
 	var tk: Array = d["trucks"][0].keys()
 	tk.sort()
-	check_eq(tk, ["boost_lap", "destroy_count", "fail_count", "lap_clock", "lap_delivered", "settings", "star", "success_count"], "트럭 칸")
+	check_eq(tk, ["boost_lap", "destroy_count", "fail_count", "lap_cargo", "lap_clock", "lap_delivered", "settings", "star", "success_count"], "트럭 칸")
+
+
+## v6-bal B1 ⑧: 껐다 켜도 지금 바퀴의 건수가 같음 (적재량 21.6 → 21건 바퀴, 22건 바퀴 둘 다).
+## 저장 → JSON 글자 → 읽기 → 남은 집 배송 수가 저장 안 한 쪽과 같음
+func test_lap_cargo_survives_restart() -> void:
+	var seen := {}
+	for seed_value in 40:
+		var s := GameState.new_game()
+		s.quest_index = 22
+		var t := s.truck(0)
+		var box := t.part("cargo_box")
+		box["grade"] = 1
+		box["lines"] = ["cargo", "junk_ride"]   # 8% → 21.6
+		var rng := RandomNumberGenerator.new()
+		rng.seed = seed_value
+		Trip.advance(s, b, 0, 40.0, rng)   # +0: 40초면 바퀴 중간 (몇 집 배송)
+		var n := t.lap_cargo
+		if seen.has(n):
+			continue
+		seen[n] = true
+		var r := Save.from_dict(JSON.parse_string(JSON.stringify(Save.to_dict(s, 1794000000))), b)
+		check_eq(r["status"], Save.Status.OK, "읽기 (%s)" % r["error"])
+		if r["state"] == null:
+			continue
+		var loaded: GameState = r["state"]
+		check_eq(loaded.truck(0).lap_cargo, n, "다시 켠 뒤 지금 바퀴 건수 (%d)" % n)
+		var rest := n - t.lap_delivered
+		var left := Trip.lap_seconds(b, t) - t.lap_clock - 0.01   # 바퀴 끝 직전까지 (새 바퀴를 굴리기 전)
+		var got_a := _parcels(Trip.advance(s, b, 0, left, RandomNumberGenerator.new()))
+		var got_b := _parcels(Trip.advance(loaded, b, 0, left, RandomNumberGenerator.new()))
+		check_eq([got_a, got_b], [rest, rest], "%d건 바퀴: 남은 집 배송 (안 끈 쪽, 다시 켠 쪽)" % n)
+		note("seed %d: %d건 실은 바퀴, 40초에 %d집 배송 → 다시 켠 뒤 남은 %d집도 같음" % [seed_value, n, n - rest, rest])
+	check_eq(seen.size(), 2, "21건 바퀴와 22건 바퀴를 둘 다 확인 (%s)" % [seen.keys()])
+
+
+func _parcels(events: Array) -> int:
+	return events.filter(func(e): return e["type"] == "parcel").size()
+
+
+## 형식 5 파일(v5·v6a, lap_cargo 없음)도 그대로 읽힘 → lap_cargo 0, 다음 진행 때 굴림. 숫자가 아니면 깨짐, 음수는 0
+func test_format_5_file_reads() -> void:
+	_clean()
+	var d := Save.to_dict(_sample_state(), 1794000000)
+	d["version"] = 5
+	for td in d["trucks"]:
+		td.erase("lap_cargo")
+	_write_text(PATH, JSON.stringify(d))
+	var r := Save.read_file(PATH, b)
+	check_eq(r["status"], Save.Status.OK, "형식 5 읽기 (%s)" % r["error"])
+	check_eq(r["old_kept"], "", "형식 5를 옮겨 둠")
+	if r["state"] != null:
+		var s: GameState = r["state"]
+		check_eq(s.truck(0).lap_cargo, 0, "형식 5: 아직 안 굴림")
+		check_eq(Trip.lap_cargo(b, s.truck(0)), ceili(Trip.cargo(b, s.truck(0))), "안 굴렸을 때 Trip.lap_cargo = ceil(평균)")
+		s.quest_index = 22
+		Trip.advance(s, b, 0, 0.5, RandomNumberGenerator.new())
+		check(s.truck(0).lap_cargo >= 1, "진행했는데 안 굴림: %d" % s.truck(0).lap_cargo)
+	_clean()
+	var bad := Save.to_dict(_sample_state(), 1794000000)
+	bad["trucks"][0]["lap_cargo"] = "많이"
+	check_eq(Save.from_dict(bad, b)["status"], Save.Status.BROKEN, "lap_cargo 글자를 못 걸러냄")
+	var neg := Save.to_dict(_sample_state(), 1794000000)
+	neg["trucks"][0]["lap_cargo"] = -3
+	var rn := Save.from_dict(neg, b)
+	check_eq(rn["state"].truck(0).lap_cargo if rn["state"] != null else -1, 0, "lap_cargo 음수 → 0")
 
 
 ## v4 C1 ⑪: 형식 3 파일(v3, 세팅 칸 없음)도 그대로 읽힘 (옮겨 두지 않음)
@@ -197,7 +265,7 @@ func test_progress_clamped() -> void:
 	d2["driver_xp"] = 1000
 	var r2 := Save.from_dict(d2, b)
 	if r2["state"] != null:
-		check_eq([r2["state"].driver_level, r2["state"].driver_xp], [3, 373], "레벨 3 경험치 1000 → 필요량 374 − 1")
+		check_eq([r2["state"].driver_level, r2["state"].driver_xp], [3, 430], "레벨 3 경험치 1000 → 필요량 431 − 1")
 	for c in [["driver_level", "3"], ["quest_index", null], ["parts_rolled", []], ["milestones_done", {}]]:
 		var bad := Save.to_dict(_sample_state(), 1794000000)
 		bad[c[0]] = c[1]

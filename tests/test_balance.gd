@@ -21,7 +21,7 @@ func test_real_file_is_ok() -> void:
 	# 지시서 "임시 시작값"
 	check_eq([b.unit_price, b.base_cargo, b.road_length, b.load_seconds, b.stop_seconds],
 			[2500, 20, 12000.0, 10.0, 0.5], "trip 숫자 (v4에서 고침)")
-	check_eq([b.fuel_rate, b.maint_rate], [0.1, 0.05], "기름값·정비비 비율")
+	check_eq([b.fuel_rate, b.maint_rate], [0.2, 0.05], "기름값·정비비 비율 (v6-bal: 기름값 20%)")
 	check_eq([b.cost_base, b.cost_mult, b.spare_drop_chance], [35000.0, 1.5, 0.00005], "강화 비용·스페어 드랍 (v4에서 고침)")
 	check_eq(b.spare_price, 5000000, "spare_price (v4에서 고침)")
 	# v5: 꺼둔 동안 시간·비율은 depot 표로 (test_v5_numbers_match_spec)
@@ -35,7 +35,7 @@ func test_real_file_shape() -> void:
 	var keys := d.keys()
 	keys.sort()
 	check_eq(keys, ["depot", "driver", "engine", "offline", "quests", "setting", "trip", "version"], "json 묶음")
-	check_eq(d["version"], "0.8", "version")
+	check_eq(d["version"], "0.9", "version")
 	check(not d["engine"].has("cost_hours"), "engine.cost_hours 가 남아 있음")
 	check_eq(d["offline"].keys(), ["ignore_under_seconds"], "offline 묶음에는 ignore_under_seconds만 (cap_hours·rate는 depot 표로)")
 
@@ -144,7 +144,7 @@ func test_wrong_length_is_reported() -> void:
 
 func test_sum_over_one_is_reported() -> void:
 	var d := real_balance_dict()
-	d["engine"]["destroy"][18] = 0.9   # 성공 0.2 + 퍼짐 0.9 = 1.1
+	d["engine"]["destroy"][18] = 0.9   # 성공 0.3 + 퍼짐 0.9 = 1.2
 	var b: Balance = Balance.from_dict(d)
 	check(not b.is_ok(), "성공+퍼짐이 1 넘는데 통과됨")
 	check(_has_error(b, "engine.success[18] + engine.destroy[18]"), "어디가 틀렸는지 안 알려줌: %s" % ", ".join(b.errors))
@@ -152,7 +152,7 @@ func test_sum_over_one_is_reported() -> void:
 
 func test_sum_exactly_one_is_ok() -> void:
 	var d := real_balance_dict()
-	d["engine"]["destroy"][18] = 0.8   # 0.2 + 0.8 = 1 (딱 1은 괜찮음)
+	d["engine"]["destroy"][18] = 0.7   # 0.3 + 0.7 = 1 (딱 1은 괜찮음)
 	var b: Balance = Balance.from_dict(d)
 	check(b.is_ok(), "성공+퍼짐이 딱 1인데 막힘: %s" % ", ".join(b.errors))
 
@@ -181,7 +181,7 @@ func test_v5_numbers_match_spec() -> void:
 	check(b.is_ok(), "진짜 balance.json에 문제가 있음: %s" % ", ".join(b.errors))
 	check_eq([b.driver_xp_per_parcel, b.driver_star_milestone_xp], [10, 500], "경험치 얻는 법 B2, B7")
 	check_eq([b.driver_base_xp, b.driver_exponent, b.driver_points_per_level, b.driver_bonus_points_every_10],
-			[100.0, 1.2, 1, 2], "레벨 곡선 B1:B4")
+			[100.0, 1.33, 1, 2], "레벨 곡선 B1:B4 (v6-bal: 지수 1.33)")
 	check_eq(b.warehouse_hours, PackedFloat64Array([4, 6, 8, 12]), "오프라인 C2:C5 창고 시간")
 	check_eq(b.night_rates, PackedFloat64Array([0.5, 0.6, 0.7, 0.8]), "오프라인 C6:C9 야간팀 비율")
 	check_eq([b.driver_max_level, b.offline_ignore_under_seconds, b.warehouse_max_level_solo], [50, 180.0, 3], "기획서에서 온 값")
@@ -198,9 +198,9 @@ func test_v5_numbers_match_spec() -> void:
 		["night_2", "night", 2, "", 400, 400000], ["star_10", "star", 10, "", 500, 600000],
 		["level_10", "level", 10, "", 500, 600000], ["warehouse_3", "warehouse", 3, "", 500, 800000],
 		["star_12", "star", 12, "", 600, 1000000],
-		["star_15", "star", 15, "", 800, 2000000], ["level_20", "level", 20, "", 800, 2000000],
-		["setting_racing", "setting_grade", 3, "", 1000, 3000000], ["first_spare", "spares_bought", 1, "", 600, 1000000],
-		["star_18", "star", 18, "", 1000, 5000000],
+		["star_15", "star", 15, "", 800, 1000000], ["level_20", "level", 20, "", 800, 1000000],   # v6-bal: 보상 돈 줄임
+		["setting_racing", "setting_grade", 3, "", 1000, 1000000], ["first_spare", "spares_bought", 1, "", 600, 1000000],
+		["star_18", "star", 18, "", 1000, 1500000],
 	]
 	var got := []
 	for q in b.quests:
@@ -215,6 +215,38 @@ func test_v5_numbers_match_spec() -> void:
 	for q in got:
 		rows.append("%s(%s %d, %d xp, %d원)" % [q[0], q[1], q[2], q[4], q[5]])
 	note("quests %d개: %s" % [got.size(), ", ".join(rows)])
+
+
+## v6-bal B1 ①: 지시서 "옮길 숫자" (스냅샷 1번·5번, Q1·Q7·Q14)와 같고, 단계마다 성공 + 퍼짐 ≤ 1 (값을 찍음)
+func test_v6bal_numbers_match_spec() -> void:
+	var b: Balance = Balance.load_file()
+	check(b.is_ok(), "진짜 balance.json에 문제가 있음: %s" % ", ".join(b.errors))
+	var success := PackedFloat64Array([0.95, 0.91, 0.87, 0.83, 0.79, 0.75, 0.71, 0.67, 0.63, 0.59, 0.50, 0.46, 0.42, 0.39, 0.35,
+			0.33, 0.32, 0.30, 0.30, 0.30, 0.30, 0.30, 0.10, 0.06, 0.03, 0.03, 0.025, 0.02, 0.015, 0.01])
+	var destroy := PackedFloat64Array()
+	destroy.resize(18)   # +0~+17은 0
+	destroy.append_array([0.02, 0.03, 0.04, 0.05, 0.08, 0.11, 0.15, 0.15, 0.16, 0.17, 0.18, 0.20])
+	check_eq(b.success, success, "engine.success (스냅샷 1번)")
+	check_eq(b.destroy, destroy, "engine.destroy (스냅샷 1번)")
+	var worst := 0.0
+	for s in b.max_star:
+		check(b.success[s] + b.destroy[s] <= 1.0 + Balance.SUM_EPSILON, "+%d 성공 + 퍼짐 > 1" % s)
+		worst = maxf(worst, b.success[s] + b.destroy[s])
+	var cumulative := [b.base_power]
+	for s in b.max_star:
+		cumulative.append(cumulative.back() + b.power_gain[s])
+	check_eq([cumulative[1], cumulative[10], cumulative[15], cumulative[18], cumulative[20], cumulative[25], cumulative[30]],
+			[105, 150, 200, 260, 300, 475, 775], "누적 출력 (스냅샷 1번)")
+	check_eq(b.fuel_rate, 0.2, "trip.fuel_rate (Q7-3)")
+	check_eq(b.roll_cost, PackedInt64Array([20000, 80000, 1600000, 6000000, 10000000]), "setting.roll_cost (Q7-1)")
+	check_eq(b.setting_options["speed"]["weight"], 10.0, "이동 속도 가중치 (Q7-3)")
+	check_eq(b.setting_options["fuel_cut"]["values"], PackedFloat64Array([0.10, 0.20, 0.30, 0.45, 0.60]), "기름값 절감 (스냅샷 5번)")
+	check_eq(b.setting_options["overboost"]["values"], PackedFloat64Array([0.03, 0.06, 0.09, 0.15, 0.24]), "오버부스트 (스냅샷 5번)")
+	check(not real_balance_dict()["setting"].has("overboost_seconds"), "setting.overboost_seconds 가 남아 있음 (규칙 1에서 지움)")
+	check_eq(b.overboost_mult, 2.0, "오버부스트 걸린 바퀴 운전 속도 2배")
+	check_eq(b.driver_exponent, 1.33, "driver.exponent (Q14-1)")
+	note("성공 + 퍼짐 최대 %.3f, 기름값 %s, 돌리기 비용 %s, 기름값 절감 %s, 오버부스트 %s" % [worst, b.fuel_rate, b.roll_cost,
+			b.setting_options["fuel_cut"]["values"], b.setting_options["overboost"]["values"]])
 
 
 ## v5: driver·depot·quests의 틀린 숫자를 찾음 (끝낼 수 없는 퀘스트 포함)

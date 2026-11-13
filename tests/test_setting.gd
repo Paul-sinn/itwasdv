@@ -48,14 +48,14 @@ func test_json_matches_spec() -> void:
 	check_eq([b.cost_cut_cap, b.engine_guard_cap], [0.6, 0.3], "cost_cut_cap, engine_guard_cap")
 	check_eq(b.up_chance, PackedFloat64Array([0.3, 0.08, 0.02, 0.003]), "up_chance")
 	check_eq(b.ceiling, PackedInt64Array([5, 20, 80, 500]), "ceiling")
-	check_eq(b.roll_cost, PackedInt64Array([20000, 80000, 400000, 2000000, 10000000]), "roll_cost")
-	check_eq([b.overboost_seconds, b.overboost_mult], [10.0, 2.0], "오버부스트 10초, 2배")
+	check_eq(b.roll_cost, PackedInt64Array([20000, 80000, 1600000, 6000000, 10000000]), "roll_cost (v6-bal Q7-1)")
+	check_eq(b.overboost_mult, 2.0, "오버부스트 걸린 바퀴 2배 (v6-bal: 초 제한 없음)")
 	var want := {
-		"speed": ["common", 6.0, [0.03, 0.05, 0.08, 0.13, 0.20]],
-		"fuel_cut": ["common", 10.0, [0.02, 0.04, 0.06, 0.09, 0.12]],
+		"speed": ["common", 10.0, [0.03, 0.05, 0.08, 0.13, 0.20]],
+		"fuel_cut": ["common", 10.0, [0.10, 0.20, 0.30, 0.45, 0.60]],
 		"cargo": ["own", 10.0, [0.05, 0.08, 0.12, 0.20, 0.30]],
 		"engine_guard": ["own", 10.0, [0.0, 0.0, 0.04, 0.06, 0.10]],
-		"overboost": ["own", 10.0, [0.01, 0.02, 0.03, 0.05, 0.08]],
+		"overboost": ["own", 10.0, [0.03, 0.06, 0.09, 0.15, 0.24]],
 	}
 	for j in JUNK:
 		want[j] = ["junk", 12.0, [0.0, 0.0, 0.0, 0.0, 0.0]]
@@ -199,9 +199,9 @@ func test_option_draws() -> void:
 			Setting.choose(s, 0, "ecu", false)
 		check_eq(guard, 0, "ECU 등급 %d에서 엔진 보호가 뽑힘" % grade)
 	check(Setting.option_chances(b2, "ecu", 2).has("engine_guard"), "ECU 스포츠부터는 엔진 보호가 뽑혀야 함")
-	# 가중치 비율: 적재함 순정 = 이동 속도 6, 기름값 10, 적재량 10, 잡옵 12 × 5 → 합 86
-	check_near(Setting.option_chances(b, "cargo_box", 0)["speed"], 6.0 / 86.0, 1e-12, "적재함 이동 속도 확률")
-	check_near(Setting.option_chances(b, "cargo_box", 0)["junk_gloss"], 12.0 / 86.0, 1e-12, "적재함 잡옵 하나 확률")
+	# 가중치 비율: 적재함 순정 = 이동 속도 10, 기름값 10, 적재량 10, 잡옵 12 × 5 → 합 90
+	check_near(Setting.option_chances(b, "cargo_box", 0)["speed"], 10.0 / 90.0, 1e-12, "적재함 이동 속도 확률")
+	check_near(Setting.option_chances(b, "cargo_box", 0)["junk_gloss"], 12.0 / 90.0, 1e-12, "적재함 잡옵 하나 확률")
 
 
 ## v4 C1 ⑥: 줄 수 1/2/3/3/3 (새 상태 줄 수도)

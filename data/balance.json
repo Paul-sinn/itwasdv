@@ -1,20 +1,20 @@
 {
-  "version": "0.8",
+  "version": "0.9",
   "trip": {
     "unit_price": 2500,
     "base_cargo": 20,
     "road_length": 12000,
     "load_seconds": 10,
     "stop_seconds": 0.5,
-    "fuel_rate": 0.1,
+    "fuel_rate": 0.2,
     "maint_rate": 0.05
   },
   "engine": {
     "max_star": 30,
     "base_power": 100,
     "power_gain": [5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 10, 10, 10, 10, 10, 20, 20, 20, 20, 20, 35, 35, 35, 35, 35, 60, 60, 60, 60, 60],
-    "success": [0.9975, 0.945, 0.8925, 0.8925, 0.84, 0.7875, 0.735, 0.6825, 0.63, 0.5775, 0.525, 0.4725, 0.42, 0.3675, 0.315, 0.315, 0.315, 0.25, 0.2, 0.2, 0.3, 0.15, 0.15, 0.1, 0.1, 0.1, 0.07, 0.05, 0.03, 0.01],
-    "destroy": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.05, 0.06, 0.07, 0.08, 0.1, 0.12, 0.12, 0.12, 0.14, 0.15, 0.16, 0.17],
+    "success": [0.95, 0.91, 0.87, 0.83, 0.79, 0.75, 0.71, 0.67, 0.63, 0.59, 0.50, 0.46, 0.42, 0.39, 0.35, 0.33, 0.32, 0.30, 0.30, 0.30, 0.30, 0.30, 0.10, 0.06, 0.03, 0.03, 0.025, 0.02, 0.015, 0.01],
+    "destroy": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.02, 0.03, 0.04, 0.05, 0.08, 0.11, 0.15, 0.15, 0.16, 0.17, 0.18, 0.20],
     "broken_drop_to": 15,
     "cost_base": 35000,
     "cost_mult": 1.5,
@@ -27,7 +27,7 @@
   "driver": {
     "max_level": 50,
     "base_xp": 100,
-    "exponent": 1.2,
+    "exponent": 1.33,
     "points_per_level": 1,
     "bonus_points_every_10": 2,
     "xp_per_parcel": 10,
@@ -45,10 +45,9 @@
     "lines_by_grade": [1, 2, 3, 3, 3],
     "up_chance": [0.3, 0.08, 0.02, 0.003],
     "ceiling": [5, 20, 80, 500],
-    "roll_cost": [20000, 80000, 400000, 2000000, 10000000],
+    "roll_cost": [20000, 80000, 1600000, 6000000, 10000000],
     "cost_cut_cap": 0.6,
     "engine_guard_cap": 0.3,
-    "overboost_seconds": 10,
     "overboost_mult": 2,
     "parts": {
       "cargo_box": {
@@ -63,13 +62,13 @@
     "options": {
       "speed": {
         "kind": "common",
-        "weight": 6,
+        "weight": 10,
         "values": [0.03, 0.05, 0.08, 0.13, 0.2]
       },
       "fuel_cut": {
         "kind": "common",
         "weight": 10,
-        "values": [0.02, 0.04, 0.06, 0.09, 0.12]
+        "values": [0.1, 0.2, 0.3, 0.45, 0.6]
       },
       "cargo": {
         "kind": "own",
@@ -84,7 +83,7 @@
       "overboost": {
         "kind": "own",
         "weight": 10,
-        "values": [0.01, 0.02, 0.03, 0.05, 0.08]
+        "values": [0.03, 0.06, 0.09, 0.15, 0.24]
       },
       "junk_ride": { "kind": "junk", "weight": 12 },
       "junk_scent": { "kind": "junk", "weight": 12 },
@@ -111,10 +110,10 @@
     { "id": "level_10", "kind": "level", "target": 10, "xp": 500, "money": 600000 },
     { "id": "warehouse_3", "kind": "warehouse", "target": 3, "xp": 500, "money": 800000 },
     { "id": "star_12", "kind": "star", "target": 12, "xp": 600, "money": 1000000 },
-    { "id": "star_15", "kind": "star", "target": 15, "xp": 800, "money": 2000000 },
-    { "id": "level_20", "kind": "level", "target": 20, "xp": 800, "money": 2000000 },
-    { "id": "setting_racing", "kind": "setting_grade", "target": 3, "xp": 1000, "money": 3000000 },
+    { "id": "star_15", "kind": "star", "target": 15, "xp": 800, "money": 1000000 },
+    { "id": "level_20", "kind": "level", "target": 20, "xp": 800, "money": 1000000 },
+    { "id": "setting_racing", "kind": "setting_grade", "target": 3, "xp": 1000, "money": 1000000 },
     { "id": "first_spare", "kind": "spares_bought", "target": 1, "xp": 600, "money": 1000000 },
-    { "id": "star_18", "kind": "star", "target": 18, "xp": 1000, "money": 5000000 }
+    { "id": "star_18", "kind": "star", "target": 18, "xp": 1000, "money": 1500000 }
   ]
 }
