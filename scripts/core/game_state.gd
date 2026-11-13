@@ -46,3 +46,78 @@ func buy_spare(b: Balance) -> bool:
 	money -= spare_price(b)
 	broken = false
 	return true
+
+
+# ---------------- 튜닝 (v2) ----------------
+# !! 껍데기 (2026-11-12 조정자) !!
+# docs/PROTOTYPE_V2.md "코드 약속"의 이름만 맞춰 둔 것. 지금은 "튜닝 없음"과 같은 값을 돌려준다.
+# 계산 담당(1단계)이 튜닝 효과를 넣어 진짜로 만든다.
+
+var tune: Dictionary = {}       ## 부위 id → 등급 (0 일반 ~ 3 전설). 없으면 0
+var tune_press_count: int = 0   ## 튜닝 버튼 누른 횟수
+var tune_up_count: int = 0      ## 그중 등급업
+var jackpot_count: int = 0      ## 대박 배송 횟수
+
+
+func grade(part: String) -> int:
+	return int(tune.get(part, 0))
+
+
+## 7칸 중 가장 높은 등급 (작은 화면 색 점)
+func best_grade() -> int:
+	var best := 0
+	for g in tune.values():
+		best = maxi(best, int(g))
+	return best
+
+
+## F6 치트·테스트용
+func set_grade(_b: Balance, part: String, g: int) -> void:
+	tune[part] = clampi(g, 0, 3)   # 껍데기
+
+
+## 보통 수익 (대박 뺌). 고장이면 0
+func steady_hourly(b: Balance) -> float:
+	return current_hourly(b)   # 껍데기
+
+
+func jackpot_chance(_b: Balance) -> float:
+	return 0.0   # 껍데기
+
+
+func jackpot_mult(_b: Balance) -> float:
+	return 2.0   # 껍데기
+
+
+func delivery_pay(b: Balance, seconds: float, jackpot: bool) -> float:
+	var pay := Economy.delivery_pay(b, star, seconds) if not broken else 0.0
+	return pay * (jackpot_mult(b) if jackpot else 1.0)
+
+
+## 엔진오일 반영 강화 비용 (최고 강수에서는 부르지 않음)
+func enhance_cost(b: Balance) -> float:
+	return Economy.enhance_cost(b, star)   # 껍데기
+
+
+## 강화 비용 + 남길 스페어값
+func enhance_need(b: Balance) -> float:
+	return Economy.enhance_need(b, star)   # 껍데기
+
+
+## { success, fail, destroy } 서스펜션 반영
+func enhance_chances(b: Balance) -> Dictionary:
+	var s := b.success[star]
+	var d := b.destroy[star]
+	return { "success": s, "fail": maxf(0.0, 1.0 - s - d), "destroy": d }   # 껍데기
+
+
+func offline_cap_hours(b: Balance) -> float:
+	return b.offline_cap_hours   # 껍데기
+
+
+func offline_rate(b: Balance) -> float:
+	return b.offline_rate   # 껍데기
+
+
+func offline_earnings(b: Balance, seconds_away: float) -> float:
+	return Economy.offline_earnings(b, star, broken, seconds_away)   # 껍데기

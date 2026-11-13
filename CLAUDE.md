@@ -24,11 +24,11 @@
 ```
 data/balance.json        게임 숫자 전부 (게임과 시뮬이 같이 읽음)
 docs/PROTOTYPE_V1.md     지금 할 일 (시제품 v1 지시서)
-docs/PROTOTYPE_V2.md     다음 할 일 초안 (튜닝·큐브. 사용자가 정하기 전엔 안 만듦)
+docs/PROTOTYPE_V2.md     지금 할 일 (튜닝·큐브: 트럭 8칸, 에이전트 둘이 나눠 만듦)
 docs/PROTOTYPE_V0.md     끝난 시제품 v0 지시서
 docs/IDEAS.md            나중에 할 것 / 이미 정한 것
 tools/delivery_sim.py    경제 시뮬레이터 (파이썬, 가상 유저 1만 명)
-scripts/core/            계산 코드 (balance, economy, enhance, game_state, save)
+scripts/core/            계산 코드 (balance, economy, enhance, tune 튜닝, game_state, save)
 scripts/ui/              화면 코드 (main, town 동네, route 꼬불길 계산, truck, garage_panel 차고,
                          settings_panel 설정, screen_mode 두 화면 오가기, desktop_window 창, tray_icon 알림 영역)
 scenes/                  Godot 씬
@@ -138,4 +138,6 @@ python -X utf8 "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\
   (v0 기록 1시간 44분: GDI·USER·핸들 그대로, 작업 메모리만 98~472MB 오르내림. 원인 모름 → 평소 쓸 때 지켜보기)
 - 사용자가 손으로: 알림 영역 아이콘 왼쪽 클릭(다른 프로그램을 쓰던 중에도 큰 화면이 앞으로 오나), 오른쪽 클릭 메뉴
 - v1 플레이 테스트 (지시서 맨 아래 5문항)
-- 튜닝(큐브): `docs/PROTOTYPE_V2.md` 초안 있음. v1 플레이 테스트 통과 + [정해야 함] 정한 뒤 시작
+- 튜닝(큐브): `docs/PROTOTYPE_V2.md` 확정 (2026-11-12, 추천안). 계산 담당(window 에이전트, 가지 `v2-core`) /
+  화면 담당(town 에이전트, 가지 `v2-ui`)이 병렬로 만들고 `prototype-v2`에 합침.
+  `scripts/core/tune.gd`와 `game_state.gd`의 튜닝 부분은 처음엔 껍데기 (이름만 약속대로)

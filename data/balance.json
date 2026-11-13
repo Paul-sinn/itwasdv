@@ -1,5 +1,5 @@
 {
-  "version": "0.4",
+  "version": "0.5",
   "income": {
     "base_hourly": 1000,
     "star_mult": 1.1,
@@ -19,9 +19,15 @@
   },
   "tune": {
     "tune_grades": ["일반", "레어", "에픽", "전설"],
-    "tune_bonus": [0.0, 0.1, 0.25, 0.5],
     "tune_cost_hours": [0.1, 1.5, 20],
-    "tune_up_chance": [0.15, 0.05, 0.015]
+    "tune_up_chance": [0.15, 0.05, 0.015],
+    "turbo_income_bonus": [0.0, 0.1, 0.25, 0.5],
+    "tire_jackpot_chance": [0.0, 0.05, 0.1, 0.15],
+    "cargo_jackpot_mult": [2, 3, 4, 5],
+    "suspension_destroy_cut": [0.0, 0.1, 0.2, 0.3],
+    "fuel_extra_hours": [0, 2, 4, 8],
+    "navi_extra_rate": [0.0, 0.1, 0.2, 0.3],
+    "oil_cost_cut": [0.0, 0.05, 0.1, 0.2]
   },
   "company": {
     "company_tiers": [
