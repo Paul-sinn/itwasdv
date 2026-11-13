@@ -28,7 +28,7 @@ docs/GAME_PLAN.md        기획서 (무엇을 왜 만드나, MVP 범위, 메이�
 docs/numbers-source.md   시트 숫자를 balance.json으로 옮긴 기록 (옮긴 숫자는 json이 기준)
 docs/PROTOTYPE_V0~V2.md  끝난 시제품 지시서 (v2 튜닝 8칸은 v3에서 지움. v4 세팅 돌리기로 새로)
 docs/PROTOTYPE_V3~V5.md  끝난 지시서: v3 경제 뼈대 (한 바퀴 계산, 고정 비용, 스페어, 저장 3, 번역), v4 세팅 돌리기 (적재함·ECU, 줄·고르기·천장), v5 기사 레벨·퀘스트·창고·야간팀·요약
-docs/PROTOTYPE_V6A.md    지금 지시서: 건물 클릭 + 건물 화면 (튜닝숍·물류센터·카센터). 화면만
+docs/PROTOTYPE_V6A.md    끝난 지시서: 건물 클릭 + 건물 화면 (튜닝숍·물류센터·카센터). v6b(명장·보험·급송·대형·VIP)는 아직
 locale/strings.csv       화면 글자 (keys, ko, en). 고치면 --import 뒤 .translation 두 개도 같이 커밋
 docs/IDEAS.md            나중에 할 것 / 이미 정한 것
 tools/tune_sim.py        경제 시뮬레이터 (판정용. --table = 단계별 표)
@@ -69,6 +69,9 @@ PowerShell (사용자 터미널): 어느 폴더에서든 그대로 복사해서 
 
 # 차고 (작은 화면 클릭 → 큰 화면, +0~+30, 스페어 사기·필요 안내, 퍼짐 → 스페어 쓰고 +15, [설정], [작게])
 & "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -s tests/check_garage.gd
+
+# 건물 클릭 (띠의 건물 3개 + 작은 버튼만 반응, 건물 화면 오가기, 카센터에서 스페어 사기)
+& "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -s tests/check_buildings.gd
 
 # 기사·물류센터 (레벨, 다음 할 일, 알림, 창고 확장·야간 배송팀, 돌아왔을 때 요약)
 & "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -s tests/check_driver.gd
@@ -146,12 +149,13 @@ python -I -X utf8 "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwas
 - 프로젝트 안의 `.csv`는 Godot가 번역 파일로 가져간다 → 기록 파일은 `.gdignore`가 있는 폴더(`tests/soak_logs`)에
 
 ## 현재 작업
-**2026-11-13 v5 (기사 레벨·퀘스트·창고·야간팀·요약) 끝:** `prototype-v5`에 합침. 화면 없는 확인 8개 전부 통과, QA 통과 67 / 실패 0.
-- **막힌 것:** 기사 능력치 5개(v5b)와 v6의 명장·보험 숫자는 숫자 시트를 읽어야 하는데 Claude Docs 커넥터가 끊김 → 연결되면 `delivery-dev`로 이어서
-- 사용자가 볼 것·정할 것은 바깥 폴더 `QUESTIONS.md`(Q1~Q14), 진행 기록은 `PROGRESS.md`, 담당 보고는 `_reports/`
-- 남은 손 확인 (사용자): v3·v4·v5 플레이 테스트(각 지시서 맨 아래), 띠 24시간 켜두기(`soak_desktop.ps1 -minutes 1440`), 진짜 창 확인(`check_switch.ps1`, `check_desktop.ps1`, `shot_screens.gd`), 영어 화면(`--language en`), 알림 영역 아이콘 클릭, v1 플레이 테스트
+**2026-11-13 v6a (건물 클릭 + 건물 화면) 끝:** `prototype-v6`에 합침. 화면 없는 확인 9개 전부 통과, QA 통과 39 / 실패 0. v3~v6a가 하룻밤에 쌓였고 **사용자 플레이 테스트가 한 번도 없었다 → 다음은 기능 추가가 아니라 사용자 확인**.
+- **먼저 할 것 (사용자):** 바깥 폴더 `QUESTIONS.md`(Q1~Q16)에 답하기, v3·v4·v5·v6a 플레이 테스트(각 지시서 맨 아래), 진짜 창 확인
+- **막힌 것:** 기사 능력치 5개(v5b)와 v6b(명장·보험·쿠폰·주간 목표·급송 전화·대형 화물·VIP)는 숫자 시트를 읽어야 하는데 Claude Docs 커넥터가 끊김 → 연결되면 `delivery-dev`로 이어서
+- 진행 기록은 바깥 폴더 `PROGRESS.md`, 담당 보고는 `_reports/`
+- 남은 손 확인 (사용자): 띠 24시간 켜두기(`soak_desktop.ps1 -minutes 1440`), 진짜 창 확인(`check_switch.ps1`, `check_desktop.ps1`, `shot_screens.gd`: 건물 빛남·이름표, 세팅 칸, 오버부스트 불꽃, 알림), 영어 화면(`--language en`), 알림 영역 아이콘 클릭, v1 플레이 테스트
 - 숫자: 임시 시작값이 많음(단가·도로·강화 비용·돌리기 비용·옵션 가중치·업그레이드 가격·퀘스트 보상). 밸런스 제안(QUESTIONS Q2, Q7, Q14)은 허락 전이라 json에 안 넣음
-- 지금 코드가 기획서와 다른 곳 (뒤 시제품에서): 능력치 없음(v5b) / 보험·명장·주간 목표·급송 전화·대형·VIP 없음(v6) / 트럭은 데이터만 여러 대, 타이어·터보·대리점 없음(v7) / 화면 트럭이 상한 전까지 돈 속도를 따라감(Q9)
+- 지금 코드가 기획서와 다른 곳 (뒤 시제품에서): 능력치 없음(v5b) / 보험·명장·주간 목표·급송 전화·대형·VIP 없음(v6b) / 트럭은 데이터만 여러 대, 타이어·터보·대리점 없음(v7) / 화면 트럭이 상한 전까지 돈 속도를 따라감(Q9)
 
 지난 기록:
 - v0 끝 (플레이 테스트 "아니오" 1개, 결과는 `docs/IDEAS.md`)
@@ -160,6 +164,7 @@ python -I -X utf8 "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwas
   `check_desktop.ps1` 44/44. 그때 전체 화면 맨 위 2줄 빈틈을 찾아 고침
 - 오래 켜두기: 사용자가 2026-11-10에 2시간 넘게 켜 두고 화면 어두워짐·작업표시줄 깨짐 없음을 확인
   (v0 기록 1시간 44분: GDI·USER·핸들 그대로, 작업 메모리만 98~472MB 오르내림. 원인 모름 → 평소 쓸 때 지켜보기)
+- v6a 건물 클릭 (2026-11-13): 화면만. `ui` 페인이 만들고 `core` 페인이 QA
 - v5 기사 레벨·퀘스트·창고 (2026-11-13): 담당은 herdr 페인 `core`·`ui`, 보고는 `_reports/`. QA·밸런스도 페인이 역할을 바꿔 맡음
 - v4 세팅 돌리기 (2026-11-13): 계산 `v4-core` C1~C2, 화면 `v4-ui` U1. 도중에 담당을 herdr 페인(`core`, `ui`)으로 바꿈
 - v3 경제 뼈대 (2026-11-13): 계산 담당(`v3-core`) C1~C3, 화면 담당(`v3-ui`) U1~U2. 조율자는 코드를 안 고치고 분배·리뷰만
