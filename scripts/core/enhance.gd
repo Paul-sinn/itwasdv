@@ -6,7 +6,6 @@
 extends RefCounted
 
 const Balance = preload("res://scripts/core/balance.gd")
-const Economy = preload("res://scripts/core/economy.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 
 ## 강화 결과. BLOCKED = 강화할 수 없는 상태라 아무 일도 안 일어남.
@@ -23,51 +22,57 @@ static func random01(rng: RandomNumberGenerator) -> float:
 	return rng.randi() / RANDI_RANGE
 
 
-## 화면에 보여줄 확률 세 개: { "success", "fail", "destroy" } (합 = 1)
-## 실패(유지) = 1 - 성공 - 퍼짐
+## 튜닝 없는 엔진만의 확률 세 개: { "success", "fail", "destroy" } (합 = 1)
+## 실패(유지) = 1 - 성공 - 퍼짐. 서스펜션을 반영한 확률은 GameState.enhance_chances(b)
 static func chances(b: Balance, star: int) -> Dictionary:
 	var s := b.success[star]
 	var d := b.destroy[star]
 	return { "success": s, "fail": maxf(0.0, 1.0 - s - d), "destroy": d }
 
 
-## 난수 r(0 이상 1 미만) 하나로 결과를 정한다.
+## 확률 세 개(chances / GameState.enhance_chances 모양)와 난수 r(0 이상 1 미만) 하나로 결과를 정한다.
 ##   r < success                → 성공
 ##   r < success + destroy      → 퍼짐
 ##   그 외                      → 실패 (강수 그대로)
-static func decide(b: Balance, star: int, r: float) -> Result:
-	var p_success := b.success[star]
+static func decide_chances(c: Dictionary, r: float) -> Result:
+	var p_success: float = c["success"]
 	if r < p_success:
 		return Result.SUCCESS
-	if r < p_success + b.destroy[star]:
+	if r < p_success + c["destroy"]:
 		return Result.DESTROY
 	return Result.FAIL
 
 
-## 생성기로 난수를 뽑아 결과를 정한다. 상태는 바꾸지 않는다.
+## 튜닝 없는 엔진만의 확률로 결과를 정한다 (위와 같은 규칙)
+static func decide(b: Balance, star: int, r: float) -> Result:
+	return decide_chances(chances(b, star), r)
+
+
+## 생성기로 난수를 뽑아 결과를 정한다 (튜닝 없는 엔진만). 상태는 바꾸지 않는다.
 static func roll(b: Balance, star: int, rng: RandomNumberGenerator) -> Result:
 	return decide(b, star, random01(rng))
 
 
 ## 지금 강화할 수 있나? 못 하면 그 이유.
-## 퍼질 수 있는 강수에서는 강화 비용 + 스페어값이 있어야 한다 (Economy.enhance_need).
+## 퍼질 수 있는 강수에서는 강화 비용 + 스페어값이 있어야 한다 (GameState.enhance_need: 엔진오일 반영).
 static func block_reason(state: GameState, b: Balance) -> Block:
 	if state.broken:
 		return Block.BROKEN
 	if state.star >= b.max_star:
 		return Block.MAX_STAR
-	if state.money < Economy.enhance_need(b, state.star):
+	if state.money < state.enhance_need(b):
 		return Block.NO_MONEY
 	return Block.NONE
 
 
 ## 강화 버튼 1번: 비용을 내고, 굴리고, 결과를 상태에 반영하고, 통계를 센다.
+## 비용·확률은 튜닝 반영 값 (엔진오일: 비용 −, 서스펜션: 퍼짐 −). 튜닝 등급은 퍼져도 그대로.
 ## 강화할 수 없는 상태면 아무것도 안 하고 BLOCKED.
 static func try_enhance(state: GameState, b: Balance, rng: RandomNumberGenerator) -> Result:
 	if block_reason(state, b) != Block.NONE:
 		return Result.BLOCKED
-	state.money -= Economy.enhance_cost(b, state.star)
-	var result := roll(b, state.star, rng)
+	state.money -= state.enhance_cost(b)
+	var result := decide_chances(state.enhance_chances(b), random01(rng))
 	match result:
 		Result.SUCCESS:
 			state.star += 1

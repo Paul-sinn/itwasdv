@@ -116,7 +116,11 @@ QUIT_PER_BROKEN_DAY = 0.05  # 본캐가 고장난 채로 하루 지날 때마다
 BALANCE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             "..", "data", "balance.json")
 _ALIAS = {"success": "OUR_SUCCESS", "destroy": "OUR_DESTROY",
-          "broken_drop_to": "OUR_BROKEN_DROP_TO"}
+          "broken_drop_to": "OUR_BROKEN_DROP_TO",
+          "turbo_income_bonus": "TUNE_BONUS"}   # v2: 튜닝 1칸 = 터보로 봄
+# v2 튜닝 7칸 중 터보 말고 나머지 효과: 이 시뮬은 튜닝을 1칸(터보)으로만 보니 조용히 넘김 (tools/tune_sim.py가 봄)
+_SKIP = {"tire_jackpot_chance", "cargo_jackpot_mult", "suspension_destroy_cut",
+         "fuel_extra_hours", "navi_extra_rate", "oil_cost_cut"}
 
 
 def load_balance(path=BALANCE_PATH):
@@ -129,6 +133,8 @@ def load_balance(path=BALANCE_PATH):
         if not isinstance(section, dict):
             continue
         for key, value in section.items():
+            if key in _SKIP:
+                continue
             name = _ALIAS.get(key, key.upper())
             if name in globals():
                 globals()[name] = value

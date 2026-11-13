@@ -4,13 +4,16 @@
 ##   saved_at_utc  저장한 시각. 세계 표준시(UTC) "YYYY-MM-DDTHH:MM:SS"
 ##                 → 꺼둔 동안 수익 확인할 때 이걸 3시간 전 / 20시간 전 / 미래로 고친다
 ##   money, star, broken, star_before_break, success_count, fail_count, destroy_count
+##   (형식 2부터) tune { 부위 id: 등급 0~3 }, tune_press_count, tune_up_count, jackpot_count
+## 형식 1 파일(튜닝 전)도 읽는다: 튜닝 칸이 없으면 전부 일반(0)·통계 0.
+## tune 안의 모르는 부위 id는 버리고, 등급은 0~최고 등급으로 자른다.
 extends RefCounted
 
 const Balance = preload("res://scripts/core/balance.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 
 const DEFAULT_PATH := "user://save.json"
-const FORMAT_VERSION := 1
+const FORMAT_VERSION := 2   ## 1: v0·v1 / 2: 튜닝(v2) 추가
 
 enum Status { OK, NONE, BROKEN }   ## 읽음 / 저장 파일 없음(새 게임) / 깨짐(새 게임)
 
@@ -27,7 +30,19 @@ static func to_dict(s: GameState, saved_at_unix: int) -> Dictionary:
 		"success_count": s.success_count,
 		"fail_count": s.fail_count,
 		"destroy_count": s.destroy_count,
+		"tune": _tune_to_dict(s),
+		"tune_press_count": s.tune_press_count,
+		"tune_up_count": s.tune_up_count,
+		"jackpot_count": s.jackpot_count,
 	}
+
+
+## 부위 id → 등급. 7부위 전부 적는다 (손으로 고치기 쉽게)
+static func _tune_to_dict(s: GameState) -> Dictionary:
+	var t := {}
+	for part in Balance.TUNE_EFFECT_KEYS:
+		t[part] = s.grade(part)
+	return t
 
 
 ## 저장 묶음 → 상태. 결과: { status, state, saved_at, error }
@@ -46,7 +61,7 @@ static func from_dict(d, b: Balance) -> Dictionary:
 	var s := GameState.new()
 	var money = d.get("money")
 	if not _is_number(money) or not is_finite(float(money)) or float(money) < 0.0:
-		return _broken("money 가 0 이상의 숫자가 아님: %s" % money)
+		return _broken("money 가 0 이상의 숫자가 아님: %s" % [money])
 	s.money = float(money)
 
 	var star = _whole(d.get("star"), 0, b.max_star)
@@ -55,7 +70,7 @@ static func from_dict(d, b: Balance) -> Dictionary:
 	s.star = star
 
 	if typeof(d.get("broken")) != TYPE_BOOL:
-		return _broken("broken 이 true/false 가 아님: %s" % d.get("broken"))
+		return _broken("broken 이 true/false 가 아님: %s" % [d.get("broken")])
 	s.broken = d["broken"]
 
 	var before = _whole(d.get("star_before_break"), 0, b.max_star)
@@ -68,6 +83,27 @@ static func from_dict(d, b: Balance) -> Dictionary:
 		if n == null:
 			return _broken("%s 가 0 이상 정수가 아님: %s" % [key, d.get(key)])
 		s.set(key, n)
+
+	# --- 튜닝 (형식 2). 칸이 없으면(형식 1) 전부 일반·0 ---
+	for key in ["tune_press_count", "tune_up_count", "jackpot_count"]:
+		if not d.has(key):
+			continue
+		var n = _whole(d[key], 0, 1 << 52)
+		if n == null:
+			return _broken("%s 가 0 이상 정수가 아님: %s" % [key, d[key]])
+		s.set(key, n)
+	if d.has("tune"):
+		var t = d["tune"]
+		if typeof(t) != TYPE_DICTIONARY:
+			return _broken("tune 이 { } 묶음이 아님: %s" % [t])
+		var top := b.tune_grades.size() - 1
+		for part in t:
+			if not Balance.TUNE_EFFECT_KEYS.has(part):
+				continue   # 모르는 부위는 버림
+			var g = t[part]
+			if not _is_number(g) or not is_finite(float(g)):
+				return _broken("tune.%s 등급이 숫자가 아님: %s" % [part, g])
+			s.tune[part] = int(clampf(floorf(float(g)), 0.0, top))   # 등급은 0~최고로 자름
 
 	return { "status": Status.OK, "state": s, "saved_at": saved_at, "error": "" }
 
