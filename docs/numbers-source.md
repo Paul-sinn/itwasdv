@@ -12,3 +12,6 @@
 | 2026-11-13 | 세팅 규칙 (B2, B10, B11) | `setting.lines_by_grade`, `setting.cost_cut_cap`, `setting.engine_guard_cap` | PROTOTYPE_V4 | |
 | 2026-11-13 | 세팅 등급업 (B5:C8) | `setting.up_chance`, `setting.ceiling` | PROTOTYPE_V4 | 명장 1.5배(B1)는 v6 |
 | 2026-11-13 | 세팅 옵션 수치 (D2:H4, D7:H8, A8) | `setting.options.*.values`, `setting.overboost_seconds`, `setting.overboost_mult` | PROTOTYPE_V4 | 장거리 속도·정비비 감소(터보·타이어)는 v7. 옵션 가중치·돌리기 비용은 시트에 없어 임시값 |
+| 2026-11-13 | 경험치 얻는 법 (B2, B7) | `driver.xp_per_parcel`, `driver.star_milestone_xp` | PROTOTYPE_V5 | 시내·장거리·주간 목표 경험치는 v6~v7 |
+| 2026-11-13 | 레벨 곡선 (B1:B4) | `driver.base_xp`, `driver.exponent`, `driver.points_per_level`, `driver.bonus_points_every_10` | PROTOTYPE_V5 | |
+| 2026-11-13 | 오프라인 (C2:C9) | `depot.warehouse_hours`, `depot.night_rates` | PROTOTYPE_V5 | `offline.cap_hours` 8, `offline.rate` 0.5를 대신함 (시작 4시간·50%). 가격은 시트에 없어 임시값 |
