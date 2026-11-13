@@ -1,6 +1,7 @@
 ## 게임 숫자(data/balance.json)를 읽고 검사한다.
 ## 묶음은 "trip"(한 바퀴·팁), "engine"(강화·스페어), "offline"(꺼둔 동안), "setting"(세팅 돌리기),
-## "driver"(기사 레벨), "abilities"(기사 능력치), "depot"(창고·야간팀), "quests"(다음 할 일 목록).
+## "driver"(기사 레벨), "abilities"(기사 능력치), "depot"(창고·야간팀), "quests"(다음 할 일 목록),
+## "special"(대형·VIP), "rush"(급송 전화), "weekly"(주간 배송 목표).
 ##
 ## 쓰는 법:
 ##   var b := Balance.load_file()
@@ -18,6 +19,8 @@ const OPTION_KINDS := ["common", "own", "junk"]
 const QUEST_KINDS := ["parcels", "star", "setting_rolls", "setting_grade", "part_rolled", "spares_bought", "warehouse", "night", "level"]
 ## 기사 능력치 id (v5b). trip.gd가 이 id로 효과를 읽어서 json에 다 있어야 하고, 모르는 id는 막는다 (효과 없이 포인트만 먹지 않게)
 const ABILITY_IDS := ["unload", "kind", "nego", "knowhow", "mech"]
+## 출력 제한 배송 종류 (v6b). trip.gd가 이 id로 읽음
+const SPECIAL_IDS := ["large", "vip"]
 
 ## 읽기/검사에서 나온 문제들. 비어 있으면 정상.
 var errors: PackedStringArray = PackedStringArray()
@@ -61,6 +64,21 @@ var driver_star_milestone_xp: int
 # --- abilities (기사 능력치 v5b) ---
 var ability_ids: Array[String] = []   ## json 순서
 var abilities: Dictionary = {}        ## id → { "per_point": float, "max_points": int }
+
+# --- special (출력 제한 배송 v6b): "large" / "vip" → { "unlock_star": int, "pay_mult": float, "share": float } ---
+var special: Dictionary = {}
+
+# --- rush (급송 요청 전화 v6b) ---
+var rush_min_minutes: float     ## 벨 간격 최소 (분)
+var rush_max_minutes: float     ## 벨 간격 최대 (분)
+var rush_ring_seconds: float    ## 벨이 울리는 시간 (초). 이 안에 받아야 함
+var rush_parcels: int           ## 받으면 트럭 0의 다음 몇 건
+var rush_pay_mult: float        ## 그 배송 단가 몇 배
+
+# --- weekly (주간 배송 목표 v6b) ---
+var weekly_target: int          ## 한 주 배송 목표 (모든 트럭, 꺼둔 동안 포함)
+var weekly_xp: int              ## 달성 보상 경험치
+var weekly_coupons: int         ## 달성 보상 보험 쿠폰
 
 # --- depot (창고 확장·야간 배송팀). [레벨-1] ---
 var warehouse_hours: PackedFloat64Array   ## 꺼둔 동안 쌓이는 최대 시간
@@ -161,6 +179,19 @@ static func from_dict(d: Dictionary) -> RefCounted:
 		var ab: Dictionary = d["abilities"][id]
 		b.ability_ids.append(id)
 		b.abilities[id] = { "per_point": float(ab["per_point"]), "max_points": int(ab["max_points"]) }
+	for k in SPECIAL_IDS:
+		var sp: Dictionary = d["special"][k]
+		b.special[k] = { "unlock_star": int(sp["unlock_star"]), "pay_mult": float(sp["pay_mult"]), "share": float(sp["share"]) }
+	var rush: Dictionary = d["rush"]
+	b.rush_min_minutes = float(rush["min_minutes"])
+	b.rush_max_minutes = float(rush["max_minutes"])
+	b.rush_ring_seconds = float(rush["ring_seconds"])
+	b.rush_parcels = int(rush["parcels"])
+	b.rush_pay_mult = float(rush["pay_mult"])
+	var weekly: Dictionary = d["weekly"]
+	b.weekly_target = int(weekly["target_parcels"])
+	b.weekly_xp = int(weekly["xp"])
+	b.weekly_coupons = int(weekly["coupons"])
 	var depot: Dictionary = d["depot"]
 	b.warehouse_hours = PackedFloat64Array(depot["warehouse_hours"])
 	b.warehouse_prices = PackedInt64Array(depot["warehouse_prices"])
@@ -203,7 +234,7 @@ static func validate(d: Dictionary) -> PackedStringArray:
 	var depot = d.get("depot")
 	var abilities = d.get("abilities")
 	for pair in [["trip", trip], ["engine", engine], ["offline", offline], ["setting", setting], ["driver", driver], ["depot", depot],
-			["abilities", abilities]]:
+			["abilities", abilities], ["special", d.get("special")], ["rush", d.get("rush")], ["weekly", d.get("weekly")]]:
 		if typeof(pair[1]) != TYPE_DICTIONARY:
 			errs.append("\"%s\" 묶음이 없음" % pair[0])
 	if typeof(d.get("quests")) != TYPE_ARRAY or d["quests"].is_empty():
@@ -264,6 +295,7 @@ static func validate(d: Dictionary) -> PackedStringArray:
 				errs.append("engine.success[%d] + engine.destroy[%d] = %s (1 이하여야 함)" % [s, s, sum])
 
 	_validate_setting(setting, max_star, errs)
+	_validate_v6b(d, max_star, errs)
 	var max_level := _validate_driver(driver, max_star, errs)
 	_validate_quests(d["quests"], max_star, max_level, setting, depot, errs)
 	return errs
@@ -286,6 +318,37 @@ static func _validate_driver(driver: Dictionary, max_star: int, errs: PackedStri
 			if float(list[i]) <= float(list[i - 1]):
 				errs.append("driver.star_milestones[%d] = %s (앞 값 %s보다 커야 함)" % [i, list[i], list[i - 1]])
 	return int(driver["max_level"]) if level_ok else 0
+
+
+## "special"·"rush"·"weekly" 묶음 검사 (v6b)
+static func _validate_v6b(d: Dictionary, max_star: int, errs: PackedStringArray) -> void:
+	var whole := func(v): return v >= 0.0 and v == floorf(v)
+	var special: Dictionary = d["special"]
+	for k in special:
+		if not SPECIAL_IDS.has(k):
+			errs.append("special 에 모르는 배송: %s (%s 중 하나여야 함)" % [k, "/".join(SPECIAL_IDS)])
+	for k in SPECIAL_IDS:
+		var where := "special.%s" % k
+		var sp = special.get(k)
+		if typeof(sp) != TYPE_DICTIONARY:
+			errs.append("%s 이 없거나 { } 묶음이 아님" % where)
+			continue
+		_check_number(sp, where, "unlock_star", errs, "0~%d 정수여야 함" % max_star,
+				func(v): return v >= 0.0 and v <= max_star and v == floorf(v))
+		_check_number(sp, where, "pay_mult", errs, "1 이상이어야 함", func(v): return v >= 1.0)
+		_check_number(sp, where, "share", errs, "0~1 사이여야 함", func(v): return v >= 0.0 and v <= 1.0)
+	var rush: Dictionary = d["rush"]
+	var min_ok := _check_number(rush, "rush", "min_minutes", errs, "0보다 커야 함", func(v): return v > 0.0)
+	if _check_number(rush, "rush", "max_minutes", errs, "0보다 커야 함", func(v): return v > 0.0) and min_ok \
+			and float(rush["max_minutes"]) < float(rush["min_minutes"]):
+		errs.append("rush.max_minutes = %s (min_minutes %s 이상이어야 함)" % [rush["max_minutes"], rush["min_minutes"]])
+	_check_number(rush, "rush", "ring_seconds", errs, "0보다 커야 함", func(v): return v > 0.0)
+	_check_number(rush, "rush", "parcels", errs, "1 이상의 정수여야 함", func(v): return v >= 1.0 and v == floorf(v))
+	_check_number(rush, "rush", "pay_mult", errs, "1 이상이어야 함", func(v): return v >= 1.0)
+	var weekly: Dictionary = d["weekly"]
+	_check_number(weekly, "weekly", "target_parcels", errs, "1 이상의 정수여야 함", func(v): return v >= 1.0 and v == floorf(v))
+	_check_number(weekly, "weekly", "xp", errs, "0 이상의 정수여야 함", whole)
+	_check_number(weekly, "weekly", "coupons", errs, "0 이상의 정수여야 함", whole)
 
 
 ## "abilities" 묶음 검사 (기사 능력치 v5b): ABILITY_IDS가 다 있고 그 밖은 없음, per_point ≥ 0, max_points 0 이상 정수.

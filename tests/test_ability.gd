@@ -164,7 +164,7 @@ func test_kind_tips() -> void:
 	check_near(Trip.tip_chance(b, _game(0), 0), 0.02, 1e-12, "친절 0 → 2%")
 	check_near(Trip.tip_chance(b, _game(0, { "kind": 30 }), 0), 0.17, 1e-12, "친절 30 → 17%")
 	for c in [[{}, 0.02, 2500], [{ "kind": 30 }, 0.17, 2500], [{ "kind": 30, "nego": 20 }, 0.17, 3000]]:
-		var s := _game(30, c[0])
+		var s := _game(14, c[0])   # +14: 보통 배송만 (v6b 대형 +15·VIP +18은 팁도 그 단가라)
 		var rng := _rng(77)
 		var events := []
 		var money0 := s.money

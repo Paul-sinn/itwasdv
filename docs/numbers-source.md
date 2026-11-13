@@ -24,3 +24,7 @@
 | 2026-11-13 | 시트에 없음 (시뮬로 정함, Q14-2 (다) 기준) | `depot.warehouse_prices` Lv2·Lv3, `depot.night_prices` | PROTOTYPE_V6_BAL | 창고 200만·300만 (Lv4 4000만 그대로), 야간팀 150만·220만·250만. tune_sim 가볍게: 본전(켜 둔 시간) 3.5~4.8시간, 2~4일째에 다 삼 |
 | 2026-11-13 | 기사 능력치 출시 5개 (스냅샷 6번) | `abilities.unload/kind/nego/knowhow/mech` 의 `per_point`, `max_points` | PROTOTYPE_V5B | 1%×30, 0.5%×30, 1%×20, 2.5%×20, 5%×20 |
 | 2026-11-13 | 시트에 없음 (임시 시작값, 조율자 → QUESTIONS Q18) | `trip.tip_base_chance`, `trip.tip_rate` | PROTOTYPE_V5B | 2%, 팁 = 단가 × 1.0 |
+| 2026-11-13 | 수입원 (스냅샷 11번), 강화 단계 열리는 배송 (1번) | `special.large/vip` 의 `unlock_star`, `pay_mult` | PROTOTYPE_V6B | 대형 +15 ×3, VIP +18 ×5 (초안) |
+| 2026-11-13 | 시트에 없음 (임시 시작값, 조율자 → QUESTIONS Q20) | `special.large.share`, `special.vip.share`, `rush.ring_seconds`, `rush.parcels`, `weekly.target_parcels` | PROTOTYPE_V6B | 10%, 5%, 30초, 20건, 30000건 |
+| 2026-11-13 | 기획서 16.6 / 4.12 (Q15 답) | `rush.min_minutes`, `rush.max_minutes`, `rush.pay_mult` | PROTOTYPE_V6B | 30~60분, ×2 |
+| 2026-11-13 | 경험치 얻는 법 (스냅샷 7번), 명장 보험 쿠폰 (9번) | `weekly.xp`, `weekly.coupons` | PROTOTYPE_V6B | 2000, 1장 |

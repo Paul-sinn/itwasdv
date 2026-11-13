@@ -21,6 +21,16 @@ var ability_points: int = 0       ## 받은 포인트 (v5에서는 쌓이기만)
 var reputation: int = 0           ## 만렙 뒤 경험치
 var abilities: Dictionary = {}    ## 능력치 id → 찍은 포인트 (없으면 0). ability.gd
 
+# --- v6b: 보험 쿠폰, 주간 배송 목표 (weekly.gd), 급송 전화 (rush.gd). 전부 저장 ---
+var coupons: int = 0              ## 보험 쿠폰 (주간 목표 보상. 쓰는 곳은 C2 보험)
+var weekly_week: int = -1         ## 지금 진행이 어느 주 것인가 (Master.week_index). -1 = 아직 모름 → 첫 tick에서 그 주로
+var weekly_parcels: int = 0       ## 이번 주 배송 수 (모든 트럭, 꺼둔 동안 포함)
+var weekly_done: bool = false     ## 이번 주 보상을 받았나
+var rush_enabled: bool = true     ## [설정] 급송 요청 전화 켜기/끄기
+var rush_next: float = -1.0       ## 다음 벨까지 남은 초 (-1 = 아직 안 굴림 → 다음 tick에서)
+var rush_ring: float = 0.0        ## 벨이 울리는 남은 초 (0 = 안 울림)
+var rush_left: int = 0            ## 남은 급송 건수 (트럭 0 배송마다 −1)
+
 # --- 물류센터 (depot.gd) ---
 var warehouse_level: int = 1
 var night_level: int = 1
@@ -70,6 +80,7 @@ func add_event(event: Dictionary) -> void:
 ## 쌓아 둔 알림을 순서대로 꺼내고 비운다. 화면이 프레임마다 부른다
 ##   { "type": "level_up", "level": int, "points": int } / { "type": "max_level" }
 ##   { "type": "quest_done", "id": String, "xp": int, "money": int } / { "type": "milestone", "star": int, "xp": int }
+##   { "type": "weekly_done", "coupons": int, "xp": int } / { "type": "rush_call" } / { "type": "rush_missed" } (v6b)
 func take_events() -> Array:
 	var out := _events
 	_events = []

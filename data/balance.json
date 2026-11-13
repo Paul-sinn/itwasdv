@@ -1,5 +1,5 @@
 {
-  "version": "0.10",
+  "version": "0.11",
   "trip": {
     "unit_price": 2500,
     "base_cargo": 20,
@@ -43,6 +43,12 @@
     "knowhow": { "per_point": 0.025, "max_points": 20 },
     "mech": { "per_point": 0.05, "max_points": 20 }
   },
+  "special": {
+    "large": { "unlock_star": 15, "pay_mult": 3, "share": 0.10 },
+    "vip": { "unlock_star": 18, "pay_mult": 5, "share": 0.05 }
+  },
+  "rush": { "min_minutes": 30, "max_minutes": 60, "ring_seconds": 30, "parcels": 20, "pay_mult": 2 },
+  "weekly": { "target_parcels": 30000, "xp": 2000, "coupons": 1 },
   "depot": {
     "warehouse_hours": [4, 6, 8, 12],
     "warehouse_prices": [2000000, 3000000, 40000000],

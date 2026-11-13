@@ -11,13 +11,16 @@
 ##   (형식 5) driver_level, driver_xp, ability_points, reputation, warehouse_level, night_level, quest_index,
 ##            parcels_total, setting_rolls, spares_bought, parts_rolled { 부품 id: true }, milestones_done [ 단계 ]
 ##   (형식 7) abilities { 능력치 id: 찍은 포인트 }
+##   (형식 8) coupons, weekly_week, weekly_parcels, weekly_done, rush_enabled, rush_next, rush_ring, rush_left
 ## 모르는 키는 버리고 범위 밖 값은 자른다. 음수 돈·스페어, 빠진 칸, 틀린 모양은 깨진 저장.
 ## 세팅: 모르는 부품·그 부품에 없는 옵션 id는 버리고, 등급·카운터는 범위로 자르고, 줄은 그 등급 줄 수까지 (앞에서부터).
 ## 형식 5 칸: 숫자가 아니면 깨진 저장, 숫자는 범위로 자름 (레벨 1~만렙, 경험치 0~다음 레벨 필요량−1, 창고·야간팀 1~표 끝,
 ##            퀘스트 번호 0~목록 길이, 개수·평판 0 이상). 모르는 부품·보너스 단계가 아닌 값은 버림.
 ## 형식 7 능력치: 숫자가 아니면 깨진 저장. 모르는 id는 버리고 0~최대로 자르고, 합이 ability_points를 넘으면 전부 0 (포인트는 돌려받음).
-## 형식 3~6 파일은 그대로 읽는다 (없는 칸은 처음 값: 세팅 없음, 오버부스트 안 걸린 바퀴, 레벨 1, 창고·야간팀 Lv1, 퀘스트 처음부터,
-##   lap_cargo 0 = 지금 바퀴 건수를 다음 진행 때 굴림, 능력치 없음).
+## 형식 8 칸: 숫자·참거짓이 아니면 깨진 저장. 쿠폰·주간 진행 0 이상, 급송 남은 건수 0~rush.parcels, 벨 남은 초 0~ring_seconds,
+##   다음 벨까지 −1(안 굴림)~max_minutes분으로 자름. 주 번호는 정수면 그대로 (시계 조작 허용).
+## 형식 3~7 파일은 그대로 읽는다 (없는 칸은 처음 값: 세팅 없음, 오버부스트 안 걸린 바퀴, 레벨 1, 창고·야간팀 Lv1, 퀘스트 처음부터,
+##   lap_cargo 0 = 지금 바퀴 건수를 다음 진행 때 굴림, 능력치 없음, 쿠폰 0, 주간 진행 0·주 모름, 급송 켜짐·벨 시계 새로).
 ##
 ## 백업: 쓸 때마다 지금 파일을 path.bak1(가장 최근) → bak2 → bak3 으로 돌린다.
 ## 본 파일이 깨졌으면 path.broken 으로 옮기고 bak1 → bak2 → bak3 중 읽히는 첫 파일로 살린다.
@@ -34,8 +37,9 @@ const Setting = preload("res://scripts/core/setting.gd")
 const TruckState = preload("res://scripts/core/truck_state.gd")
 
 const DEFAULT_PATH := "user://save.json"
-const FORMAT_VERSION := 7   ## 1: v0·v1 / 2: 튜닝(v2) / 3: 한 바퀴 경제·트럭 여러 대(v3) / 4: 세팅 돌리기(v4) / 5: 기사 레벨·퀘스트·창고(v5)
+const FORMAT_VERSION := 8   ## 1: v0·v1 / 2: 튜닝(v2) / 3: 한 바퀴 경제·트럭 여러 대(v3) / 4: 세팅 돌리기(v4) / 5: 기사 레벨·퀘스트·창고(v5)
                             ## 6: 트럭 lap_cargo (지금 바퀴에 실은 건수, v6-bal) / 7: 기사 능력치 abilities (v5b)
+                            ## 8: 쿠폰·주간 배송 목표·급송 전화 (v6b)
 const OLDEST_READABLE := 3  ## 이보다 옛 형식은 변환하지 않고 옮겨 둔다
 
 enum Status { OK, NONE, BROKEN }   ## 읽음 / 저장 파일 없음(새 게임) / 깨짐(새 게임)
@@ -76,6 +80,14 @@ static func to_dict(s: GameState, saved_at_unix: int) -> Dictionary:
 		"parts_rolled": s.parts_rolled.duplicate(),
 		"milestones_done": s.milestones_done.duplicate(),
 		"abilities": s.abilities.duplicate(),
+		"coupons": s.coupons,
+		"weekly_week": s.weekly_week,
+		"weekly_parcels": s.weekly_parcels,
+		"weekly_done": s.weekly_done,
+		"rush_enabled": s.rush_enabled,
+		"rush_next": s.rush_next,
+		"rush_ring": s.rush_ring,
+		"rush_left": s.rush_left,
 	}
 	for key in PROGRESS_INTS:
 		d[key] = s.get(key)
@@ -141,6 +153,8 @@ static func from_dict(d, b: Balance) -> Dictionary:
 	var why := _progress_from(d, b, s)
 	if why == "":
 		why = _abilities_from(d.get("abilities", {}), b, s)   # 형식 6까지는 없음 → 능력치 없음
+	if why == "":
+		why = _v8_from(d, b, s)   # 형식 7까지는 없음 → 처음 값
 	if why != "":
 		return _broken(why)
 	return _result(Status.OK, s, saved_at)
@@ -296,6 +310,25 @@ static func _progress_from(d: Dictionary, b: Balance, s: GameState) -> String:
 	for m in done:
 		if _is_finite_number(m) and m == floorf(m) and b.driver_star_milestones.has(int(m)) and not s.milestones_done.has(int(m)):
 			s.milestones_done.append(int(m))
+	return ""
+
+
+## 형식 8 칸 (쿠폰·주간 목표·급송) → s. 없는 칸은 GameState 처음 값. 틀린 모양이면 그 이유 (없으면 "")
+static func _v8_from(d: Dictionary, b: Balance, s: GameState) -> String:
+	for key in ["coupons", "weekly_week", "weekly_parcels", "rush_left", "rush_next", "rush_ring"]:
+		if not _is_finite_number(d.get(key, 0)):
+			return "%s 가 숫자가 아님: %s" % [key, d.get(key)]
+	for key in ["weekly_done", "rush_enabled"]:
+		if typeof(d.get(key, false)) != TYPE_BOOL:
+			return "%s 가 true/false가 아님: %s" % [key, d.get(key)]
+	s.coupons = clampi(floori(d.get("coupons", 0)), 0, MAX_WHOLE)
+	s.weekly_week = floori(d.get("weekly_week", s.weekly_week))
+	s.weekly_parcels = clampi(floori(d.get("weekly_parcels", 0)), 0, MAX_WHOLE)
+	s.weekly_done = d.get("weekly_done", false)
+	s.rush_enabled = d.get("rush_enabled", true)
+	s.rush_next = clampf(float(d.get("rush_next", -1.0)), -1.0, b.rush_max_minutes * 60.0)
+	s.rush_ring = clampf(float(d.get("rush_ring", 0.0)), 0.0, b.rush_ring_seconds)
+	s.rush_left = clampi(floori(d.get("rush_left", 0)), 0, b.rush_parcels)
 	return ""
 
 

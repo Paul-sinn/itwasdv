@@ -15,6 +15,22 @@ const TIP_AVG := 50.0   ## v5b 팁 평균 (배송 1건마다) = 기본 팁 확�
 var b: Balance = Balance.load_file()
 ## v3 숫자(단가 100, 적재량 5, 정차 2초, 스페어 드랍 0.0002): 집마다 시각이 딱 떨어져서, 시각·배송 수를 손으로 계산한 테스트에 씀
 var bv3: Balance = _v3_balance()
+## v6b 대형·VIP를 끈 진짜 숫자 (1시간 돈이 시간당 수입과 한 바퀴치 안인지 보는 테스트용: VIP 한 건이 한 바퀴치만큼 흔들어서)
+var bn: Balance = _no_special_balance()
+
+
+func _no_special_balance() -> Balance:
+	var d := real_balance_dict()
+	d["special"]["large"]["share"] = 0.0
+	d["special"]["vip"]["share"] = 0.0
+	return Balance.from_dict(d)
+
+
+## v6b 배송 1건 평균 배수 (보통 1 / 대형 3 / VIP 5, 몫 10% / 5%. VIP 먼저 → 아니면 대형): +18부터 1.39, +15~+17 1.2
+func _special_mult(star: int) -> float:
+	var vip := 0.05 if star >= 18 else 0.0
+	var large := 0.10 if star >= 15 else 0.0
+	return vip * 5.0 + (1.0 - vip) * large * 3.0 + (1.0 - vip) * (1.0 - large) * 1.0
 
 
 func _v3_balance() -> Balance:
@@ -44,7 +60,9 @@ func _expected(star: int) -> Dictionary:
 	var pay := 2500 - 500 - 125
 	# v3 숫자 단가 100: 100 − 20 − 5 + 팁 평균 2% × 100
 	var v3_hourly := 5 * (75 + 2.0) * 3600.0 / (10.0 + 12000.0 / power + 5 * 2.0)
-	return { "power": power, "lap": lap, "pay": pay, "lap_income": 20 * pay, "hourly": 20 * (pay + TIP_AVG) * 3600.0 / lap, "v3_hourly": v3_hourly }
+	var mult := _special_mult(star)   # v6b 대형·VIP 평균 (1건 돈·팁이 단가 배수만큼)
+	return { "power": power, "lap": lap, "pay": pay, "lap_income": 20 * pay, "hourly": 20 * (pay + TIP_AVG) * mult * 3600.0 / lap,
+			"v3_hourly": v3_hourly * mult }
 
 
 ## 퀘스트는 다 끝낸 상태로 (v5): 여기서는 배송 돈만 본다. 퀘스트 보상은 test_quest.gd
@@ -95,20 +113,20 @@ func test_hourly_income_at() -> void:
 
 ## 지시서 C1 ②: advance로 3600초 돌린 돈이 시간당 수입과 한 바퀴 수입 1번치 안쪽
 func test_hour_of_advance_matches_hourly() -> void:
-	for star in STARS:
+	for star in STARS:   # 대형·VIP 끈 숫자로 (v6b: 대형·VIP 몫 평균은 test_v6b ③에서 50시간으로)
 		var s := _game(star)
 		var t := s.truck(0)
-		var events := Trip.advance(s, b, 0, 3600.0, _rng(1))
-		var hourly := Trip.hourly_income(b, _st(t), 0)
+		var events := Trip.advance(s, bn, 0, 3600.0, _rng(1))
+		var hourly := Trip.hourly_income(bn, _st(t), 0)
 		var gap := absf(s.money - hourly)
-		check(gap <= Trip.lap_income(b, _st(t), 0), "+%d: 1시간 돈 %d, 시간당 %.1f, 차이 %.1f > 한 바퀴 %d"
-				% [star, s.money, hourly, gap, Trip.lap_income(b, _st(t), 0)])
+		check(gap <= Trip.lap_income(bn, _st(t), 0), "+%d: 1시간 돈 %d, 시간당 %.1f, 차이 %.1f > 한 바퀴 %d"
+				% [star, s.money, hourly, gap, Trip.lap_income(bn, _st(t), 0)])
 		var paid := 0
 		for ev in events:
 			if ev["type"] == "parcel" or ev["type"] == "tip":
 				paid += ev["pay"]
 		check_eq(paid, s.money, "+%d: 이벤트 돈 합(배송 + 팁) = 늘어난 돈" % star)
-		note("+%d: advance 1시간 %d원 / 시간당 %.1f원 (차이 %.1f, 허용 %d)" % [star, s.money, hourly, gap, Trip.lap_income(b, _st(t), 0)])
+		note("+%d: advance 1시간 %d원 / 시간당 %.1f원 (차이 %.1f, 허용 %d)" % [star, s.money, hourly, gap, Trip.lap_income(bn, _st(t), 0)])
 
 
 ## 지시서 C1 ③: 0.1초씩 나눠 돌려도 한 번에 돌린 것과 돈·배송 수가 같음
@@ -451,7 +469,8 @@ func test_setting_overboost_lap() -> void:
 		check_near(plain_lap - Trip.lap_seconds(b, _st(t), 0), drive / 2.0, 1e-9, "+%d 줄어든 초 = 달리는 초의 절반 (싣기 10초·정차 10초는 그대로)" % star)
 		var avg := plain_lap * 0.28 + boost_lap * 0.72
 		check_near(Trip.avg_lap_seconds(b, _st(t), 0), avg, 1e-9, "+%d 평균 한 바퀴 (걸린 바퀴인지와 상관없음)" % star)
-		check_near(Trip.hourly_income(b, _st(t), 0), 20 * (1875 + TIP_AVG) * 3600.0 / avg, 1e-6, "+%d 시간당 = 평균 한 바퀴로" % star)
+		check_near(Trip.hourly_income(b, _st(t), 0), 20 * (1875 + TIP_AVG) * _special_mult(star) * 3600.0 / avg, 1e-6,
+				"+%d 시간당 = 평균 한 바퀴로 (대형·VIP 평균 포함)" % star)
 		note("+%d 오버부스트 72%%: 안 걸린 바퀴 %.4f초, 걸린 바퀴 %.4f초 (달리기 %.4f → %.4f초), 평균 %.4f초"
 				% [star, plain_lap, Trip.lap_seconds(b, _st(t), 0), drive, drive / 2.0, avg])
 	# advance도 같은 시각: +0 걸린 바퀴(달리기 120 → 60초)는 집 i = 10 + 60i ÷ 21 + 0.5i, 80초에 새 바퀴
