@@ -39,12 +39,13 @@ static func _commas(n: int) -> String:
 	return digits + out
 
 
-## 소수점 둘째 자리까지, 필요 없는 0은 뗌: 8.0 → "8", 94.5 → "94.5", 99.75 → "99.75"
-static func num(v: float) -> String:
-	var x := snappedf(v, 0.01)
+## 소수점 digits 자리까지(기본 둘째), 필요 없는 0은 뗌: 8.0 → "8", 94.5 → "94.5", 99.75 → "99.75"
+## 적재량 건수는 한 자리: num(21.6, 1) → "21.6", num(20.0, 1) → "20"
+static func num(v: float, digits := 2) -> String:
+	var x := snappedf(v, pow(10.0, -digits))
 	if is_equal_approx(x, roundf(x)):
 		return "%d" % int(roundf(x))
-	return String.num(x, 2)
+	return String.num(x, digits)
 
 
 ## 0.9975 → "99.75%", 0.05 → "5%", 0.945 → "94.5%"

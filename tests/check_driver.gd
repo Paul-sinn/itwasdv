@@ -67,15 +67,19 @@ func _run() -> void:
 	await _frames(3)
 	var p = m.panel
 	var d = p.driver
+	# Lv.3 경험치: ③에서 창고 확장 할 일 보상 경험치를 받으면 딱 Lv.4가 되게 (레벨 곡선 숫자가 바뀌어도 맞게 Driver로 계산)
+	var need3 := Driver.xp_need(b, 3)
+	var w_xp: int = b.quests[_qi(b, "warehouse_2")]["xp"]
+	var xp3 := clampi(need3 - w_xp, 0, need3 - 1)
+	_check(xp3 + w_xp >= need3 and xp3 + w_xp - need3 < Driver.xp_need(b, 4), "Lv.3 경험치 %d + 보상 %d로 딱 Lv.4가 안 됨" % [xp3, w_xp])
 	m.state.driver_level = 3
-	m.state.driver_xp = 120
+	m.state.driver_xp = xp3
 	m.state.ability_points = 2
 	await _frames(3)
-	var need3 := Driver.xp_need(b, 3)
 	var q := Quest.current(b, m.state)
 	_report(m.is_full() and p.building == "depot" and d.visible and not p.setting.visible and not p._engine_box.visible
-			and d._level.text == "기사 Lv.3" and d._xp_bar.value == 120 and d._xp_bar.max_value == need3
-			and d._xp.text == "경험치 120 / %d" % need3 and d._points.text.contains("포인트 2")
+			and d._level.text == "기사 Lv.3" and d._xp_bar.value == xp3 and d._xp_bar.max_value == need3
+			and d._xp.text == "경험치 %d / %d" % [xp3, need3] and d._points.text.contains("포인트 2")
 			and d._quest_head.text == "다음 할 일 · 끝낸 것 1/22" and d._quest_name.text == "배송 20건"
 			and d._quest_desc.text == Fmt.quest_desc("parcels_20") and d._quest_desc.visible
 			and d._quest_progress.text == "진행 3/20 · 보상 +%s원 · 경험치 +%d" % [Fmt.money(q["money"]), q["xp"]],

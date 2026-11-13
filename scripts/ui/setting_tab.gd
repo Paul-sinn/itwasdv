@@ -1,6 +1,7 @@
 ## 차고 [세팅] 칸: 부품(적재함·ECU)을 골라 세팅 돌리기 (트럭 0).
 ##   위: 부품 버튼 (잠긴 부품은 "엔진 +5에 열림")
-##   가운데: 고른 부품의 지금 상태 (등급 이름 + 줄들), 등급업 확률 · 천장 n/N, 한 줄에 나올 확률, 비용, [돌리기]
+##   가운데: 고른 부품의 지금 상태 (등급 이름 + 줄들), 옵션 효과 (v6-bal: 적재함 → 한 바퀴 적재량 "21.6건",
+##           ECU → 오버부스트 설명), 등급업 확률 · 천장 n/N, 한 줄에 나올 확률, 비용, [돌리기]
 ##   고르는 중(pending)이면: 지금 쓰는 것 / 새로 나온 것을 나란히 + 버튼 두 개
 ## 확률·비용은 scripts/core/setting.gd 값을 그대로 보여 준다. 버튼은 신호만 → main.gd → Setting.try_roll / choose
 ## 부품·옵션·등급 이름은 번역 파일 키 SETTING_PART_<ID>, SETTING_OPT_<ID>, SETTING_GRADE_<등급> (id는 balance.json)
@@ -29,6 +30,7 @@ var take_button: Button     ## 새 것 쓰기
 var _parts_row: HBoxContainer
 var _grade: Label           ## "적재함 · 스트리트" (등급 색)
 var _lines: VBoxContainer   ## 지금 쓰는 줄
+var _effect: Label          ## 이 부품에서 나오는 옵션의 효과: "한 바퀴 적재량 21.6건" / 오버부스트 설명 (고르는 중엔 숨김)
 var _up: Label              ## "등급업 확률 8% · 천장 3/20"
 var _chances: Label         ## "한 줄에 나올 확률: …"
 var _cost: Label
@@ -52,6 +54,7 @@ func _ready() -> void:
 	_grade.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN   # 글자 폭만큼만 (커질 때 기준점이 글자에 맞게)
 	_grade.autowrap_mode = TextServer.AUTOWRAP_OFF   # 글자 폭만큼이라 줄바꿈하면 한 글자씩 꺾임
 	_lines = _box(self)
+	_effect = _label(self, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
 	_up = _label(self, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
 	_chances = _label(self, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
 	_cost = _label(self, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
@@ -204,6 +207,13 @@ func refresh(b: Balance, s: GameState, locked: bool) -> void:
 	for op: String in chances:
 		parts.append("%s %s" % [option_name(op), Fmt.percent(chances[op])])
 	_chances.text = tr("SETTING_CHANCES") % " · ".join(parts)
+	# 이 부품에서 나오는 옵션의 효과 (적재량 = 지금 평균 적재량, 소수점 한 자리까지 / 오버부스트 = 걸리면 어떻게 되나)
+	var notes := PackedStringArray()
+	if chances.has("cargo"):
+		notes.append(tr("SETTING_CARGO_NOW") % Fmt.num(Trip.cargo(b, t), 1))
+	if chances.has("overboost"):
+		notes.append(tr("SETTING_OVERBOOST_NOTE") % Fmt.num(b.overboost_mult))
+	_effect.text = "\n".join(notes)
 
 	var cost := Setting.roll_cost(b, grade)
 	_cost.text = tr("GARAGE_COST") % Fmt.money(cost)
@@ -221,6 +231,7 @@ func refresh(b: Balance, s: GameState, locked: bool) -> void:
 	var pending = p["pending"]
 	_choose.visible = pending != null
 	_chances.visible = pending == null   # 고르는 동안은 자리를 아낌
+	_effect.visible = pending == null and _effect.text != ""
 	_cost.visible = pending == null
 	if pending != null:
 		var new_grade: int = pending["grade"]
