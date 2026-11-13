@@ -1,28 +1,34 @@
 """
-택배 방치형 - 튜닝(큐브) 시뮬레이터 (v2 1단계)
+택배 방치형 - 경제 시뮬레이터 (v3 경제 뼈대, 판정용)
 
-트럭 1대 = 엔진(강화 ★) + 튜닝 7칸. 돈을 "가장 이득인 곳"에 쓰는 가상 플레이어로
-  - 튜닝 있을 때 / 없을 때 15·18·20·22·25강까지 걸리는 시간
-  - 튜닝에 쓴 돈 비율
-  - 시간이 지나며 부위 등급이 어떻게 오르나
-를 본다.
+흉내 내는 것 (v3 게임에 있는 것만):
+  트럭 1대, 엔진 강화(성공 / 실패=유지 / 퍼짐 → 스페어 1개 쓰고 +15), 강화 비용 고정표,
+  스페어 엔진(고정가 구매 + 배송마다 낮은 확률 드랍, 꺼둔 동안은 평균값),
+  한 바퀴 수입(출력 → 속도 → 한 바퀴 초), 기름값·정비비, 꺼둔 동안(상한 시간 × 비율).
+  세팅·기사 레벨·명장·보험·창고 확장·보조 트럭은 아직 없음 (v4~).
 
-실행:  python -I -X utf8 tools/tune_sim.py
-       (옵션: --players 1000  --hours 8  --seed 7)
+계산식은 docs/PROTOTYPE_V3.md "계산식" = scripts/core/trip.gd, economy.gd, enhance.gd 와 같다.
+  반올림은 Godot roundi와 같게 (0.5는 0에서 먼 쪽. 파이썬 round()는 짝수 쪽이라 안 씀)
+게임 숫자는 전부 data/balance.json (게임과 같은 파일)의 trip / engine / offline 묶음.
+
+실행:  python -I -X utf8 tools/tune_sim.py                   가볍게(2.5시간)·열심히(8시간) 둘 다
+       python -I -X utf8 tools/tune_sim.py --hours 2.5      그 시간만
+       python -I -X utf8 tools/tune_sim.py --table          단계별 출력·한 바퀴·시간당 수입·강화 비용 표
+       (옵션: --players 1000  --seed 7)
        -X utf8: 막대그래프 글자(█) 때문에 cp949 콘솔에서 필요
-게임 숫자는 전부 data/balance.json (게임과 같은 파일). 계산식은 docs/PROTOTYPE_V2.md "계산식"과 같다.
+판정: "30일" 줄의 지금 단계 중앙값 (기획서 16.7). 최고 도달 단계는 참고만.
 
 플레이어 가정 (시뮬 전용. 게임 숫자 아님):
-  - 하루 HOURS시간 켜 둠(기본 8), 나머지는 꺼 둠 → 다음 날 켤 때 꺼둔 동안 수익을 받는다
-  - 켜 둔 동안 CHECK_HOURS(30분)마다 살펴보고, 살 수 있는 것 중 이득인 것을 산다
-  - "이득" = 목표까지 남은 시간이 얼마나 줄어드나. 목표는 두 가지 플레이어로 본다:
-      가까이 보는 플레이어: 다음 목표 강수(15·18·20·22·25 중 지금보다 높은 가장 낮은 것)
-      멀리 보는 플레이어: 처음부터 GOAL강
-      튜닝 1번의 이득 = 등급업 확률 × (지금 남은 시간 − 등급업하면 남은 시간) − 그 돈을 버는 데 걸리는 시간
-    이게 0보다 큰 튜닝이 있으면 (이득/비용이 큰 것부터) 튜닝, 없으면 강화. 고장 나면 스페어부터.
-    남은 시간은 퍼짐(15강으로 떨어져 다시 올라오기 + 스페어값)까지 넣은 기댓값
-  - 대박 배송은 평균으로 계산 (배송이 시간당 수백 번이라 하루 단위로는 평균과 거의 같음)
-  - 튜닝 없음 = 같은 플레이어가 튜닝 버튼을 아예 안 누름
+  - 하루 HOURS시간 켜 둠, 나머지(24 − HOURS)는 꺼 둠 → 다음 날 켤 때 꺼둔 동안 돈·스페어를 받는다
+    (게임 Trip.apply_offline과 같음: min(꺼둔 시간, cap_hours) × rate, 스페어는 소수 나머지를 이어 감)
+  - 켜 둔 동안 돈은 배송 1건마다 들어온다. 배송은 한 바퀴 평균 속도(N ÷ 한 바퀴 초)로 고르게 나온다고 본다
+    (게임은 바퀴 안에서 싣는 시간·집마다 시각이 다름. 1시간 합계 차이는 한 바퀴치 안쪽 = C1 테스트 ②)
+  - 행동 규칙 하나 ("버는 족족 강화"):
+      돈이 생기면 CHECK_HOURS(30분) 안에 화면을 보고, 누를 수 있는 동안 계속 강화를 누른다.
+      퍼질 수 있는 단계(+18~)인데 스페어가 0개면 그때 스페어를 1개 산다 (미리 쌓아 두지 않음).
+      +30이 되면 더 안 누름.
+  - 퍼진 뒤 회복 비용: 퍼진 순간부터 원래 단계로 다시 올라갈 때까지 쓴 돈(강화 + 스페어 구매)을
+    "원래 단계에서의 하루 수입(켜 둔 시간 + 꺼둔 동안)"으로 나눈 값. 퍼질 때 쓴 스페어 1개는 안 셈
 """
 import argparse
 import json
@@ -33,247 +39,225 @@ import statistics as st
 
 BALANCE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "balance.json")
 
-# 화면 순서 (scripts/core/tune.gd PARTS) → balance.json 효과 이름 (scripts/core/balance.gd TUNE_EFFECT_KEYS)
-PARTS = ["turbo", "tire", "cargo", "suspension", "fuel_tank", "navigation", "engine_oil"]
-EFFECT_KEYS = {
-    "turbo": "turbo_income_bonus", "tire": "tire_jackpot_chance", "cargo": "cargo_jackpot_mult",
-    "suspension": "suspension_destroy_cut", "fuel_tank": "fuel_extra_hours",
-    "navigation": "navi_extra_rate", "engine_oil": "oil_cost_cut",
-}
-PART_NAMES = {"turbo": "터보", "tire": "타이어", "cargo": "짐칸", "suspension": "서스펜션",
-              "fuel_tank": "연료탱크", "navigation": "내비", "engine_oil": "엔진오일"}
-TURBO, TIRE, CARGO, SUS, FUEL, NAVI, OIL = range(7)
-
 # ---------- 시뮬 전용 가정 ----------
-MILESTONES = [15, 18, 20, 22, 25]
-GOAL = 25                 # 플레이어가 노리는 강수 (여기 닿으면 그 플레이어는 끝)
+PLAYER_TYPES = [("가볍게", 2.5), ("열심히", 8.0)]   # 기획서 16.7 판정 기준 유저
+TARGETS = {2.5: 18, 8.0: 20}                         # 기획서 "경제 목표" (30일째 지금 단계 중앙값)
 CHECK_HOURS = 0.5         # 켜 둔 동안 몇 시간마다 살펴보나
-MAX_DAYS = 1500           # 이 안에 목표에 못 닿으면 "못 감"
-SNAP_DAYS = [1, 3, 7, 14, 30, 60, 90, 180, 365]
+SIM_DAYS = 90             # 판정은 30일. 그 뒤는 참고 + 후반 퍼짐 회복 비용용
+SNAP_DAYS = [1, 3, 7, 14, 30, 60, 90]
+JUDGE_DAY = 30
+TABLE_STARS = [0, 10, 18, 30]   # C1 테스트 ①이 찍는 단계
 
 
-def roundf(x):
-    """Godot roundf와 같게 (0.5는 0에서 먼 쪽으로)"""
-    return math.floor(x + 0.5) if x >= 0 else -math.floor(-x + 0.5)
+def roundi(x):
+    """Godot roundi와 같게 (0.5는 0에서 먼 쪽으로)"""
+    if x < 0:
+        return -roundi(-x)
+    f = math.floor(x)
+    return int(f) + (1 if x - f >= 0.5 else 0)
 
 
 class Bal:
-    """balance.json 의 income / engine / tune 묶음"""
+    """balance.json 의 trip / engine / offline 묶음 + 게임 계산식 (trip.gd, economy.gd)"""
 
     def __init__(self, path):
         with open(path, encoding="utf-8") as f:
             d = json.load(f)
         self.version = d.get("version", "?")
-        inc, eng, tune = d["income"], d["engine"], d["tune"]
-        self.base = float(inc["base_hourly"])
-        self.offline_cap = float(inc["offline_cap_hours"])
-        self.offline_rate = float(inc["offline_rate"])
+        trip, eng, off = d["trip"], d["engine"], d["offline"]
+        self.unit_price = int(trip["unit_price"])
+        self.cargo = int(trip["base_cargo"])
+        self.road = float(trip["road_length"])
+        self.load = float(trip["load_seconds"])
+        self.stop = float(trip["stop_seconds"])
+        self.fuel_rate = float(trip["fuel_rate"])
+        self.maint_rate = float(trip["maint_rate"])
         self.max_star = int(eng["max_star"])
-        self.success = eng["success"]
-        self.destroy = eng["destroy"]
-        self.cost_hours = eng["cost_hours"]
+        self.base_power = int(eng["base_power"])
+        self.power_gain = [int(g) for g in eng["power_gain"]]
+        self.success = [float(x) for x in eng["success"]]
+        self.destroy = [float(x) for x in eng["destroy"]]
         self.drop_to = int(eng["broken_drop_to"])
-        self.spare = float(eng["spare_price"])
-        hi = int(inc["high_from_star"])
-        self.inc = [self.base * inc["star_mult"] ** min(s, hi - 1) * inc["star_mult_high"] ** max(0, s - (hi - 1))
-                    for s in range(self.max_star + 1)]
-        self.grades = tune["tune_grades"]
-        self.top = len(self.grades) - 1
-        self.tune_cost = [roundf(h * self.base) for h in tune["tune_cost_hours"]]
-        self.up = tune["tune_up_chance"]
-        self.eff = [tune[EFFECT_KEYS[p]] for p in PARTS]
+        self.cost_base = float(eng["cost_base"])
+        self.cost_mult = float(eng["cost_mult"])
+        self.spare_price = int(eng["spare_price"])
+        self.spare_chance = float(eng["spare_drop_chance"])
+        self.offline_cap = float(off["cap_hours"])
+        self.offline_rate = float(off["rate"])
 
+    # --- Trip ---
+    def power(self, star):
+        return self.base_power + sum(self.power_gain[:star])
 
-class Model:
-    """목표까지 남은 시간 계산 (튜닝 등급 → 남은 시간). HOURS(하루 켜 두는 시간)마다 하나"""
+    def lap_seconds(self, star):
+        return self.load + self.road / float(self.power(star)) + self.cargo * self.stop
 
-    def __init__(self, b, hours):
-        self.b, self.hours = b, hours
-        n = b.top + 1
-        # P[엔진오일][서스펜션][k] = 0강부터 k강까지 θ 합.
-        # θ[k] = k강 → k+1강 평균 몇 시간 (그 강수 엔진 수익만으로 24시간 벌 때. 퍼져서 15강부터 다시 올라오는 시간 포함)
-        # 진짜 시간 = θ 합 ÷ mult(튜닝 등급)
-        self.P = [[self._prefix(b.eff[OIL][o], b.eff[SUS][s]) for s in range(n)] for o in range(n)]
+    def parcel_pay(self):
+        u = self.unit_price
+        return u - roundi(u * self.fuel_rate) - roundi(u * self.maint_rate)
 
-    def _prefix(self, oil_cut, sus_cut):
-        b = self.b
-        theta = []
-        for k in range(b.max_star):
-            p = b.success[k]
-            d = b.destroy[k] * (1 - sus_cut)
-            reclimb = sum(theta[b.drop_to:k]) if k > b.drop_to else 0.0
-            # 1번 누를 때: 강화 비용(엔진오일 반영) / 퍼지면 스페어값 + 15강부터 다시 올라오기. 성공할 때까지 평균
-            theta.append((b.cost_hours[k] * (1 - oil_cut) + d * (b.spare / b.inc[k] + reclimb)) / p)
-        prefix = [0.0]
-        for t in theta:
-            prefix.append(prefix[-1] + t)
-        return prefix
+    def lap_income(self):
+        return self.cargo * self.parcel_pay()
 
-    def mult(self, g):
-        """수익 배수 (엔진 수익 대비 하루 평균): (1 + 터보) × 대박 평균 × (켜 둔 시간 + 꺼둔 동안 몫) / 24"""
-        b = self.b
-        jack = 1 + b.eff[TIRE][g[TIRE]] * (b.eff[CARGO][g[CARGO]] - 1)
-        off = min(24 - self.hours, b.offline_cap + b.eff[FUEL][g[FUEL]]) * (b.offline_rate + b.eff[NAVI][g[NAVI]])
-        return (1 + b.eff[TURBO][g[TURBO]]) * jack * (self.hours + off) / 24
+    def hourly(self, star):
+        return self.lap_income() * 3600.0 / self.lap_seconds(star)
 
-    def remaining(self, star, g, goal):
-        """goal강까지 남은 시간 (진짜 시간, 시간 단위)"""
-        prefix = self.P[g[OIL]][g[SUS]]
-        return (prefix[goal] - prefix[star]) / self.mult(g)
+    def parcels_per_hour(self, star):
+        return self.cargo * 3600.0 / self.lap_seconds(star)
 
-    def tune_options(self, star, g, goal):
-        """이득이 0보다 큰 튜닝 [(이득/비용, 부위 번호, 비용)] 큰 것부터"""
-        b = self.b
-        now = self.remaining(star, g, goal)
-        earn_per_hour = b.inc[star] * self.mult(g)
-        out = []
-        for i in range(7):
-            gi = g[i]
-            if gi >= b.top:
-                continue
-            g2 = list(g)
-            g2[i] = gi + 1
-            cost = b.tune_cost[gi]
-            gain = b.up[gi] * (now - self.remaining(star, g2, goal)) - cost / earn_per_hour
-            if gain > 0:
-                out.append((gain / cost, i, cost))
-        out.sort(reverse=True)
-        return out
+    # --- Economy / Enhance ---
+    def enhance_cost(self, star):
+        return roundi(self.cost_base * self.cost_mult ** star)
 
+    def needs_spare(self, star):
+        return 0 <= star < self.max_star and self.destroy[star] > 0.0
 
-def next_goal(star, far):
-    """플레이어가 지금 노리는 강수"""
-    if far:
-        return GOAL
-    return next((m for m in MILESTONES if m > star), GOAL)
+    # --- 꺼둔 동안 (Trip.apply_offline, 트럭 1대) ---
+    def offline(self, star, hours_away):
+        """→ (돈, 배송 수). 꺼둔 시간이 0 이하면 (0, 0)"""
+        if hours_away <= 0:
+            return 0, 0
+        hours = min(hours_away * 3600.0 / 3600.0, self.offline_cap)
+        money = math.floor(self.hourly(star) * hours * self.offline_rate)
+        parcels = math.floor(self.cargo * 3600.0 / self.lap_seconds(star) * hours * self.offline_rate)
+        return money, parcels
+
+    def daily_income(self, star, hours_on):
+        """켜 둔 시간 + 꺼둔 동안 하루 수입 (퍼짐 회복 비용을 며칠치로 바꿀 때)"""
+        return self.hourly(star) * hours_on + self.offline(star, 24 - hours_on)[0]
 
 
 class Player:
-    def __init__(self, b, model, rng, tuning, far):
-        self.b, self.m, self.rng, self.tuning, self.far = b, model, rng, tuning, far
-        self.star, self.broken, self.g, self.money = 0, False, [0] * 7, 0.0
-        self.spent = {"engine": 0.0, "spare": 0.0, "tune": 0.0}
-        self.reach = {}          # 강수 → 처음 닿은 날 (진짜 시간, 일)
-        self.reach_tune_share = {}
-        self.legend_day = {}     # 부위 번호 → 전설 된 날
-        self.snaps = {}          # 날 → (강수, 등급들, 튜닝에 쓴 돈 비율)
-        self.presses = {"engine": 0, "tune": 0}
+    def __init__(self, b, hours, rng):
+        self.b, self.H, self.rng = b, hours, rng
+        self.star = 0
+        self.money = 0
+        self.spares = 0
+        self.carry = 0.0          # 꺼둔 동안 스페어 소수 나머지 (GameState.spare_drop_carry)
+        self.frac = 0.0           # 켜 둔 동안 배송 소수 진행
+        self.next_drop = self._geom()
+        self.best = 0
+        self.destroys = 0
+        self.presses = 0
+        self.spares_bought = 0
+        self.spares_dropped = 0
+        self.spent = {"engine": 0, "spare": 0}
+        self.open_climbs = []     # [원래 단계, 그동안 쓴 돈, 퍼진 날]
+        self.climbs = []          # (원래 단계, 쓴 돈 ÷ 원래 단계 하루 수입, 걸린 날)
+        self.snaps = {}           # 날 → (지금 단계, 최고 단계, 퍼짐 횟수, 돈, 스페어)
 
-    # --- 게임 계산식 (game_state.gd와 같음) ---
-    def hourly(self):
-        if self.broken:
-            return 0.0
-        b, g = self.b, self.g
-        return b.inc[self.star] * (1 + b.eff[TURBO][g[TURBO]]) * (1 + b.eff[TIRE][g[TIRE]] * (b.eff[CARGO][g[CARGO]] - 1))
+    def _geom(self):
+        """다음 스페어 드랍까지 배송 몇 건 (배송마다 spare_chance 확률 = 기하분포)"""
+        p = self.b.spare_chance
+        if p <= 0:
+            return math.inf
+        if p >= 1:
+            return 1
+        return int(math.log(1.0 - self.rng.random()) / math.log(1.0 - p)) + 1
 
-    def enhance_cost(self):
+    def _deliver(self, n):
+        """켜 둔 동안 배송 n건: 돈 + 스페어 드랍"""
+        self.money += n * self.b.parcel_pay()
+        while n >= self.next_drop:
+            n -= self.next_drop
+            self.spares += 1
+            self.spares_dropped += 1
+            self.next_drop = self._geom()
+        self.next_drop -= n
+
+    def _earn(self, hours):
+        total = self.frac + self.b.parcels_per_hour(self.star) * hours + 1e-9
+        n = math.floor(total)
+        self.frac = total - n
+        self._deliver(n)
+
+    def _spend(self, amount, kind):
+        self.money -= amount
+        self.spent[kind] += amount
+        for c in self.open_climbs:
+            c[1] += amount
+
+    def act(self, day):
+        """살펴보기 1번: 누를 수 있는 동안 계속 누른다. 스페어는 필요할 때 1개만"""
         b = self.b
-        return roundf(b.cost_hours[self.star] * b.inc[self.star] * (1 - b.eff[OIL][self.g[OIL]]))
-
-    def enhance_need(self):
-        return self.enhance_cost() + (self.b.spare if self.b.destroy[self.star] > 0 else 0.0)
-
-    def offline(self, hours_off):
-        b, g = self.b, self.g
-        if self.broken or hours_off <= 0:
-            return 0.0
-        return self.hourly() * min(hours_off, b.offline_cap + b.eff[FUEL][g[FUEL]]) * (b.offline_rate + b.eff[NAVI][g[NAVI]])
-
-    def tune_share(self):
-        total = sum(self.spent.values())
-        return self.spent["tune"] / total if total > 0 else 0.0
-
-    # --- 살펴보기 1번: 살 수 있는 것 중 이득인 것을 계속 산다 ---
-    def act(self, now_day):
-        b = self.b
-        while True:
-            if self.broken:
-                if self.money < b.spare:
+        while self.star < b.max_star:
+            if b.needs_spare(self.star) and self.spares == 0:
+                if self.money < b.spare_price:
                     return
-                self.money -= b.spare
-                self.spent["spare"] += b.spare
-                self.broken = False
+                self._spend(b.spare_price, "spare")
+                self.spares += 1
+                self.spares_bought += 1
                 continue
-            if self.star >= GOAL:
+            cost = b.enhance_cost(self.star)
+            if self.money < cost:
                 return
-            if self.tuning:
-                bought = False
-                for _, i, cost in self.m.tune_options(self.star, self.g, next_goal(self.star, self.far)):
-                    if self.money >= cost:
-                        self.money -= cost
-                        self.spent["tune"] += cost
-                        self.presses["tune"] += 1
-                        if self.rng.random() < b.up[self.g[i]]:
-                            self.g[i] += 1
-                            if self.g[i] == b.top:
-                                self.legend_day[i] = now_day
-                        bought = True
-                        break
-                if bought:
-                    continue
-            if self.money < self.enhance_need():
-                return
-            cost = self.enhance_cost()
-            self.money -= cost
-            self.spent["engine"] += cost
-            self.presses["engine"] += 1
-            p = b.success[self.star]
-            d = b.destroy[self.star] * (1 - b.eff[SUS][self.g[SUS]])
-            r = self.rng.random()
-            if r < p:
+            self._spend(cost, "engine")
+            self.presses += 1
+            r = self.rng.random()            # Enhance.decide: 성공 → 퍼짐 → 실패 순서
+            s, d = b.success[self.star], b.destroy[self.star]
+            if r < s:
                 self.star += 1
-                if self.star not in self.reach:
-                    self.reach[self.star] = now_day
-                    self.reach_tune_share[self.star] = self.tune_share()
-            elif r < p + d:
+                self.best = max(self.best, self.star)
+                self._close_climbs(day)
+            elif r < s + d:
+                self.destroys += 1
+                self.open_climbs.append([self.star, 0, day])
+                self.spares -= 1
                 self.star = min(self.star, b.drop_to)
-                self.broken = True
+
+    def _close_climbs(self, day):
+        still = []
+        for target, spent, start in self.open_climbs:
+            if self.star >= target:
+                self.climbs.append((target, spent / self.b.daily_income(target, self.H), day - start))
+            else:
+                still.append([target, spent, start])
+        self.open_climbs = still
 
     def next_price(self):
-        """지금 사고 싶은 것 중 가장 싼 값 (없으면 None)"""
-        if self.broken:
-            return self.b.spare
-        if self.star >= GOAL:
+        """지금 모으는 돈 (없으면 None)"""
+        b = self.b
+        if self.star >= b.max_star:
             return None
-        prices = [self.enhance_need()]
-        if self.tuning:
-            prices += [c for _, _, c in self.m.tune_options(self.star, self.g, next_goal(self.star, self.far))]
-        return min(prices)
+        if b.needs_spare(self.star) and self.spares == 0:
+            return b.spare_price
+        return b.enhance_cost(self.star)
 
     def run(self):
-        H = self.m.hours
+        b, H = self.b, self.H
         snap_set = set(SNAP_DAYS)
-        for day in range(MAX_DAYS):
-            if day in snap_set:
-                self.snaps[day] = (self.star, tuple(self.g), self.tune_share())
+        for day in range(1, SIM_DAYS + 1):
             h = 0.0
             while True:
-                self.act((day * 24 + h) / 24)
-                if self.star >= GOAL:
-                    return self._finish()
-                rate, price = self.hourly(), self.next_price()
-                if rate <= 0 or price is None:
+                self.act(day - 1 + h / 24)
+                price = self.next_price()
+                rate = b.parcels_per_hour(self.star)
+                if price is None:
                     nh = H
                 else:
-                    nh = h + max(0.0, (price - self.money) / rate)
+                    parcels = max(0, math.ceil((price - self.money) / b.parcel_pay()))
+                    nh = h + max(0.0, parcels - self.frac) / rate
                     nh = max(h + CHECK_HOURS, math.ceil(nh / CHECK_HOURS - 1e-9) * CHECK_HOURS)
                 if nh >= H:
-                    self.money += rate * (H - h)
+                    self._earn(H - h)
                     break
-                self.money += rate * (nh - h)
+                self._earn(nh - h)
                 h = nh
-            self.money += self.offline(24 - H)
-        return self._finish()
-
-    def _finish(self):
-        for d in SNAP_DAYS:
-            self.snaps.setdefault(d, (self.star, tuple(self.g), self.tune_share()))
+            if day in snap_set:
+                self.snaps[day] = (self.star, self.best, self.destroys, self.money, self.spares)
+            money, parcels = b.offline(self.star, 24 - H)
+            self.money += money
+            self.carry += parcels * b.spare_chance
+            whole = math.floor(self.carry)
+            self.carry -= whole
+            self.spares += whole
+            self.spares_dropped += whole
         return self
 
 
-def simulate(b, model, n, seed, tuning, far):
+def simulate(b, hours, n, seed):
     master = random.Random(seed)
-    return [Player(b, model, random.Random(master.random()), tuning, far).run() for _ in range(n)]
+    return [Player(b, hours, random.Random(master.random())).run() for _ in range(n)]
 
 
 def pct(xs, q):
@@ -281,119 +265,105 @@ def pct(xs, q):
     return xs[min(len(xs) - 1, int(q * len(xs)))]
 
 
-def fmt_days(d):
-    if d is None:
-        return "   -  "
-    return f"{d * 24:5.1f}시간" if d < 1 else f"{d:6.1f}일 "
+def won(v):
+    """돈을 1.2만 / 3.4억 / 1.2조 꼴로 (게임 돈 표기와 비슷하게, 표 읽기용)"""
+    for unit, name in ((10 ** 12, "조"), (10 ** 8, "억"), (10 ** 4, "만")):
+        if abs(v) >= unit:
+            x = v / unit
+            return f"{x:.1f}{name}" if x < 100 else f"{x:,.0f}{name}"
+    return f"{v:,.0f}"
 
 
 # ======================= 출력 =======================
-def price_table(b):
-    print("=" * 78)
-    print(f"■ 튜닝 가격표 (balance.json v{b.version})")
-    print("=" * 78)
-    total = 0.0
-    for g in range(b.top):
-        avg = b.tune_cost[g] / b.up[g]
-        total += avg
-        print(f"  {b.grades[g]}→{b.grades[g + 1]}: 1번 {b.tune_cost[g]:>7,.0f}원, 등급업 {b.up[g] * 100:4.1f}% "
-              f"→ 평균 {1 / b.up[g]:5.1f}번, 약 {avg:>11,.0f}원")
-    print(f"  한 부위 전설까지 평균 약 {total:,.0f}원 / 7부위 약 {total * 7:,.0f}원")
-    print("  이 돈이 몇 시간치 수익인가 (엔진만): " + " / ".join(
-        f"{s}강 {total / b.inc[s]:,.0f}시간" for s in [10, 15, 18, 20, 22, 25]))
-    print("  부위 효과 (" + " / ".join(b.grades) + "):")
-    for i, p in enumerate(PARTS):
-        print(f"    {PART_NAMES[p]:<5} {' / '.join(f'{v:g}' for v in b.eff[i])}")
+def table(b):
+    print("=" * 96)
+    print(f"■ 단계별 표 (balance.json v{b.version})  배송 1건 {b.parcel_pay()}원 = 단가 {b.unit_price} − 기름값 "
+          f"{roundi(b.unit_price * b.fuel_rate)} − 정비비 {roundi(b.unit_price * b.maint_rate)}, 한 바퀴 {b.cargo}건")
+    print("=" * 96)
+    print("  단계 | 출력 |  한 바퀴 초 | 한 바퀴 수입 |   시간당 수입 | 하루(2.5h) | 하루(8h) |    강화 비용 | 비용÷시간당")
+    for s in range(b.max_star + 1):
+        mark = "◀" if s in TABLE_STARS else " "
+        cost = b.enhance_cost(s) if s < b.max_star else None
+        cost_txt = f"{cost:>12,}" if cost is not None else f"{'-':>12}"
+        hrs_txt = f"{cost / b.hourly(s):8.1f}시간" if cost is not None else f"{'-':>12}"
+        print(f"  {mark}+{s:<2} | {b.power(s):>4} | {b.lap_seconds(s):>11.4f} | {b.lap_income():>11,} | "
+              f"{b.hourly(s):>13.4f} | {won(b.daily_income(s, 2.5)):>10} | {won(b.daily_income(s, 8.0)):>8} | "
+              f"{cost_txt} | {hrs_txt}")
+    print("  ◀ = C1 테스트 ①(test_trip.gd test_lap_numbers_match_formula)이 찍는 단계. 시간당 수입이 같아야 함")
+    print(f"  스페어 {b.spare_price:,}원 고정, 배송마다 {b.spare_chance * 100:g}% 드랍. "
+          f"꺼둔 동안 최대 {b.offline_cap:g}시간 × {b.offline_rate * 100:g}%")
     print()
 
 
-def report(b, model, far, with_tune, no_tune):
-    n = len(with_tune)
-    print("=" * 78)
-    who = f"멀리 보는 플레이어 (처음부터 {GOAL}강 목표)" if far else "가까이 보는 플레이어 (다음 목표 강수만 봄)"
-    print(f"■ {who}")
-    print(f"  {n:,}명 × 2 (튜닝 있음 / 없음), 하루 {model.hours:g}시간 켜 둠, {CHECK_HOURS * 60:.0f}분마다 살펴봄")
-    print("=" * 78)
-
-    print("\n  ▶ 강수까지 걸린 진짜 시간 (중간값 [빠른 10% ~ 느린 10%])")
-    print("    강수 |        튜닝 있음                 |        튜닝 없음                 | 없음÷있음 | 그때 튜닝에 쓴 돈")
-    for m in MILESTONES:
-        row = []
-        meds = []
-        for ps in (with_tune, no_tune):
-            days = [p.reach[m] for p in ps if m in p.reach]
-            if len(days) < n // 2:
-                row.append(f"{'절반 넘게 못 감':^31}")
-                meds.append(None)
-                continue
-            med = st.median(days)
-            meds.append(med)
-            row.append(f"{fmt_days(med)} [{fmt_days(pct(days, 0.1))}~{fmt_days(pct(days, 0.9))}]")
-        speed = f"{meds[1] / meds[0]:5.2f}배" if meds[0] and meds[1] else "   -  "
-        shares = [p.reach_tune_share[m] for p in with_tune if m in p.reach_tune_share]
-        share = f"{st.median(shares) * 100:5.1f}%" if shares else "-"
-        print(f"    {m:>2}강 | {row[0]} | {row[1]} |  {speed}  | {share}")
-    for label, ps in (("튜닝 있음", with_tune), ("튜닝 없음", no_tune)):
-        got = sum(1 for p in ps if GOAL in p.reach)
-        print(f"    {label}: {MAX_DAYS}일 안에 {GOAL}강 {got / n * 100:.1f}%")
-
-    print(f"\n  ▶ 돈 쓴 곳 ({GOAL}강 닿을 때까지, 튜닝 있음, 중간값)")
-    tot = lambda p: sum(p.spent.values())
-    for k, label in (("engine", "강화"), ("spare", "스페어"), ("tune", "튜닝")):
-        print(f"    {label:<4} {st.median([p.spent[k] / tot(p) * 100 for p in with_tune]):5.1f}%  "
-              f"(평균 {st.mean([p.spent[k] for p in with_tune]):>14,.0f}원)")
-    print(f"    버튼 누른 횟수: 강화 {st.median([p.presses['engine'] for p in with_tune]):,.0f}번 / "
-          f"튜닝 {st.median([p.presses['tune'] for p in with_tune]):,.0f}번  "
-          f"(튜닝 없음: 강화 {st.median([p.presses['engine'] for p in no_tune]):,.0f}번)")
-
-    print("\n  ▶ 시간별 부위 등급 (튜닝 있음, 평균 등급 0 일반 ~ 3 전설 / 아래 줄은 강수 중간값)")
-    head = "    날짜  " + "".join(f"{PART_NAMES[p]:>7}" for p in PARTS) + "   | 강수(있음/없음) | 튜닝 돈 비율"
-    print(head)
+def report(b, label, hours, players, seed):
+    n = len(players)
+    off_h = min(24 - hours, b.offline_cap)
+    target = TARGETS.get(hours)
+    print("=" * 96)
+    print(f"■ {label}: 하루 {hours:g}시간 켜 둠, {24 - hours:g}시간 꺼 둠 (→ {off_h:g}시간치 × {b.offline_rate * 100:g}%), "
+          f"{n:,}명, seed {seed}" + (f"  — 목표 30일 +{target}" if target else ""))
+    print("=" * 96)
+    print("    날짜 | 지금 단계 중앙값 [하위 10% ~ 상위 10%] | 최고 도달(참고) | 퍼짐 평균 | 들고 있는 돈 중앙값 | 스페어 중앙값")
     for d in SNAP_DAYS:
-        avg = [st.mean(p.snaps[d][1][i] for p in with_tune) for i in range(7)]
-        star_t = st.median(p.snaps[d][0] for p in with_tune)
-        star_n = st.median(p.snaps[d][0] for p in no_tune)
-        share = st.median(p.snaps[d][2] for p in with_tune) * 100
-        print(f"    {d:>3}일  " + "".join(f"{a:7.2f}" for a in avg) + f"   |   {star_t:4.0f} / {star_n:<4.0f}    |  {share:5.1f}%")
+        cur = [p.snaps[d][0] for p in players]
+        best = [p.snaps[d][1] for p in players]
+        mark = " ← 판정" if d == JUDGE_DAY else ""
+        if d == JUDGE_DAY and target:
+            mark += f" (목표 +{target}: {'맞음' if st.median(cur) >= target else '모자람'})"
+        print(f"    {d:>3}일 |        +{st.median(cur):<4g} [+{pct(cur, 0.1):<2} ~ +{pct(cur, 0.9):<2}]"
+              f"            |     +{st.median(best):<4g}      |  {st.mean(p.snaps[d][2] for p in players):6.2f}   | "
+              f"{won(st.median(p.snaps[d][3] for p in players)):>18} | {st.median(p.snaps[d][4] for p in players):>8g}{mark}")
 
-    print("\n  ▶ 부위별 전설 된 날 (중간값, 전설까지 간 플레이어 비율)")
-    for i, p in enumerate(PARTS):
-        days = [pl.legend_day[i] for pl in with_tune if i in pl.legend_day]
-        if days:
-            bar = "█" * min(40, int(st.median(days) / 2))
-            print(f"    {PART_NAMES[p]:<5} {fmt_days(st.median(days))} ({len(days) / n * 100:5.1f}%) {bar}")
+    judge = [p.snaps[JUDGE_DAY][0] for p in players]
+    print(f"\n  ▶ {JUDGE_DAY}일째 지금 단계 분포")
+    for s in range(min(judge), max(judge) + 1):
+        k = sum(1 for x in judge if x == s)
+        if k:
+            print(f"    +{s:<2} {k / n * 100:5.1f}% {'█' * round(k / n * 100)}")
+
+    print(f"\n  ▶ {SIM_DAYS}일 동안: 강화 {st.median(p.presses for p in players):,.0f}번 (중앙값), "
+          f"스페어 산 것 평균 {st.mean(p.spares_bought for p in players):.2f}개 / 드랍 평균 {st.mean(p.spares_dropped for p in players):.2f}개, "
+          f"쓴 돈 중 스페어 {st.median(p.spent['spare'] / max(1, p.spent['engine'] + p.spent['spare']) for p in players) * 100:.1f}% (중앙값)")
+
+    print(f"\n  ▶ 퍼진 뒤 원래 단계로 돌아가는 데 든 돈 ({SIM_DAYS}일 안에 퍼진 것. 원래 단계 하루 수입의 며칠치)")
+    print("    퍼진 단계 | 퍼짐 횟수 | 돌아감 | 든 돈 중앙값 [하위 10% ~ 상위 10%] | 평균    | 걸린 날 중앙값")
+    climbs = [c for p in players for c in p.climbs]
+    opened = {}
+    for p in players:
+        for c in p.open_climbs:
+            opened[c[0]] = opened.get(c[0], 0) + 1
+    for s in range(b.max_star):
+        done = [c for c in climbs if c[0] == s]
+        left = opened.get(s, 0)
+        if not done and not left:
+            continue
+        if done:
+            days = [c[1] for c in done]
+            print(f"    +{s:<2}       | {len(done) + left:>8,} | {len(done) / (len(done) + left) * 100:5.1f}% | "
+                  f"{st.median(days):8.2f}일 [{pct(days, 0.1):6.2f} ~ {pct(days, 0.9):6.2f}]   | {st.mean(days):6.2f}일 | "
+                  f"{st.median(c[2] for c in done):6.2f}일")
         else:
-            print(f"    {PART_NAMES[p]:<5} 아무도 전설까지 안 감")
-
-    print("\n  ▶ 일반→레어 튜닝 1번(100원)의 이득 (전부 일반일 때. 목표까지 줄어드는 시간 − 100원 버는 시간, 분)")
-    print("    강수 " + "".join(f"{PART_NAMES[p]:>8}" for p in PARTS))
-    for s in [0, 10, 15, 18, 20, 22]:
-        g = [0] * 7
-        goal = next_goal(s, far)
-        now = model.remaining(s, g, goal)
-        cells = []
-        for i in range(7):
-            g2 = list(g)
-            g2[i] = 1
-            cost = b.tune_cost[0]
-            gain = b.up[0] * (now - model.remaining(s, g2, goal)) - cost / (b.inc[s] * model.mult(g))
-            cells.append(f"{gain * 60:8.1f}")
-        print(f"    {s:>2}강 " + "".join(cells))
+            print(f"    +{s:<2}       | {left:>8,} |   0.0% | {'아직 아무도 못 돌아감':^34} |")
     print()
 
 
 def main():
-    ap = argparse.ArgumentParser(description="튜닝(큐브) 시뮬레이터")
+    ap = argparse.ArgumentParser(description="경제 시뮬레이터 (v3 경제 뼈대)")
     ap.add_argument("--players", type=int, default=1000)
-    ap.add_argument("--hours", type=float, default=8.0, help="하루 켜 두는 시간")
+    ap.add_argument("--hours", type=float, default=None, help="하루 켜 두는 시간 (안 주면 가볍게 2.5 + 열심히 8)")
     ap.add_argument("--seed", type=int, default=7)
+    ap.add_argument("--table", action="store_true", help="단계별 출력·한 바퀴·시간당 수입·강화 비용 표만")
     a = ap.parse_args()
+    if a.hours is not None and not 0 < a.hours <= 24:
+        ap.error("--hours 는 0보다 크고 24 이하")
     b = Bal(BALANCE_PATH)
-    model = Model(b, a.hours)
-    price_table(b)
-    no_tune = simulate(b, model, a.players, a.seed, False, False)
-    for far in (False, True):
-        report(b, model, far, simulate(b, model, a.players, a.seed, True, far), no_tune)
+    if a.table:
+        table(b)
+        return
+    names = {h: name for name, h in PLAYER_TYPES}
+    types = PLAYER_TYPES if a.hours is None else [(names.get(a.hours, "직접 정한 시간"), a.hours)]
+    for label, hours in types:
+        report(b, label, hours, simulate(b, hours, a.players, a.seed), a.seed)
 
 
 if __name__ == "__main__":
