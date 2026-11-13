@@ -83,7 +83,7 @@ func _run() -> void:
 	m.screen.enter_full()
 	t.star = 18
 	m.state.spares = 0
-	m.state.money = Economy.enhance_cost(b, 18)
+	m.state.money = Economy.enhance_cost(b, 18, m.state)
 	t.success_count = 31
 	t.fail_count = 12
 	t.destroy_count = 1

@@ -96,6 +96,7 @@ func _run() -> void:
 	await _frames(1)
 	t = m.state.truck(0)
 	_check(t.star == 0 and m.state.spares == 0 and m.state.money < Trip.parcel_pay(b, m.state, 0) * 2, "작은 화면 F3: 처음 상태가 아님")
+	m.state.master_unlocked = true   # 준비: F3 뒤 새 상태. F4로 +10을 넘겨도 명장 요일 고르기 창(v6b)이 안 뜨게 (이 확인과 상관없음, 창이 버튼을 가림)
 	_check(m.screen.mode == ScreenMode.Mode.SMALL and not p.visible, "치트 키를 눌렀더니 작은 화면이 아니게 됨")
 
 	# 1-3) 복귀 팝업: 작은 화면 위, 480x220 안. [확인]은 팝업만 닫음 (큰 화면으로 안 감)
@@ -151,7 +152,7 @@ func _run() -> void:
 	var spare_rule_ok := true
 	for star in range(0, b.max_star):
 		_check(t.star == star, "F4 %d번째: 단계 %d (기대 %d)" % [star, t.star, star])
-		var want_cost := tr("GARAGE_COST") % Fmt.money(Economy.enhance_cost(b, star))
+		var want_cost := tr("GARAGE_COST") % Fmt.money(Economy.enhance_cost(b, star, m.state))
 		if p._cost.text != want_cost:
 			cost_ok = false
 			print("    +%d 비용 글자 '%s' (기대 '%s')" % [star, p._cost.text, want_cost])
@@ -176,7 +177,7 @@ func _run() -> void:
 	# 4) +18: 돈은 넉넉, 스페어 0 → 버튼 꺼짐 + 이유 글. 눌러도 아무 일 없음
 	t.star = 18
 	m.state.spares = 0
-	m.state.money = Economy.enhance_cost(b, 18) + Economy.spare_price(b)
+	m.state.money = Economy.enhance_cost(b, 18, m.state) + Economy.spare_price(b)
 	await _frames(1)
 	var blocked: bool = p._enhance_button.disabled and p._wait.visible and p._wait.text == tr("GARAGE_NEED_SPARE")
 	var before_block: int = t.success_count + t.fail_count + t.destroy_count
@@ -195,7 +196,7 @@ func _run() -> void:
 	var car_result: String = p._car_result.text
 	_click(p.building_buttons["tuning"].get_global_rect().get_center())
 	await _frames(2)
-	var cost18 := Economy.enhance_cost(b, 18)
+	var cost18 := Economy.enhance_cost(b, 18, m.state)
 	_report(m.state.spares == 1 and m.state.money >= cost18 and m.state.money < cost18 + Economy.spare_price(b) and p._spares.text == "스페어 엔진 1개"
 			and not p._enhance_button.disabled and not p._wait.visible and car_result.contains("스페어"),
 			"② 카센터 스페어 사기 클릭 → 스페어 %d개 ('%s'), 돈 −%s, 튜닝숍 강화 버튼 켜짐, 결과 '%s'" % [

@@ -261,3 +261,10 @@ const COLOR_RUSH_TEXT := Color(0.15, 0.13, 0.10)
 const COLOR_RUSH_BUTTON := Color(0.90, 0.42, 0.20)
 const COLOR_RUSH_BAR_BG := Color(0.80, 0.72, 0.60)
 const COLOR_RUSH_LEFT := Color(1.0, 0.65, 0.40)      ## 구석 줄 "급송 N건 남음"
+
+# --- v6b: 명장 방문일·보험 (튜닝숍 [명장] 칸, 요일 고르기 창, 강화 칸 [보험], 띠의 튜닝숍 표시) ---
+const COLOR_MASTER := Color(0.40, 0.90, 1.0)          ## 명장 글자·방문 중 튜닝숍 테두리
+const COLOR_INSURED := Color(0.55, 0.85, 1.0)         ## "퍼져도 단계 유지"·"보험 덕분에 살았어요"
+## 방문 중 띠의 튜닝숍 테두리 두께 (설계 좌표). 건물 가장자리를 가운데로 그려서 바깥 절반이 빛남 두께(보이는 곳) 안에 들어감
+const MASTER_MARK_WIDTH := BUILDING_GLOW_PX * 2.0
+const MASTER_DAY_BUTTON_SIZE := 14                    ## 요일 버튼 7개 글자 (v0 패널 크기 기준)

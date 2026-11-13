@@ -5,6 +5,8 @@
 ## v5: 기사 레벨·다음 할 일·창고 확장·야간 배송팀 (driver_tab.gd)
 ## v6a: 위쪽 줄에서 건물을 고름 (튜닝숍 / 물류센터 / 카센터). 건물마다 NPC 한 줄.
 ##      튜닝숍 = [엔진 강화] [세팅 돌리기] 두 칸, 물류센터 = driver_tab.gd, 카센터 = 스페어 엔진 사기
+## v6b: 튜닝숍 세 번째 칸 [명장] (master_tab.gd). [엔진 강화] 칸에 "명장 방문 중: 보너스" 줄, [강화] 옆 [보험] 켜기,
+##      "지금 돈이면 N번 시도 가능". 확률·비용·보험 요금·횟수는 Enhance·Economy 값을 그대로 (now_local은 main이 매 프레임 넣음)
 ## 보여주기만 한다. 버튼을 누르면 신호만 보내고, 실제 강화·구매·돌리기는 main.gd → scripts/core 가 한다.
 extends PanelContainer
 
@@ -18,13 +20,14 @@ const Fmt = preload("res://scripts/ui/fmt.gd")
 const Town = preload("res://scripts/ui/town.gd")
 const SettingTab = preload("res://scripts/ui/setting_tab.gd")
 const DriverTab = preload("res://scripts/ui/driver_tab.gd")
+const MasterTab = preload("res://scripts/ui/master_tab.gd")
 
 signal enhance_pressed
 signal spare_pressed
 
 const TRUCK := 0   ## 지금은 트럭 1대 (고르는 탭은 v7)
 
-enum Tab { ENGINE, SETTING }   ## 튜닝숍 안 두 칸
+enum Tab { ENGINE, SETTING, MASTER }   ## 튜닝숍 안 세 칸
 ## 건물마다 NPC 이름·인사말 번역 키 (건물 이름은 Town.BUILDING_NAMES)
 const NPC_KEYS := {
 	"tuning": ["NPC_TUNING", "NPC_TUNING_HELLO"],
@@ -36,6 +39,11 @@ var building := "tuning"         ## 지금 보는 건물 (Town.BUILDINGS 중 하
 var building_buttons := {}       ## 건물 id → 위쪽 줄 버튼
 var engine_tab_button: Button    ## 튜닝숍 [엔진 강화]
 var setting_tab_button: Button   ## 튜닝숍 [세팅]
+var master_tab_button: Button    ## 튜닝숍 [명장]
+var insure_button: Button        ## [강화] 옆 [보험] 켜기 (방문 중이거나 쿠폰이 있을 때만 켤 수 있음)
+var insure := false              ## 보험을 켰나 (main이 강화할 때 읽음. 걸 수 없게 되면 저절로 꺼짐)
+var now_local := 0               ## 현지 시각 (main.now_local()을 매 프레임 넣음. 방문 중인지·보험 요금을 볼 때)
+var master: MasterTab            ## 튜닝숍 [명장] 칸
 var to_car_button: Button        ## 스페어가 없어 강화가 막혔을 때 [카센터로]
 var setting: SettingTab          ## 튜닝숍 [세팅] 칸
 var driver: DriverTab            ## 물류센터 화면
@@ -55,13 +63,16 @@ var _tabs: HBoxContainer
 var _enhance_row: HBoxContainer   ## [강화] [카센터로]
 var _engine_box: VBoxContainer   ## [엔진 강화] 칸
 var _tab := Tab.ENGINE
+var _title_row: HBoxContainer   ## [엔진 +N] ... [스페어 엔진 N개]
 var _title: Label
+var _master_line: Label   ## "명장 방문 중: 강화 비용 20% 할인" (방문 중에만)
 var _spares: Label    ## "스페어 엔진 N개"
 var _income: Label
 var _chances: Label
 var _danger: Label
 var _danger_note: Label   ## "퍼지면 스페어 엔진 1개를 써서 +15로"
 var _cost: Label
+var _tries: Label     ## "지금 돈이면 N번 시도 가능" (보험을 켰으면 보험 포함)
 var _wait: Label      ## 못 누르는 이유: 스페어 없음 / 돈 모자람 (약 N분 뒤)
 var _enhance_button: Button
 var _spare_button: Button
@@ -114,31 +125,47 @@ func _ready() -> void:
 	var group := ButtonGroup.new()
 	engine_tab_button = _toggle(_tabs, tr("GARAGE_TAB_ENGINE"), group)
 	setting_tab_button = _toggle(_tabs, tr("GARAGE_TAB_SETTING"), group)
+	master_tab_button = _toggle(_tabs, tr("GARAGE_TAB_MASTER"), group)
 	engine_tab_button.pressed.connect(func(): show_tab(Tab.ENGINE))
 	setting_tab_button.pressed.connect(func(): show_tab(Tab.SETTING))
+	master_tab_button.pressed.connect(func(): show_tab(Tab.MASTER))
 
 	var e := VBoxContainer.new()
 	_engine_box = e
 	_box.add_child(e)
-	_title = _label(e, Feel.PANEL_TITLE_SIZE, Feel.COLOR_STAR)
+	# 제목 줄: "엔진 +18" 왼쪽, "스페어 엔진 N개" 오른쪽 (v6b: 방문 줄·시도 횟수 줄이 늘어서 1280x720에 맞게 한 줄로)
+	_title_row = HBoxContainer.new()
+	e.add_child(_title_row)
+	_title = _label(_title_row, Feel.PANEL_TITLE_SIZE, Feel.COLOR_STAR)
 	_title.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN   # 글자 폭만큼만 (커질 때 기준점이 글자에 맞게)
 	_title.autowrap_mode = TextServer.AUTOWRAP_OFF
-	_spares = _label(e, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
+	_spares = _label(_title_row, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
+	_spares.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_spares.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_spares.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_spares.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_master_line = _label(e, Feel.PANEL_TEXT_SIZE, Feel.COLOR_MASTER)
 	_income = _label(e, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
 	_chances = _label(e, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
 	_danger = _label(e, Feel.PANEL_DANGER_SIZE, Feel.COLOR_DANGER)
 	_danger_note = _label(e, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
 	_cost = _label(e, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
+	_tries = _label(e, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
 	_wait = _label(e, Feel.PANEL_TEXT_SIZE, Feel.COLOR_DIM)
 
-	# [강화] 옆에 [카센터로] (스페어가 없어 막혔을 때만. 한 줄에 둬서 칸이 길어지지 않게)
+	# [강화] [보험] [카센터로] 한 줄 (칸이 길어지지 않게). [카센터로]는 스페어가 없어 막혔을 때만
 	_enhance_row = HBoxContainer.new()
 	e.add_child(_enhance_row)
 	_enhance_button = _button(_enhance_row, tr("GARAGE_ENHANCE"))
 	_enhance_button.pressed.connect(func(): enhance_pressed.emit())
+	insure_button = _button(_enhance_row, tr("GARAGE_INSURE"))
+	insure_button.toggle_mode = true
+	insure_button.add_theme_color_override("font_pressed_color", Feel.COLOR_INSURED)
+	insure_button.add_theme_color_override("font_hover_pressed_color", Feel.COLOR_INSURED)
+	insure_button.toggled.connect(func(on: bool): insure = on)
 	to_car_button = _button(_enhance_row, tr("GARAGE_TO_CAR"))
 	to_car_button.pressed.connect(func(): show_building("car_center"))
-	for btn in [_enhance_button, to_car_button]:
+	for btn in [_enhance_button, insure_button, to_car_button]:
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 	_result = _label(e, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
@@ -150,6 +177,8 @@ func _ready() -> void:
 	_box.add_child(setting)
 	driver = DriverTab.new()
 	_box.add_child(driver)
+	master = MasterTab.new()
+	_box.add_child(master)
 
 	# 카센터: 스페어 엔진 (들고 있는 개수, 설명, [사기], 모자란 금액, 산 결과)
 	_car_box = VBoxContainer.new()
@@ -181,7 +210,7 @@ func set_ui_scale(s: float) -> void:
 	_style.set_content_margin_all(Feel.PANEL_PADDING * s)
 	_box.add_theme_constant_override("separation", int(roundf(Feel.PANEL_GAP * s)))
 	_engine_box.add_theme_constant_override("separation", int(roundf(Feel.PANEL_GAP_SMALL * s)))
-	for row: Control in [_tabs, _building_row, _npc_row, _car_box, _enhance_row]:
+	for row: Control in [_tabs, _building_row, _npc_row, _car_box, _enhance_row, _title_row]:
 		row.add_theme_constant_override("separation", int(roundf(Feel.PANEL_GAP_SMALL * s)))
 	_npc_face.custom_minimum_size = Vector2.ONE * Feel.NPC_FACE_SIZE * s
 	for c: Control in _font_sizes:
@@ -189,6 +218,7 @@ func set_ui_scale(s: float) -> void:
 	_result.add_theme_font_size_override("font_size", _px(_result_size))
 	setting.set_ui_scale(s)
 	driver.set_ui_scale(s)
+	master.set_ui_scale(s)
 	reset_size()
 
 
@@ -210,7 +240,7 @@ func show_building(id: String) -> void:
 	_show_parts()
 
 
-## 튜닝숍 [엔진 강화] / [세팅] 칸 바꾸기 (튜닝숍 화면으로)
+## 튜닝숍 [엔진 강화] / [세팅] / [명장] 칸 바꾸기 (튜닝숍 화면으로)
 func show_tab(t: Tab) -> void:
 	_tab = t
 	show_building("tuning")
@@ -221,12 +251,14 @@ func _show_parts() -> void:
 	_tabs.visible = tuning
 	_engine_box.visible = tuning and _tab == Tab.ENGINE
 	setting.visible = tuning and _tab == Tab.SETTING
+	master.visible = tuning and _tab == Tab.MASTER
 	driver.visible = building == "depot"
 	_car_box.visible = building == "car_center"
 	for id: String in building_buttons:
 		building_buttons[id].set_pressed_no_signal(id == building)
 	engine_tab_button.set_pressed_no_signal(_tab == Tab.ENGINE)
 	setting_tab_button.set_pressed_no_signal(_tab == Tab.SETTING)
+	master_tab_button.set_pressed_no_signal(_tab == Tab.MASTER)
 
 
 func current_tab() -> Tab:
@@ -273,32 +305,57 @@ func refresh(b: Balance, s: GameState) -> void:
 	var danger := false
 
 	_title.text = tr("GARAGE_TITLE_MAX" if at_max else "GARAGE_TITLE") % t.star
+	_master_line.visible = s.active_bonus != ""   # 방문 중에만 (Master.tick이 채움)
+	if _master_line.visible:
+		_master_line.text = tr("GARAGE_MASTER_VISIT") % Fmt.master_bonus(b.master_bonuses, s.active_bonus)
 	_spares.text = tr("GARAGE_SPARES") % s.spares
 	var now := Trip.hourly_income(b, s, TRUCK)
+	# 보험: 걸 수 없게 되면(방문일이 지남·쿠폰을 다 씀) 저절로 끔. 뜸 중에는 못 바꿈
+	var can_insure := Enhance.can_insure(s, now_local)
+	if insure and not can_insure and not _busy:
+		insure = false
+	insure_button.set_pressed_no_signal(insure)
+	insure_button.disabled = not can_insure or is_busy()
 	if at_max:
 		_income.text = tr("GARAGE_HOURLY") % Fmt.money(int(now))
-		_set_visible([_income], [_chances, _danger, _danger_note, _cost, _wait, _enhance_row, _enhance_button, to_car_button])
+		_set_visible([_income], [_chances, _danger, _danger_note, _cost, _tries, _wait, _enhance_row, _enhance_button, to_car_button])
 	else:
-		var c := Enhance.chances_for(b, t)
-		var cost := Economy.enhance_cost(b, t.star)
-		var block := Enhance.block_reason(s, b, TRUCK)
+		var c := Enhance.chances_for(b, s, TRUCK, insure)
+		var risky: bool = Enhance.chances_for(b, s, TRUCK)["destroy"] > 0.0   # 보험 없이는 퍼질 수 있는 단계
+		var cost := Economy.enhance_cost(b, t.star, s)
+		var fee := Enhance.insure_fee(s, b, TRUCK, now_local) if insure else 0
+		var block := Enhance.block_reason(s, b, TRUCK, insure, now_local)
 		_income.text = tr("GARAGE_HOURLY_NEXT") % [Fmt.money(int(now)), Fmt.money(int(Trip.hourly_income_at(b, s, TRUCK, t.star + 1)))]
 		_chances.text = tr("GARAGE_CHANCES") % [
 			Fmt.percent(c["success"]), Fmt.percent(c["fail"]), Fmt.percent(c["destroy"])]
 		danger = c["destroy"] > 0.0
-		_danger.text = tr("GARAGE_DANGER") % Fmt.percent(c["destroy"])
+		if insure:   # 퍼짐 확률 자리에 "보험: 퍼져도 단계 유지"
+			_danger.text = tr("GARAGE_INSURED_SAFE")
+			_danger.add_theme_color_override("font_color", Feel.COLOR_INSURED)
+		else:
+			_danger.text = tr("GARAGE_DANGER") % Fmt.percent(c["destroy"])
+			_danger.add_theme_color_override("font_color", Feel.COLOR_DANGER)
 		_danger_note.text = tr("GARAGE_DANGER_NOTE") % b.broken_drop_to
-		_cost.text = tr("GARAGE_COST") % Fmt.money(cost)
+		if not insure:
+			_cost.text = tr("GARAGE_COST") % Fmt.money(cost)
+		elif fee > 0:   # 방문 중: 보험 추가 요금
+			_cost.text = tr("GARAGE_COST_INSURED") % [Fmt.money(cost), Fmt.money(fee)]
+		else:           # 방문일이 아님: 쿠폰 1장 (괄호 = 쓰고 남는 장수)
+			_cost.text = tr("GARAGE_COST_COUPON") % [Fmt.money(cost), s.coupons - 1]
+		_tries.text = tr("GARAGE_TRIES") % Economy.tries(s, b, TRUCK, insure, now_local)
 		match block:
 			Enhance.Block.NO_SPARE:
 				_wait.text = tr("GARAGE_NEED_SPARE")
 			Enhance.Block.NO_MONEY:
-				_wait.text = tr("GARAGE_SHORT_WAIT") % Fmt.wait_text(Economy.seconds_to_afford(cost, s.money, now))
+				_wait.text = tr("GARAGE_SHORT_WAIT") % Fmt.wait_text(Economy.seconds_to_afford(cost + fee, s.money, now))
+			Enhance.Block.NO_INSURE:
+				_wait.text = tr("GARAGE_NO_INSURE")
 		_enhance_button.disabled = block != Enhance.Block.NONE or is_busy()
 		_set_visible([_income, _chances, _cost, _enhance_row, _enhance_button], [])
-		_danger.visible = danger
+		_danger.visible = risky
 		_danger_note.visible = danger
 		_wait.visible = block != Enhance.Block.NONE
+		_tries.visible = not _wait.visible   # 못 누르면 이유 줄이 대신 (0번 줄은 안 보여 줌)
 		to_car_button.visible = block == Enhance.Block.NO_SPARE
 
 	# 카센터: 스페어 엔진
@@ -323,6 +380,8 @@ func refresh(b: Balance, s: GameState) -> void:
 		setting.refresh(b, s, _busy)
 	if driver.visible:
 		driver.refresh(b, s)
+	if master.visible:
+		master.refresh(b, s, now_local)
 
 
 ## 방금 일어난 일을 한 줄로 (+ 아래 작은 설명). font_size는 v0 패널 기준 (배수는 여기서 곱함)

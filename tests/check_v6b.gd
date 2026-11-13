@@ -1,5 +1,5 @@
-## v6b U1 완료 기준 자동 확인: 대형·VIP·급송 "+금액", 급송 전화 말풍선, [설정] 급송 끄기, 주간 배송 목표.
-## (U2 명장·보험 확인은 C2를 합친 뒤 이 파일에 더한다)
+## v6b U1·U2 완료 기준 자동 확인. U1: 대형·VIP·급송 "+금액", 급송 전화 말풍선, [설정] 급송 끄기, 주간 배송 목표.
+## U2: 명장 요일 고르기·[명장] 칸·예고/방문 알림·강화 칸 [보험]·"+2!"·"N번 시도 가능"·띠의 튜닝숍 표시.
 ## 진짜 게임 화면(main.tscn)에 진짜 클릭을 넣어서 확인한다. 단계·벨 시계·주간 진행을 미리 넣는 것은 준비로만 하고,
 ## 확인하는 동작은 진짜 클릭이나 진짜 프레임(main이 Rush.tick → Trip.advance → take_events)으로 한다.
 ## ① 대형·VIP·급송 "+금액"의 색·글자가 보통과 다름
@@ -8,7 +8,12 @@
 ## ⑤ 물류센터 [창고·할 일] 주간 목표 줄이 진행·달성을 보여 줌, 달성 알림, 주가 바뀌면 0   ⑥ en에 한글·키 없음
 ## ⑦ 창 크기: 작은 화면 3가지에서 말풍선·"급송 N건 남음"이 동네 안·보이는 곳 안·건물·집과 안 겹침 (글자 10개 떠도 사각형 30개 이하),
 ##    큰 화면 5가지에서 물류센터 화면·[설정]이 창 안
-## 현지 시각은 main.now_local_override로 고정 (수요일 낮 12시: 확인 도중 주가 안 바뀌게). 진짜 저장·설정 파일은 건드리지 않는다.
+## U2 ① [명장] 칸 잠김 글 → +10 뒤 요일 고르기 창   ② 요일 클릭 → 저장, 바꾸면 "다음 주부터"   ③ 예고·방문 알림
+##    ④ 방문 중 강화 칸에 보너스 줄, [보험] 켜면 비용·확률 글이 바뀌고 실제 빠지는 돈 = 비용 + 보험 요금
+##    ⑤ 쿠폰만 있을 때 [보험] → 쿠폰 −1   ⑥ 방문일도 쿠폰도 없으면 [보험] 꺼짐   ⑦ 보험이 막은 퍼짐 결과 글, 2단계면 "+2!"
+##    ⑧ "지금 돈이면 N번 시도 가능" = 실제로 누른 횟수   ⑨ 방문 중 작은 화면 튜닝숍 테두리 (보이는 곳 안)   ⑩ en, 창 크기 5가지
+## 현지 시각은 main.now_local_override로 고정 (수요일 낮 12시: 확인 도중 주가 안 바뀌게. U2는 목·금요일로 옮겨 가며).
+## 결과를 정해야 하는 강화(⑦)는 main의 난수 씨앗을 미리 골라 둔다 (같은 씨앗의 난수를 따로 뽑아 보고 고름). 진짜 저장·설정 파일은 건드리지 않는다.
 ##
 ## 실행:
 ##   <GODOT_CONSOLE> --headless --path <프로젝트> -s tests/check_v6b.gd
@@ -17,6 +22,9 @@ extends SceneTree
 const ErrorWatch = preload("res://tests/error_watch.gd")   ## 실행 중 스크립트 오류가 나면 실패로 끝냄
 const MAIN_SCENE := "res://scenes/main.tscn"
 const Balance = preload("res://scripts/core/balance.gd")
+const Economy = preload("res://scripts/core/economy.gd")
+const Enhance = preload("res://scripts/core/enhance.gd")
+const Master = preload("res://scripts/core/master.gd")
 const Quest = preload("res://scripts/core/quest.gd")
 const Rush = preload("res://scripts/core/rush.gd")
 const Save = preload("res://scripts/core/save.gd")
@@ -241,6 +249,8 @@ func _run() -> void:
 			"⑦ ko·en 작은 화면 %d가지: 말풍선·'급송 N건 남음'이 동네 안·보이는 곳 안, 건물·집·할 일 줄과 안 겹침, 글자 10개 + 말풍선 + 처음 말풍선에도 사각형 30개 이하 / 큰 화면 %d가지: 물류센터 [창고·할 일]·[설정]이 창 안, [작게]·[설정] 버튼과 안 겹침 %s %s" % [
 			SMALL_SIZES.size(), FIT_SIZES.size(), fit_ko, fit_en])
 
+	await _u2(b)
+
 	Engine.time_scale = 1.0
 	Save.delete_file(TEST_SAVE)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SETTINGS))
@@ -342,9 +352,374 @@ func _check_fits(m: Node, b: Balance) -> Array:
 	return bad
 
 
+# ---------------- U2: 명장·보험 ----------------
+
+func _u2(b: Balance) -> void:
+	TranslationServer.set_locale("ko")
+	var thu := now + DAY       # 고른 방문일 (목요일)
+	var fri := now + 2 * DAY   # 방문일 아님
+	Save.delete_file(TEST_SAVE)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SETTINGS))
+	var m := await _launch_u2(b)
+	var p = m.panel
+	var town = m.town
+	var mt = p.master
+	var picker = m.day_picker
+	var t = m.state.truck(0)
+	t.star = b.master_unlock_star - 1
+	m.state.money = Economy.enhance_cost(b, t.star, m.state) * 100
+
+	# ① [명장] 칸 잠김 글 → 강화 버튼을 눌러 +10 → 요일 고르기 창 (튜닝숍 [명장] 칸 위)
+	_click(town.building_rects()["tuning"].get_center())
+	await _frames(3)
+	_click(p.master_tab_button.get_global_rect().get_center())
+	await _frames(2)
+	var locked_text: String = mt._locked.text
+	var locked_ok: bool = mt._locked.is_visible_in_tree() and not mt._open_box.visible and not picker.visible \
+			and locked_text == "엔진 +%d을 달성하면 명장이 찾아와요" % b.master_unlock_star
+	_click(p.engine_tab_button.get_global_rect().get_center())
+	await _frames(2)
+	var presses := 0
+	while t.star < b.master_unlock_star and presses < 40:
+		await _press_enhance(m)
+		presses += 1
+	await _frames(3)
+	var picker_texts := _visible_texts(picker)
+	var pick_ok: bool = t.star == b.master_unlock_star and m.state.master_unlocked and picker.visible and picker_texts.has("명장이 찾아왔어요!") \
+			and picker_texts.has("어떤 요일에 명장이 오면 좋겠어요?") and picker.day_buttons.size() == 7 and p.current_tab() == p.Tab.MASTER \
+			and Rect2(Vector2.ZERO, Vector2(root.size)).encloses(picker.get_global_rect())
+	var hidden_line: String = mt._bonus.text
+	_report(locked_ok and pick_ok, "① [명장] 칸 잠김 '%s' → [강화] %d번 눌러 +%d → 요일 고르기 창 %s, 튜닝숍 [명장] 칸" % [
+			locked_text, presses, t.star, picker_texts])
+
+	# ② 창에서 [목] (오늘 수요일 → 이번 주부터) → 저장. [명장] 칸에서 [금]으로 바꿈 → "다음 주부터 금요일"·저장
+	_click(picker.day_buttons[3].get_global_rect().get_center())
+	var saved1 = _saved_state(b)
+	await _frames(2)
+	var day_text: String = mt._day.text
+	var first_ok: bool = not picker.visible and Master.chosen_day(m.state) == 3 and Master.pending_day(m.state) == -1 \
+			and saved1 != null and saved1.master_day == 3 and day_text == "명장 방문일: 매주 목요일" and mt.day_buttons[3].button_pressed \
+			and not mt._next.visible and mt._open_box.is_visible_in_tree()
+	_click(mt.day_buttons[4].get_global_rect().get_center())
+	var saved2 = _saved_state(b)
+	await _frames(2)
+	var change_ok: bool = Master.chosen_day(m.state) == 3 and Master.pending_day(m.state) == 4 and saved2 != null and saved2.master_next_day == 4 \
+			and saved2.master_day == 3 and mt._day.text == day_text and mt._next.is_visible_in_tree() and mt._next.text == "다음 주부터 금요일" \
+			and mt.day_buttons[4].button_pressed and not mt.day_buttons[3].button_pressed and mt._pick_note.text == "요일을 바꾸면 다음 주부터 적용돼요"
+	_report(first_ok and change_ok, "② 창 [목] 클릭 → '%s'·저장 (창 닫힘), [명장] 칸 [금] 클릭 → '%s'·저장, 이번 주는 목요일 그대로" % [day_text, mt._next.text])
+
+	# ③ 수요일: 내일 방문 예고 알림, [명장] 칸 보너스가 보임 → 목요일: 방문 알림 (같은 보너스), "오늘 명장이 와 있어요!"
+	var bonus: String = m.state.master_bonus
+	var bonus_text := Fmt.master_bonus(b.master_bonuses, bonus)
+	var want_tomorrow := "내일 명장이 와요: " + bonus_text
+	var got_tomorrow: bool = await _until(func(): return _noticed(town, want_tomorrow), 3.0)
+	await _frames(1)
+	var known_line: String = mt._bonus.text
+	var not_today: bool = not mt._today.visible and m.state.active_bonus == ""
+	m.now_local_override = thu
+	var want_today := "오늘 명장이 와 있어요: " + bonus_text
+	var got_today: bool = await _until(func(): return _noticed(town, want_today), 3.0)
+	await _frames(1)
+	_report(got_tomorrow and got_today and bonus != "" and not_today and hidden_line == "보너스는 방문 전날 전화로 알려 줘요"
+			and known_line == "이번 방문 보너스: " + bonus_text and mt._today.is_visible_in_tree() and mt._today.text == "오늘 명장이 와 있어요!"
+			and m.state.active_bonus == bonus,
+			"③ 수요일 알림 '%s' → 목요일 알림 '%s', [명장] 칸 '%s' → '%s', '%s'" % [want_tomorrow, want_today, hidden_line, known_line, mt._today.text])
+
+	# ④ 목요일(방문 중) +18: 보너스 줄, [보험] 클릭 → 비용·확률·퍼짐 글이 바뀜, [강화] → 빠진 돈 = 비용 + 보험 요금 (쿠폰 그대로)
+	_click(p.engine_tab_button.get_global_rect().get_center())
+	t.star = 18
+	m.state.spares = 1
+	m.state.coupons = 3
+	var cost := Economy.enhance_cost(b, 18, m.state)
+	m.state.money = cost * 10
+	await _frames(2)
+	var line: String = p._master_line.text
+	var plain_cost: String = p._cost.text
+	var plain_chances: String = p._chances.text
+	var plain_danger: String = p._danger.text
+	_click(p.insure_button.get_global_rect().get_center())
+	await _frames(2)
+	var fee := Enhance.insure_fee(m.state, b, 0, thu)
+	var c: Dictionary = Enhance.chances_for(b, m.state, 0, true)
+	var ins_cost: String = p._cost.text
+	var ins_ok: bool = p.insure and p.insure_button.button_pressed and fee > 0 and fee == roundi(cost * b.master_insure_fee_mult) \
+			and plain_cost == "비용 %s원" % Fmt.money(cost) and ins_cost == "비용 %s원 + 보험 %s원" % [Fmt.money(cost), Fmt.money(fee)] \
+			and p._chances.text == tr("GARAGE_CHANCES") % [Fmt.percent(c["success"]), Fmt.percent(c["fail"]), Fmt.percent(0.0)] \
+			and p._chances.text != plain_chances and plain_danger.begins_with("퍼질 확률") and p._danger.text == "보험: 퍼져도 단계 유지" \
+			and p._style.border_color != Feel.COLOR_DANGER and not p._enhance_button.disabled
+	var money0: int = m.state.money
+	await _press_enhance(m)
+	var paid: int = money0 - m.state.money
+	_report(line == "명장 방문 중: " + bonus_text and ins_ok and paid == cost + fee and m.state.coupons == 3,
+			"④ 방문 중 '%s', [보험] → '%s' → '%s', '%s' → '%s', [강화] 빠진 돈 %s원 = 비용 + 보험 (쿠폰 3장 그대로)" % [
+			line, plain_cost, ins_cost, plain_danger, p._danger.text, Fmt.money(paid)])
+
+	# ⑤ 금요일(방문일 아님) +18 스페어 0, 쿠폰 2장: [보험] 끄면 스페어가 없어 못 누름 → 켜면 쿠폰 글, [강화] → 쿠폰 −1, 비용만
+	m.now_local_override = fri
+	t.star = 18
+	m.state.spares = 0
+	m.state.coupons = 2
+	await _frames(2)
+	cost = Economy.enhance_cost(b, 18, m.state)
+	m.state.money = cost * 5
+	if p.insure:
+		_click(p.insure_button.get_global_rect().get_center())
+	await _frames(2)
+	var off_ok: bool = not p.insure and not p._master_line.visible and p._enhance_button.disabled and p._wait.text == tr("GARAGE_NEED_SPARE")
+	_click(p.insure_button.get_global_rect().get_center())
+	await _frames(2)
+	var coupon_text: String = p._cost.text
+	var on_ok: bool = p.insure and coupon_text == "비용 %s원 · 보험 쿠폰 1장 사용 (1장 남음)" % Fmt.money(cost) and not p._enhance_button.disabled
+	money0 = m.state.money
+	await _press_enhance(m)
+	_report(off_ok and on_ok and m.state.coupons == 1 and money0 - m.state.money == cost and m.state.spares == 0,
+			"⑤ 금요일 쿠폰 2장 [보험] → '%s', [강화] → 쿠폰 2 → %d장, 빠진 돈 %s원 = 비용 (스페어 0개로도 누름)" % [
+			coupon_text, m.state.coupons, Fmt.money(money0 - m.state.money)])
+
+	# ⑥ 방문일도 아니고 쿠폰도 없으면 [보험] 꺼짐 (눌러도 안 켜짐)
+	m.state.coupons = 0
+	t.star = 18
+	await _frames(2)
+	var dis_ok: bool = p.insure_button.disabled and not p.insure and not p.insure_button.button_pressed
+	_click(p.insure_button.get_global_rect().get_center())
+	await _frames(2)
+	_report(dis_ok and not p.insure and p.insure_button.disabled and p._cost.text == "비용 %s원" % Fmt.money(cost),
+			"⑥ 방문일 아님 + 쿠폰 0장: [%s] 꺼짐, 눌러도 안 켜짐 ('%s')" % [p.insure_button.text, p._cost.text])
+
+	# ⑦ 쿠폰 보험 + 퍼짐이 뜨는 씨앗 → "보험 덕분에 살았어요" (+18 그대로, 스페어 안 씀)
+	m.state.coupons = 1
+	m.state.money = cost * 5
+	await _frames(2)
+	_click(p.insure_button.get_global_rect().get_center())
+	await _frames(2)
+	var c0: Dictionary = Enhance.chances_for(b, m.state, 0)
+	var lo: float = c0["success"]
+	var hi: float = lo + c0["destroy"]
+	m.rng.seed = _seed_for(func(r1: float, _r2: float): return r1 >= lo and r1 < hi)
+	var destroys0: int = t.destroy_count
+	await _press_enhance(m)
+	var insured_text: String = p._result.text
+	var insured_ok: bool = insured_text == "보험 덕분에 살았어요! (+18 그대로)" and t.star == 18 and m.state.spares == 0 and m.state.coupons == 0 \
+			and t.destroy_count == destroys0
+	# 목요일(방문 중) 보너스 "2단계" + 성공하고 한 번 더 뜨는 씨앗 → "+2!  +18 → +20"
+	m.now_local_override = thu
+	m.state.master_bonus = "double_step"   # 준비: 이번 주 보너스를 "2단계"로 (그 주 번호는 그대로)
+	t.star = 18
+	m.state.spares = 1
+	m.state.money = cost * 5
+	await _frames(2)
+	if p.insure:
+		_click(p.insure_button.get_global_rect().get_center())
+		await _frames(2)
+	var c1: Dictionary = Enhance.chances_for(b, m.state, 0)
+	var win: float = c1["success"]
+	var extra: float = b.master_bonuses["double_step"]
+	m.rng.seed = _seed_for(func(r1: float, r2: float): return r1 < win and r2 < extra)
+	await _press_enhance(m)
+	var double_text: String = p._result.text
+	_report(insured_ok and m.state.active_bonus == "double_step" and double_text == "+2!  +18 → +20" and t.star == 20,
+			"⑦ 쿠폰 보험 + 퍼짐 → '%s' (+%d, 스페어 0개 그대로), 방문 중 '2단계' 보너스 → '%s'" % [insured_text, 18, double_text])
+
+	# ⑧ 목요일 방문 중 +18: "지금 돈이면 N번 시도 가능" (보험 끔 / 켬) = Economy.tries, 켠 채로 누를 수 있는 만큼 누른 횟수와 같음
+	m.state.master_bonus = bonus
+	t.star = 18
+	m.state.spares = 1
+	m.state.coupons = 0
+	await _frames(2)
+	cost = Economy.enhance_cost(b, 18, m.state)
+	fee = Enhance.insure_fee(m.state, b, 0, thu)
+	m.state.money = (cost + fee) * 3 + cost
+	await _frames(2)
+	var tries_off: String = p._tries.text
+	var n_off := Economy.tries(m.state, b, 0, false, thu)
+	_click(p.insure_button.get_global_rect().get_center())
+	await _frames(2)
+	var tries_on: String = p._tries.text
+	var n_on := Economy.tries(m.state, b, 0, true, thu)
+	var pressed := 0
+	while not p._enhance_button.disabled and pressed < 10:
+		await _press_enhance(m)
+		pressed += 1
+		t.star = 18   # 준비: 단계를 되돌림 (글은 "지금 단계 비용으로 N번")
+		await _frames(2)
+	_report(tries_off == "지금 돈이면 %d번 시도 가능" % n_off and tries_on == "지금 돈이면 %d번 시도 가능" % n_on and n_on == 3 and n_off == 10
+			and pressed == n_on and p.insure and m.state.money == cost,
+			"⑧ 보험 끔 '%s' / 켬 '%s' (Economy.tries), [보험] 켠 채로 실제로 %d번 누르고 막힘" % [tries_off, tries_on, pressed])
+
+	# ⑨ 작은 화면 3가지: 방문 중이면 튜닝숍 테두리가 보이는 곳 안, 방문일이 아니면 없음
+	m.screen.enter_small()
+	await _frames(3)
+	var mark_bad := []
+	for size: Vector2i in SMALL_SIZES:
+		root.size = size
+		await _frames(3)
+		var r: Rect2 = town.building_rects()["tuning"]
+		var mark := Rect2(r.position + town.global_position, r.size).grow(Feel.MASTER_MARK_WIDTH / 2.0 * town.zoom)
+		if not town.master_visit or not _enclosed(m.visible_rects(), mark):
+			mark_bad.append("%s 테두리 %s" % [size, mark])
+	root.size = Feel.SMALL_SIZE
+	m.now_local_override = fri
+	await _frames(2)
+	var off_day: bool = not town.master_visit
+	m.now_local_override = thu
+	await _frames(2)
+	_report(mark_bad.is_empty() and off_day and town.master_visit,
+			"⑨ 방문 중 작은 화면 %d가지: 튜닝숍 테두리가 보이는 곳 안, 금요일엔 없음 %s" % [SMALL_SIZES.size(), mark_bad])
+
+	# ⑩ ko 큰 화면 5가지 (강화 칸 가장 긴 때·[보험] 켬, [명장] 칸, 요일 고르기 창)
+	var fit_ko: Array = await _check_fits_u2(m, b)
+	await _close(m)
+
+	# ⑩ en: 잠김 글·요일 창·[명장] 칸·알림·강화 칸·결과 글·보너스 7개·요일 이름에 한글·키 없음 + 창 크기 5가지
+	TranslationServer.set_locale("en")
+	Save.delete_file(TEST_SAVE)
+	m = await _launch_u2(b)
+	p = m.panel
+	town = m.town
+	mt = p.master
+	t = m.state.truck(0)
+	var texts := []
+	_click(town.building_rects()["tuning"].get_center())
+	await _frames(3)
+	_click(p.master_tab_button.get_global_rect().get_center())
+	await _frames(2)
+	texts.append_array(_visible_texts(mt))
+	t.star = b.master_unlock_star   # 준비: +10 (Master.tick이 열고 요일 창)
+	await _frames(3)
+	texts.append_array(_visible_texts(m.day_picker))
+	var en_picker: bool = m.day_picker.visible
+	_click(m.day_picker.day_buttons[3].get_global_rect().get_center())
+	await _frames(2)
+	_click(mt.day_buttons[4].get_global_rect().get_center())
+	await _frames(2)
+	texts.append_array(_visible_texts(mt))
+	await _until(func(): return town.notices_shown.size() + town._notice_queue.size() > 0, 3.0)
+	m.now_local_override = thu
+	await _frames(3)
+	texts.append_array(_visible_texts(mt))
+	texts.append_array(town.notices_shown)
+	texts.append_array(town._notice_queue)
+	_click(p.engine_tab_button.get_global_rect().get_center())
+	t.star = 18
+	m.state.money = Economy.enhance_cost(b, 18, m.state) * 10
+	m.state.coupons = 1
+	await _frames(2)
+	texts.append_array(_visible_texts(p))
+	_click(p.insure_button.get_global_rect().get_center())
+	await _frames(2)
+	texts.append_array(_visible_texts(p))
+	m.now_local_override = fri
+	await _frames(2)
+	texts.append_array(_visible_texts(p))
+	for key in ["GARAGE_NO_INSURE", "MASTER_BONUS_HIDDEN", "MASTER_LOCKED", "MASTER_PICK_FIRST"]:
+		texts.append(tr(key))
+	texts.append(tr("RESULT_INSURED") % 18)
+	texts.append(tr("RESULT_DOUBLE") % [18, 20])
+	for id: String in b.master_bonus_ids:
+		texts.append(Fmt.master_bonus(b.master_bonuses, id))
+	for d in 7:
+		texts.append(Fmt.day_name(d))
+		texts.append(Fmt.day_name(d, true))
+	var bad := texts.filter(func(x): return _untranslated(String(x)))
+	_report(bad.is_empty() and en_picker and p.insure_button.text == "Insurance" and p.master_tab_button.text == "Master",
+			"⑩ en [명장]·요일 창·알림·강화 칸·결과·보너스 7개·요일 글자 %d개에 한글·키 없음 %s" % [texts.size(), bad])
+	print("    en: %s" % [texts])
+	m.now_local_override = thu
+	var fit_en: Array = await _check_fits_u2(m, b)
+	await _close(m)
+	TranslationServer.set_locale("ko")
+	_report(fit_ko.is_empty() and fit_en.is_empty(),
+			"⑩ ko·en 큰 화면 %d가지: 튜닝숍 [엔진 강화] (방문 줄·퍼짐·스페어 없음·결과, [보험] 켬), [명장] 칸, 요일 고르기 창이 창 안, 동네·[작게]·[설정]과 안 겹침 %s %s" % [
+			FIT_SIZES.size(), fit_ko, fit_en])
+
+
+## ⑩ 큰 화면 5가지: 강화 칸이 가장 긴 때 (방문 줄 + 퍼짐 + 스페어 없음 + [카센터로] + 결과 두 줄) / [보험] 켬, [명장] 칸 (바꾼 요일까지), 요일 고르기 창. 문제 목록
+func _check_fits_u2(m: Node, b: Balance) -> Array:
+	var p = m.panel
+	var town = m.town
+	var bad := []
+	var t = m.state.truck(0)
+	_click(town.building_rects()["tuning"].get_center())
+	await _frames(3)
+	for size: Vector2i in FIT_SIZES:
+		root.size = size
+		await _frames(3)
+		var view := Rect2(Vector2.ZERO, Vector2(size))
+		_click(p.engine_tab_button.get_global_rect().get_center())
+		t.star = 18
+		m.state.spares = 0
+		m.state.coupons = 1
+		m.state.money = Economy.enhance_cost(b, 18, m.state) * 3
+		if p.insure:
+			_click(p.insure_button.get_global_rect().get_center())
+		p.show_result(tr("RESULT_DESTROY"), Feel.COLOR_DANGER, Feel.DESTROY_TEXT_SIZE, tr("RESULT_DESTROY_NOTE") % [b.broken_drop_to, 0])   # 준비: 결과 두 줄
+		await _frames(3)
+		for state_name in ["보험 끔", "보험 켬"]:
+			var pr: Rect2 = p.get_global_rect()
+			# 보험 끔: 퍼짐 설명 + 스페어 없음 이유 줄 + [카센터로] / 보험 켬: 방문 중 보험 요금 + "N번 시도 가능"
+			var shown: bool = p._danger_note.visible and p._wait.visible and p.to_car_button.visible if state_name == "보험 끔" \
+					else p._tries.visible and p._cost.text.contains("+")
+			if not p._master_line.is_visible_in_tree() or not shown or not view.encloses(pr) or pr.intersects(town.area()) \
+					or pr.intersects(m.small_button.get_global_rect()) or pr.intersects(m.settings_button.get_global_rect()):
+				bad.append("강화 칸 %s %dx%d %s" % [state_name, size.x, size.y, pr])
+			_click(p.insure_button.get_global_rect().get_center())
+			await _frames(3)
+		_click(p.master_tab_button.get_global_rect().get_center())
+		await _frames(3)
+		var mr: Rect2 = p.get_global_rect()
+		if not p.master._next.is_visible_in_tree() or not view.encloses(mr) or mr.intersects(town.area()) or mr.intersects(m.settings_button.get_global_rect()):
+			bad.append("[명장] 칸 %dx%d %s" % [size.x, size.y, mr])
+		m.day_picker.visible = true   # 준비: 요일 고르기 창을 다시 띄움
+		await _frames(3)
+		var dr: Rect2 = m.day_picker.get_global_rect()
+		if not view.encloses(dr):
+			bad.append("요일 창 %dx%d %s" % [size.x, size.y, dr])
+		_click(m.day_picker.later_button.get_global_rect().get_center())
+		await _frames(2)
+		if m.day_picker.visible:
+			bad.append("요일 창 %dx%d [나중에]로 안 닫힘" % [size.x, size.y])
+	root.size = Vector2i(1600, 900)
+	await _frames(2)
+	return bad
+
+
+## U2용으로 띄움: 급송 벨을 끔 (벨이 난수를 쓰지 않게), 할 일은 다 끝냄 (보상 돈이 안 끼게), 뜸은 짧게
+func _launch_u2(b: Balance) -> Node:
+	var m := await _launch()
+	m.state.rush_enabled = false
+	m.state.quest_index = Quest.count(b)
+	m.suspense_scale = 0.01
+	return m
+
+
+## 차고 [강화] 진짜 클릭 → 결과가 나올 때까지
+func _press_enhance(m: Node) -> void:
+	_click(m.panel._enhance_button.get_global_rect().get_center())
+	await _until(func(): return not m.enhancing, 5.0)
+	await _frames(1)
+
+
+## 난수 씨앗 고르기: 그 씨앗으로 뽑은 첫 두 난수 (Enhance.random01)가 cond(r1, r2)를 만족하는 첫 씨앗
+func _seed_for(cond: Callable) -> int:
+	var probe := RandomNumberGenerator.new()
+	for seed in range(1, 200000):
+		probe.seed = seed
+		var r1 := Enhance.random01(probe)
+		var r2 := Enhance.random01(probe)
+		if cond.call(r1, r2):
+			return seed
+	push_error("씨앗을 못 찾음")
+	return 0
+
+
+## 동네 알림에 text가 떴거나 차례를 기다리나
+func _noticed(town: Node, text: String) -> bool:
+	return town.notices_shown.has(text) or town._notice_queue.has(text)
+
+
 ## en 화면에 한글이나 번역 키가 그대로 보이나
 func _untranslated(x: String) -> bool:
-	for prefix in ["TOWN_", "SETTINGS_", "DEPOT_", "NOTICE_"]:
+	for prefix in ["TOWN_", "SETTINGS_", "DEPOT_", "NOTICE_", "MASTER_", "GARAGE_", "DAY_", "RESULT_"]:
 		if x.begins_with(prefix):
 			return true
 	return _hangul.search(x) != null

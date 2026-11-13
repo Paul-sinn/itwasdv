@@ -190,6 +190,7 @@ func _run() -> void:
 			Fmt.money(price), saved.spares if saved != null else -1, p._car_result.text, short_text])
 
 	# ⑨ +18 스페어 0개: 강화 칸에 이유 글 + [카센터로] → 카센터
+	m.state.master_unlocked = true   # 준비: +10을 넘겨도 명장 요일 고르기 창(v6b)이 안 뜨게 (이 확인과 상관없음, 창이 버튼을 가림)
 	m.state.truck(0).star = 18
 	m.state.spares = 0
 	m.state.money = RICH

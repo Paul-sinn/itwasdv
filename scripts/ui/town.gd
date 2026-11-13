@@ -45,6 +45,7 @@ var notices_shown: Array[String] = []   ## 지금까지 띄운 알림 글자, �
 var hovered := ""            ## 마우스가 올라가 있는 건물 id ("" = 없음)
 var tuning_button: Button    ## 구석 줄 끝 작은 버튼 [강화]
 var hint: Label              ## 처음 켰을 때 말풍선 "건물을 눌러보세요" (켜고 끄기는 main.gd → set_hint)
+var master_visit := false    ## 명장 방문 중 → 튜닝숍에 색 테두리 (set_master_visit)
 
 var _houses: Array[Vector2] = []     ## 집 자리 (길 가운데 선 위, 설계 좌표)
 var _hud: HBoxContainer
@@ -273,6 +274,13 @@ func _place_name_tag() -> void:
 
 
 ## 처음 말풍선 켜고 끄기 (main.gd: 작은 화면이고 아직 건물을 안 눌렀을 때만 켬)
+## 명장 방문 중이면 튜닝숍 둘레에 색 테두리 (빛남 두께 안이라 보이는 곳 사각형은 그대로)
+func set_master_visit(on: bool) -> void:
+	if master_visit != on:
+		master_visit = on
+		queue_redraw()
+
+
 func set_hint(on: bool) -> void:
 	if hint.visible != on:
 		hint.visible = on
@@ -577,6 +585,8 @@ func _draw() -> void:
 		draw_rect(d, colors[id].lightened(Feel.BUILDING_GLOW_LIGHTEN) if lit else colors[id])
 		var door := Feel.BUILDING_DOOR_SIZE
 		draw_rect(Rect2(d.end.x - d.size.x * Feel.BUILDING_DOOR_RIGHT, d.end.y - d.size.y * door.y, d.size.x * door.x, d.size.y * door.y), Feel.COLOR_ROAD_EDGE)
+		if id == "tuning" and master_visit:   # 건물 가장자리를 가운데로: 바깥 절반 = 빛남 두께
+			draw_rect(d, Feel.COLOR_MASTER, false, Feel.MASTER_MARK_WIDTH)
 
 	# 집 (벽 + 지붕 + 문). 길보다 먼저 그려서 길 뒤에 선 것처럼
 	var hs := Feel.TOWN_HOUSE_SIZE

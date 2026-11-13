@@ -16,6 +16,7 @@ extends SceneTree
 const ErrorWatch = preload("res://tests/error_watch.gd")   ## 실행 중 스크립트 오류가 나면 실패로 끝냄
 
 const MAIN_SCENE := "res://scenes/main.tscn"
+const Master = preload("res://scripts/core/master.gd")
 const Save = preload("res://scripts/core/save.gd")
 const Trip = preload("res://scripts/core/trip.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
@@ -89,6 +90,8 @@ func _start() -> void:
 	if _plain_only:   # 대형·VIP 몫 0 → 보통 배송만 (위 v6b 설명)
 		for k in _main.balance.special:
 			_main.balance.special[k]["share"] = 0.0
+	# 명장(v6b C2): +10 이상이면 첫 Master.tick이 명장을 열며 그 주 보너스를 굴려 rng를 한 번 씀 → seed 전에 미리 (굴림 순서를 v6b 전과 같게)
+	Master.tick(_main.state, _main.balance, _main.now_local(), _main.rng)
 	_main.rng.seed = 20261113 + _case
 	# 급송 전화(v6b)는 이 확인과 상관없음 (받는 사람이 없음). 켜 두면 벨 간격 굴리기가 같은 rng를 써서
 	# 오버부스트·팁 굴림 순서가 seed마다 달라짐 → 꺼서 이 확인의 굴림을 v6b 전과 같게

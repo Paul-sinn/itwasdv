@@ -226,3 +226,48 @@ SETTINGS_OFF,끄기,Off
 DEPOT_WEEKLY,이번 주 배송 %s / %s건 → 보험 쿠폰 %d장 + 경험치 %s,This week %s / %s → %d coupon + %s XP
 DEPOT_WEEKLY_DONE,이번 주 달성! (배송 %s건),Weekly goal done! (%s deliveries)
 NOTICE_WEEKLY,주간 배송 목표 달성! 보험 쿠폰 +%d장 · 경험치 +%s,Weekly goal done! +%d insurance coupon · +%s XP
+GARAGE_TAB_MASTER,명장,Master
+MASTER_LOCKED,엔진 +%d을 달성하면 명장이 찾아와요,Reach engine +%d and the Master will start visiting
+MASTER_DAY,명장 방문일: 매주 %s,The Master visits every %s
+MASTER_DAY_NONE,명장 방문일: 아직 안 골랐어요,Master's visiting day: not chosen yet
+MASTER_NEXT_DAY,다음 주부터 %s,From next week: %s
+MASTER_PICK_FIRST,요일을 고르세요. 그날 게임을 켜 두면 명장이 와 있어요,"Pick a day. If the game is on that day, the Master is there"
+MASTER_PICK_CHANGE,요일을 바꾸면 다음 주부터 적용돼요,A new day applies from next week
+MASTER_BONUS_LINE,이번 방문 보너스: %s,Visit bonus: %s
+MASTER_BONUS_HIDDEN,보너스는 방문 전날 전화로 알려 줘요,The bonus is announced by phone the day before
+MASTER_TODAY,오늘 명장이 와 있어요!,The Master is here today!
+MASTER_PICKER_TITLE,명장이 찾아왔어요!,The Master has arrived!
+MASTER_PICKER_ASK,어떤 요일에 명장이 오면 좋겠어요?,Which day should the Master visit?
+MASTER_PICKER_LATER,나중에 고를게요,Later
+DAY_0,월요일,Monday
+DAY_1,화요일,Tuesday
+DAY_2,수요일,Wednesday
+DAY_3,목요일,Thursday
+DAY_4,금요일,Friday
+DAY_5,토요일,Saturday
+DAY_6,일요일,Sunday
+DAY_SHORT_0,월,Mon
+DAY_SHORT_1,화,Tue
+DAY_SHORT_2,수,Wed
+DAY_SHORT_3,목,Thu
+DAY_SHORT_4,금,Fri
+DAY_SHORT_5,토,Sat
+DAY_SHORT_6,일,Sun
+MASTER_BONUS_DESTROY_CUT,퍼짐 확률 %s 줄어듦,Blow-up chance -%s
+MASTER_BONUS_ENHANCE_DISCOUNT,강화 비용 %s 할인,Upgrade cost -%s
+MASTER_BONUS_SETTING_UP_MULT,세팅 등급업 확률 ×%s,Setup grade-up chance ×%s
+MASTER_BONUS_SUCCESS_MULT,강화 성공 확률 ×%s,Upgrade success chance ×%s
+MASTER_BONUS_SPARE_MULT,스페어 엔진 나올 확률 ×%s,Spare engine drop chance ×%s
+MASTER_BONUS_SETTING_DISCOUNT,세팅 돌리기 비용 %s 할인,Setup roll cost -%s
+MASTER_BONUS_DOUBLE_STEP,강화 성공 때 %s 확률로 한 단계 더,%s chance of one extra level on success
+GARAGE_MASTER_VISIT,명장 방문 중: %s,Master visiting: %s
+GARAGE_INSURE,보험,Insurance
+GARAGE_COST_INSURED,비용 %s원 + 보험 %s원,Cost ₩%s + insurance ₩%s
+GARAGE_COST_COUPON,비용 %s원 · 보험 쿠폰 1장 사용 (%d장 남음),Cost ₩%s · uses 1 insurance coupon (%d left)
+GARAGE_INSURED_SAFE,보험: 퍼져도 단계 유지,Insured: no drop on blow-up
+GARAGE_TRIES,지금 돈이면 %d번 시도 가능,You can try %d times with your money
+GARAGE_NO_INSURE,보험을 걸 수 없어요 (명장 방문일도 아니고 쿠폰도 없음),"Can't insure (no Master visit today, no coupon)"
+RESULT_INSURED,보험 덕분에 살았어요! (+%d 그대로),Insurance saved you! (still +%d)
+RESULT_DOUBLE,+2!  +%d → +%d,+2!  +%d → +%d
+NOTICE_MASTER_TOMORROW,내일 명장이 와요: %s,The Master comes tomorrow: %s
+NOTICE_MASTER_TODAY,오늘 명장이 와 있어요: %s,The Master is here today: %s

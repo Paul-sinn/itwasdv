@@ -198,7 +198,7 @@ func refresh(b: Balance, s: GameState, locked: bool) -> void:
 	_grade.add_theme_color_override("font_color", Feel.SETTING_GRADE_COLORS[grade])
 	_show_lines(_lines, b, grade, p["lines"])
 	if grade < Setting.max_grade(b):
-		_up.text = tr("SETTING_UP_CHANCE") % Fmt.percent(Setting.up_chance(b, grade)) + " · " \
+		_up.text = tr("SETTING_UP_CHANCE") % Fmt.percent(Setting.up_chance(b, grade, s)) + " · " \
 				+ tr("SETTING_CEILING") % [p["counters"][grade], Setting.ceiling(b, grade)]
 	else:
 		_up.text = tr("SETTING_MAX_GRADE")
@@ -215,7 +215,7 @@ func refresh(b: Balance, s: GameState, locked: bool) -> void:
 		notes.append(tr("SETTING_OVERBOOST_NOTE") % Fmt.num(b.overboost_mult))
 	_effect.text = "\n".join(notes)
 
-	var cost := Setting.roll_cost(b, grade)
+	var cost := Setting.roll_cost(b, grade, s)
 	_cost.text = tr("GARAGE_COST") % Fmt.money(cost)
 	var block := Setting.block_reason(s, b, TRUCK, selected)
 	match block:

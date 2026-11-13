@@ -65,6 +65,12 @@ func _run() -> void:
 	for id: String in Ability.ids(b):
 		for suffix in ["", "_DESC", "_EFFECT"]:
 			code_keys["ABILITY_" + id.to_upper() + suffix] = true
+	# 명장 보너스 키는 balance.json의 id로, 요일 키는 번호로 만들어 씀 (Fmt.master_bonus / day_name)
+	for id: String in b.master_bonus_ids:
+		code_keys["MASTER_BONUS_" + id.to_upper()] = true
+	for d in 7:
+		code_keys["DAY_%d" % d] = true
+		code_keys["DAY_SHORT_%d" % d] = true
 	_check_keys(code_keys)
 	_check_money()
 	await _check_screen_ko()
