@@ -156,6 +156,8 @@ func _run() -> void:
 	_click(p.building_buttons["depot"].get_global_rect().get_center())
 	await _frames(2)
 	var d = p.driver
+	_click(d.depot_page_button.get_global_rect().get_center())   # v5b: 할 일·창고·야간팀은 [창고·할 일] 칸
+	await _frames(2)
 	var depot_ok: bool = d._level.is_visible_in_tree() and d._quest_name.is_visible_in_tree() \
 			and d._titles["warehouse"].is_visible_in_tree() and d._titles["night"].is_visible_in_tree()
 	m.state.spares = 2

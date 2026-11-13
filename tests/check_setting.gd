@@ -24,7 +24,7 @@ const Enhance = preload("res://scripts/core/enhance.gd")
 const Save = preload("res://scripts/core/save.gd")
 const Setting = preload("res://scripts/core/setting.gd")
 const Trip = preload("res://scripts/core/trip.gd")
-const TruckState = preload("res://scripts/core/truck_state.gd")
+const GameState = preload("res://scripts/core/game_state.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
@@ -247,14 +247,14 @@ func _run() -> void:
 	_click(p.engine_tab_button.get_global_rect().get_center())
 	await _frames(3)
 	var c := Enhance.chances_for(b, t)
-	var plain := TruckState.new()
-	plain.star = t.star
-	var hourly := Trip.hourly_income(b, t)
+	var plain := GameState.new_game()   # 같은 단계, 세팅·능력치 없음
+	plain.truck(0).star = t.star
+	var hourly := Trip.hourly_income(b, m.state, 0)
 	_report(p._danger.text == tr("GARAGE_DANGER") % Fmt.percent(c["destroy"]) and c["destroy"] < Enhance.chances(b, 20)["destroy"]
 			and p._chances.text == tr("GARAGE_CHANCES") % [Fmt.percent(c["success"]), Fmt.percent(c["fail"]), Fmt.percent(c["destroy"])]
-			and p._income.text.begins_with(tr("GARAGE_HOURLY") % Fmt.money(int(hourly))) and hourly != Trip.hourly_income(b, plain),
+			and p._income.text.begins_with(tr("GARAGE_HOURLY") % Fmt.money(int(hourly))) and hourly != Trip.hourly_income(b, plain, 0),
 			"⑨ 강화 칸 '%s' / '%s' (엔진만이면 퍼짐 %s), '%s' (세팅 없으면 시간당 %s원)" % [
-			p._danger.text, p._chances.text, Fmt.percent(Enhance.chances(b, 20)["destroy"]), p._income.text, Fmt.money(int(Trip.hourly_income(b, plain)))])
+			p._danger.text, p._chances.text, Fmt.percent(Enhance.chances(b, 20)["destroy"]), p._income.text, Fmt.money(int(Trip.hourly_income(b, plain, 0)))])
 	await _close(m)
 
 	# ⑩ en: 탭이 뜨고, 돌리고 고르는 동안 보이는 글자에 한글·키가 없음

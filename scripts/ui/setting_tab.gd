@@ -220,7 +220,7 @@ func refresh(b: Balance, s: GameState, locked: bool) -> void:
 	var block := Setting.block_reason(s, b, TRUCK, selected)
 	match block:
 		Setting.Block.NO_MONEY:
-			var hourly := Trip.hourly_income(b, t)
+			var hourly := Trip.hourly_income(b, s, TRUCK)
 			_wait.text = tr("SETTING_SHORT") % [Fmt.money(cost - s.money), Fmt.wait_text(Economy.seconds_to_afford(cost, s.money, hourly))]
 		Setting.Block.PENDING:
 			_wait.text = tr("SETTING_PENDING")

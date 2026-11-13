@@ -64,7 +64,7 @@ func _run() -> void:
 	t = m.state.truck(0)
 	_check(t.star == 19 and t.success_count == 5 and t.fail_count == 6 and t.destroy_count == 1 and m.state.spares == 3,
 			"다시 켰는데 단계/통계/스페어가 다름: +%d %d/%d/%d 스페어 %d" % [t.star, t.success_count, t.fail_count, t.destroy_count, m.state.spares])
-	_check(m.state.money >= 98765 and m.state.money < 98765 + Trip.lap_income(b, t), "다시 켰는데 돈이 다름: %s" % m.state.money)
+	_check(m.state.money >= 98765 and m.state.money < 98765 + Trip.lap_income(b, m.state, 0), "다시 켰는데 돈이 다름: %s" % m.state.money)
 	_check(not m.popup.visible, "바로 다시 켰는데(3분 미만) 복귀 팝업이 뜸")
 	var timer: Timer = m.get_node("Autosave")
 	_check(timer.wait_time == 30.0 and timer.ignore_time_scale and not timer.is_stopped(), "30초 자동 저장 타이머가 이상함")
@@ -89,7 +89,7 @@ func _run() -> void:
 		m = await _launch()
 		var r: Dictionary = m.offline_report
 		var got_money: int = m.state.money - 1000
-		var slack: float = Trip.hourly_income(b, m.state.truck(0)) * Depot.rate(b, m.state) * 5.0 / HOUR + 1.0
+		var slack: float = Trip.hourly_income(b, m.state, 0) * Depot.rate(b, m.state) * 5.0 / HOUR + 1.0
 		var ok: bool = absf(got_money - want["money"]) <= slack and got_money == r["money"] \
 				and absi(r["parcels"] - want["parcels"]) <= 1 and r["spares"] == want["spares"] and m.state.spares == want["spares"]
 		var main_text: String = m.popup.main_text()
@@ -99,13 +99,14 @@ func _run() -> void:
 			shown = shown and main_text == tr("RETURN_MAIN_ZERO") and note.contains(c["note"])
 		else:
 			shown = shown and main_text.contains("+" + Fmt.money(r["money"]) + "원") \
-					and note.contains(tr("RETURN_DETAIL") % [r["parcels"], r["xp"], r["spares"]])
+					and note.contains(tr("RETURN_DETAIL") % [r["parcels"], r["spares"]]) \
+					and note.contains(tr("RETURN_XP") % r["xp"]) == (r["xp"] > 0)   # 노하우 경험치 줄은 있을 때만
 		_report(ok and shown, "③ %s: 돈 +%d (Trip.apply_offline %d), 배송 %d건, 스페어 +%d개 → 복귀 창 '%s' / '%s'" % [
 				c["name"], got_money, want["money"], r["parcels"], r["spares"], main_text, note.replace("\n", " / ")])
 		await _close(m)
 		# 받은 뒤 바로 저장했으니, 또 켜면 두 번 받지 않아야 함
 		m = await _launch()
-		_check(m.state.money - 1000 - got_money < Trip.lap_income(b, m.state.truck(0)), "%s: 다시 켰더니 또 받음 (%d)" % [c["name"], m.state.money - 1000])
+		_check(m.state.money - 1000 - got_money < Trip.lap_income(b, m.state, 0), "%s: 다시 켰더니 또 받음 (%d)" % [c["name"], m.state.money - 1000])
 		await _close(m)
 
 	# 3) 옛 형식(형식 2) 파일 → save.v2.json으로 남기고 새 게임 + 안내
@@ -113,7 +114,7 @@ func _run() -> void:
 	var old_text := JSON.stringify({ "version": 2, "saved_at_utc": "2026-11-12T10:00:00", "money": 123.0, "star": 5 })
 	_write(TEST_SAVE, old_text)
 	m = await _launch()
-	var old_ok: bool = m.state.truck(0).star == 0 and m.state.money < Trip.lap_income(b, m.state.truck(0)) \
+	var old_ok: bool = m.state.truck(0).star == 0 and m.state.money < Trip.lap_income(b, m.state, 0) \
 			and FileAccess.get_file_as_string(OLD_KEPT) == old_text
 	_report(old_ok and m.popup.visible and m.popup.main_text() == tr("LOAD_OLD_KEPT") % OLD_KEPT.get_file(),
 			"③ 옛 형식 파일 → save.v2.json으로 남기고 새 게임, 복귀 창 '%s'" % m.popup.main_text().replace("\n", " / "))
@@ -132,7 +133,7 @@ func _run() -> void:
 	_write(TEST_SAVE, "{ 이건 깨진 파일")
 	m = await _launch()
 	_report(m.state.truck(0).star == 12 and m.popup.visible and m.popup.main_text() == tr("LOAD_RECOVERED") % "save.json.broken"
-			and m.popup.note_text().contains(tr("RETURN_DETAIL") % [m.offline_report["parcels"], m.offline_report["xp"], m.offline_report["spares"]])
+			and m.popup.note_text().contains(tr("RETURN_DETAIL") % [m.offline_report["parcels"], m.offline_report["spares"]])
 			and FileAccess.file_exists(TEST_SAVE + ".broken"),
 			"③ 본 파일이 깨짐 → 백업에서 +%d로 살림, 복귀 창 '%s' / '%s'" % [
 			m.state.truck(0).star, m.popup.main_text().replace("\n", " / "), m.popup.note_text().replace("\n", " / ")])
@@ -143,7 +144,7 @@ func _run() -> void:
 	_clean()
 	_write(TEST_SAVE, "{ 이건 깨진 파일")
 	m = await _launch()
-	_check(m.state.truck(0).star == 0 and m.state.money < Trip.lap_income(b, m.state.truck(0)), "깨진 저장인데 새로 시작 안 함")
+	_check(m.state.truck(0).star == 0 and m.state.money < Trip.lap_income(b, m.state, 0), "깨진 저장인데 새로 시작 안 함")
 	_check(m.popup.visible and m.popup.main_text() == tr("LOAD_BROKEN") % "save.json.broken", "깨진 저장 알림이 없음: '%s'" % m.popup.main_text())
 	_check(Rect2(Vector2.ZERO, Vector2(Feel.SMALL_SIZE)).encloses(m.popup.get_rect()), "깨진 저장 알림이 작은 화면 밖: %s" % m.popup.get_rect())
 	_check(FileAccess.file_exists(TEST_SAVE + ".broken"), "깨진 파일을 .broken 으로 안 남김")

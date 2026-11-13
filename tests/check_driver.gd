@@ -3,6 +3,7 @@
 ## 확인하는 동작은 진짜 클릭이나 진짜 프레임(main이 Trip.advance → Quest.check → take_events)으로 한다.
 ## ① 작은 화면 "Lv.N" + 다음 할 일 한 줄 (이름 + 진행 "3/20")
 ## ② 물류센터 화면 (v6a 전 [기사·물류센터] 칸): 레벨, 경험치 막대(driver_xp / xp_need), 포인트, 지금 할 일(이름·설명·진행·보상), 끝낸 수 n/22
+##    (v5b: 할 일·창고·야간팀은 물류센터 화면 [창고·할 일] 칸. 처음 열면 [능력치] 칸이라 [창고·할 일]을 진짜 클릭으로 누름)
 ## ③ 할 일 끝 → 알림(이름 + 보상), 돈 + 보상, 다음 할 일로   ④ 레벨업 알림("Lv.N" + 포인트), 만렙 알림
 ## ⑤ 창고·야간팀: 지금 값 → 다음 값, 가격, 사면 돈 −가격·레벨 +1, 돈 모자라면 버튼 꺼짐 + 모자란 금액, 창고 Lv3 "대리점부터"
 ## ⑥ 올리기·강화·세팅 직후 Quest.check (main의 프레임을 멈춰도 바로 다음 할 일로)
@@ -62,11 +63,13 @@ func _run() -> void:
 	_report(not m.is_full() and line_ok and bad_lines.is_empty(),
 			"① 작은 화면 '%s' + '%s', 할 일 22개 줄이 동네 안·집과 안 겹침·보이는 곳 안 %s" % [town._level_label.text, first_line, bad_lines])
 
-	# ② 작은 화면 물류센터 건물 클릭 → 큰 화면 물류센터 화면
+	# ② 작은 화면 물류센터 건물 클릭 → 큰 화면 물류센터 화면 → [창고·할 일]
 	_click(town.building_rects()["depot"].get_center())
 	await _frames(3)
 	var p = m.panel
 	var d = p.driver
+	_click(d.depot_page_button.get_global_rect().get_center())
+	await _frames(2)
 	# Lv.3 경험치: ③에서 창고 확장 할 일 보상 경험치를 받으면 딱 Lv.4가 되게 (레벨 곡선 숫자가 바뀌어도 맞게 Driver로 계산)
 	var need3 := Driver.xp_need(b, 3)
 	var w_xp: int = b.quests[_qi(b, "warehouse_2")]["xp"]
@@ -268,7 +271,7 @@ func _check_return(b: Balance) -> void:
 		match c["name"]:
 			"3시간":
 				this_ok = m.popup.visible and fits and not r["full"] and main_text == "자리 비운 3시간 동안 +%s원" % Fmt.money(r["money"]) \
-						and note == "배송 %d건 · 경험치 +0 · 스페어 엔진 +%d개\n꺼둔 동안은 50%%만, 최대 %s시간치까지 쌓입니다." % [r["parcels"], r["spares"], Fmt.num(cap)] \
+						and note == "배송 %d건 · 스페어 엔진 +%d개\n꺼둔 동안은 50%%만, 최대 %s시간치까지 쌓입니다." % [r["parcels"], r["spares"], Fmt.num(cap)] \
 						and m.state.money == 1000 + r["money"] and r["money"] > 0
 			"20시간":
 				this_ok = m.popup.visible and fits and r["full"] and r["hours"] == cap and main_text == "자리 비운 20시간 동안 +%s원" % Fmt.money(r["money"]) \
@@ -340,6 +343,8 @@ func _check_en(b: Balance) -> void:
 	_click(m.town.building_rects()["depot"].get_center())
 	await _frames(3)
 	var p = m.panel
+	_click(p.driver.depot_page_button.get_global_rect().get_center())
+	await _frames(2)
 	m.state.money = 0
 	for i in Quest.count(b) + 1:
 		m.state.quest_index = i
@@ -473,9 +478,11 @@ func _launch(full: bool) -> Node:
 		root.size = Feel.SMALL_SIZE if mode == ScreenMode.Mode.SMALL else Vector2i(1600, 900))
 	Engine.time_scale = 0.0
 	await _frames(3)
-	if full:
+	if full:   # 물류센터 → [창고·할 일]
 		_click(m.town.building_rects()["depot"].get_center())
 		await _frames(3)
+		_click(m.panel.driver.depot_page_button.get_global_rect().get_center())
+		await _frames(2)
 	return m
 
 

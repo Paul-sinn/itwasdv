@@ -4,6 +4,7 @@
 ## v6a: 건물 세 개(물류센터·튜닝숍·카센터, 임시 사각형 + 간판). 마우스를 올리면 빛남 + 이름표.
 ##      구석 줄 끝 작은 버튼 [강화] → tuning_pressed. 건물 클릭은 main.gd가 building_at()으로 가른다
 ## v6-bal: 처음 켰을 때 말풍선 "건물을 눌러보세요" (hint, set_hint. 언제 켜나는 main.gd)
+## v5b: 팁이 나오면 "+금액" 옆에 "팁! +금액" (show_tip), 찍을 능력치 포인트가 남으면 레벨 옆 점 (set_point_dot)
 ## 동네 설계 좌표(feel.gd TOWN_SIZE = 작은 화면 크기)로 만들고, 전체 화면에서는 같은 동네를 통째로 확대한다.
 ## 길·집·트럭은 확대해서 그리고(선명함), 글자는 확대 배수에 맞춘 글자 크기로 따로 놓는다.
 ## 그리기만 한다. 돈·배송은 main.gd → scripts/core/trip.gd (배송 이벤트가 오면 show_payout)
@@ -29,6 +30,8 @@ var show_ground := false     ## 동네 바닥을 칠할까 (전체 화면에서�
 var payouts_shown := 0       ## 지금까지 띄운 "+금액" 수 (확인용)
 var spares_shown := 0        ## 지금까지 띄운 "스페어 엔진 +1" 수 (확인용)
 var boosts_shown := 0        ## 지금까지 띄운 "오버부스트!" 수 (확인용)
+var tips_shown: Array[String] = []   ## 지금까지 띄운 "팁! +금액" 글자 (확인용)
+var point_dot: Panel         ## 구석 줄 레벨 옆 점: 찍을 능력치 포인트가 남음 (set_point_dot)
 var notices_shown: Array[String] = []   ## 지금까지 띄운 알림 글자, 띄운 순서대로 (확인용)
 var hovered := ""            ## 마우스가 올라가 있는 건물 id ("" = 없음)
 var tuning_button: Button    ## 구석 줄 끝 작은 버튼 [강화]
@@ -45,6 +48,8 @@ var _notice_queue: Array[String] = []   ## 차례를 기다리는 알림
 var _signs := {}          ## 건물 id → 간판 글자
 var _name_tag: Label      ## 마우스 올린 건물 위 이름표
 var _payouts: Array[Label] = []   ## 떠오르는 중인 "+금액"·"스페어 엔진 +1"들
+var _last_payout: Label   ## 마지막 "+금액" (팁이 오면 그 옆에 "팁!"을 붙임)
+var _dot_style: StyleBoxFlat
 
 
 func _ready() -> void:
@@ -69,6 +74,14 @@ func _ready() -> void:
 	_hud.add_child(_star_label)
 	_hud.add_child(_money_label)
 	_hud.add_child(_level_label)
+	point_dot = Panel.new()   # 둥근 바탕 = 점 (글꼴에 ● 가 없어도 보이게)
+	point_dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	point_dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_dot_style = StyleBoxFlat.new()
+	_dot_style.bg_color = Feel.COLOR_POINT_DOT
+	point_dot.add_theme_stylebox_override("panel", _dot_style)
+	point_dot.visible = false
+	_hud.add_child(point_dot)
 	tuning_button = Button.new()
 	tuning_button.text = tr("TOWN_TUNING_BUTTON")
 	tuning_button.focus_mode = Control.FOCUS_NONE
@@ -112,6 +125,9 @@ func layout(top_left: Vector2, z: float, text_k: float) -> void:
 	for l in [_star_label, _money_label, _level_label]:
 		_set_font(l, Feel.HUD_FONT_SIZE)
 	_style_button()
+	var d := Feel.POINT_DOT_SIZE * text_scale
+	point_dot.custom_minimum_size = Vector2(d, d)
+	_dot_style.set_corner_radius_all(int(ceilf(d / 2.0)))
 	_hud.reset_size()
 	_hud.position = to_view(Feel.TOWN_HUD_POS)
 	_set_font(_quest_label, Feel.QUEST_FONT_SIZE)
@@ -245,6 +261,11 @@ func set_hud(money: int, star: int, level: int) -> void:
 	_level_label.text = tr("TOWN_LEVEL") % level
 
 
+## 레벨 옆 점 (찍을 능력치 포인트가 남았으면 켬. 물류센터에 가 보라는 표시)
+func set_point_dot(on: bool) -> void:
+	point_dot.visible = on
+
+
 ## "다음 할 일" 한 줄 (글자는 main.gd가 만듦)
 func set_quest(text: String) -> void:
 	if _quest_label.text != text:
@@ -294,7 +315,27 @@ func pop_star() -> void:
 ## 집 앞: "+금액"이 떠올랐다가 사라짐 (계산 쪽 배송 이벤트가 올 때)
 func show_payout(house: int, amount: int) -> void:
 	payouts_shown += 1
-	_float_text(_house_spot(house), "+" + Fmt.money(amount), Feel.PAYOUT_FONT_SIZE, Feel.COLOR_PAYOUT, Feel.PAYOUT_RISE, Feel.PAYOUT_DURATION)
+	_last_payout = _float_text(_house_spot(house), "+" + Fmt.money(amount), Feel.PAYOUT_FONT_SIZE, Feel.COLOR_PAYOUT, Feel.PAYOUT_RISE, Feel.PAYOUT_DURATION)
+
+
+## 배송에서 팁이 나옴: 바로 앞 "+금액" 옆에 "팁! +금액" (다른 색). "+금액"의 자식이라 같이 떠오르고 같이 사라지고,
+## 보이는 곳은 그 "+금액" 사각형을 넓혀서 (visible_rects). "+금액"이 이미 없으면 그 집 위에 따로 띄움
+func show_tip(house: int, amount: int) -> void:
+	var text := tr("TOWN_TIP") % Fmt.money(amount)
+	tips_shown.append(text)
+	if _last_payout == null or not is_instance_valid(_last_payout) or not _payouts.has(_last_payout):
+		_float_text(_house_spot(house), text, Feel.PAYOUT_FONT_SIZE, Feel.COLOR_TIP, Feel.PAYOUT_RISE, Feel.PAYOUT_DURATION)
+		return
+	var tip := make_label(Feel.PAYOUT_FONT_SIZE, Feel.COLOR_TIP)
+	_set_font(tip, Feel.PAYOUT_FONT_SIZE)
+	tip.text = text
+	_last_payout.add_child(tip)
+	tip.reset_size()
+	tip.position = Vector2(_last_payout.size.x + Feel.TIP_GAP * text_scale, 0.0)
+	# 동네 오른쪽 밖으로 나가면 "+금액"째 왼쪽으로
+	var over := _last_payout.position.x + tip.position.x + tip.size.x - area().end.x
+	if over > 0.0:
+		_last_payout.position.x = maxf(area().position.x, _last_payout.position.x - over)
 
 
 ## 배송하다 스페어 엔진을 받음: "스페어 엔진 +1" (더 크게, 금색, 더 오래)
@@ -315,7 +356,7 @@ func _house_spot(house: int) -> Vector2:
 
 
 ## spot(동네 설계 좌표, 길 가운데 선 위) 위쪽에서 글자가 떠올랐다가 사라짐
-func _float_text(spot: Vector2, text: String, font_size: int, color: Color, rise_px: float, seconds: float) -> void:
+func _float_text(spot: Vector2, text: String, font_size: int, color: Color, rise_px: float, seconds: float) -> Label:
 	var label := make_label(font_size, color)
 	_set_font(label, font_size)
 	label.text = text
@@ -337,6 +378,7 @@ func _float_text(spot: Vector2, text: String, font_size: int, color: Color, rise
 	tw.chain().tween_callback(func():
 		_payouts.erase(label)
 		label.queue_free())
+	return label
 
 
 ## 떠오르는 중인 글자 수 (확인용)
@@ -396,7 +438,10 @@ func visible_rects(truck_pad: float) -> Array:
 		out.append(smoke.grow(truck_pad))
 	for p in _payouts:
 		if is_instance_valid(p):
-			out.append(Rect2(p.position, p.get_combined_minimum_size()).grow(o))
+			var r := Rect2(p.position, p.get_combined_minimum_size())
+			for c: Control in p.get_children():   # 옆에 붙은 "팁!" (같은 사각형을 넓힘)
+				r = r.merge(Rect2(p.position + c.position, c.get_combined_minimum_size()))
+			out.append(r.grow(o))
 	return out
 
 

@@ -235,3 +235,11 @@ const HINT_PAD := Vector2(6, 2)            ## 말풍선 안 여백 (좌우, 위�
 const HINT_RADIUS := 5
 const COLOR_HINT_BG := Color(1.0, 0.96, 0.82)
 const COLOR_HINT_TEXT := Color(0.15, 0.13, 0.10)
+
+# --- v5b: 기사 능력치 (물류센터 화면 [능력치] 칸), 동네 팁, 구석 줄 포인트 점 ---
+const ABILITY_RESET_ARM_SECONDS := 3.0     ## [초기화]를 한 번 누른 뒤 이 시간 안에 또 눌러야 초기화 (진짜 시간)
+const ABILITY_ADD_SIZE := 16               ## [+] 버튼 글자 (v0 패널 기준)
+const COLOR_TIP := Color(1.0, 0.62, 0.86)  ## 동네 "팁! +금액" ("+금액" 초록과 다르게)
+const TIP_GAP := 4.0                       ## "+금액"과 "팁!" 사이 (설계 좌표)
+const POINT_DOT_SIZE := 6.0                ## 구석 줄 레벨 옆 점 지름 (작은 화면 기준). 찍을 포인트가 남았다는 표시
+const COLOR_POINT_DOT := Color(1.0, 0.45, 0.35)
