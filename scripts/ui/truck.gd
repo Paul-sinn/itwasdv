@@ -18,6 +18,7 @@ const SMOKE_SPREAD := 10.0   ## 퍼짐 연기가 처음 옆으로 흩어지는 �
 
 var star := 0          ## 강수 (빠르기에만 씀)
 var running := true    ## false면 그 자리에 멈춤 (고장)
+var tune_grade := 0    ## 7부위 중 가장 높은 튜닝 등급 → 짐칸 옆면에 그 등급 색 점 (0 = 일반이면 점 없음)
 
 var view_origin := Vector2.ZERO   ## 동네 설계 좌표 (0,0)이 동네 노드 안에서 어디에 오나
 var view_zoom := 1.0              ## 동네 확대 배수
@@ -259,6 +260,13 @@ func _draw() -> void:
 	draw_rect(Rect2(cab_x, h * 0.3, cab_w, h * 0.7), Feel.COLOR_TRUCK_CAB if running else Feel.COLOR_TRUCK_STOPPED)
 	draw_circle(Vector2(w * 0.22, h + wr * 0.6), wr, Feel.COLOR_WHEEL)
 	draw_circle(Vector2(w * 0.78, h + wr * 0.6), wr, Feel.COLOR_WHEEL)
+
+	# 튜닝 등급 점: 짐칸 옆면 가운데 (트럭 그림 안이라 작은 화면에서도 보이는 곳 안)
+	if tune_grade > 0:
+		var dot := Vector2(box_x + (w - cab_w) / 2.0, h * 0.45)
+		var dot_color: Color = Feel.TUNE_GRADE_COLORS[mini(tune_grade, Feel.TUNE_GRADE_COLORS.size() - 1)]
+		draw_circle(dot, Feel.TUNE_DOT_RADIUS + Feel.TUNE_DOT_OUTLINE, Feel.COLOR_TEXT_OUTLINE)
+		draw_circle(dot, Feel.TUNE_DOT_RADIUS, dot_color)
 
 	# 연기: 엔진(운전석) 위에서 올라가며 커지고 흐려짐
 	var origin := _smoke_origin()

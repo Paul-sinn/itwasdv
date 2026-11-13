@@ -14,12 +14,15 @@ const Economy = preload("res://scripts/core/economy.gd")
 const Enhance = preload("res://scripts/core/enhance.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Save = preload("res://scripts/core/save.gd")
+const Tune = preload("res://scripts/core/tune.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const Town = preload("res://scripts/ui/town.gd")
 const GaragePanel = preload("res://scripts/ui/garage_panel.gd")
 const ReturnPopup = preload("res://scripts/ui/return_popup.gd")
 const SettingsPanel = preload("res://scripts/ui/settings_panel.gd")
+const TuneTab = preload("res://scripts/ui/tune_tab.gd")
+const TuneText = preload("res://scripts/ui/tune_text.gd")
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
 
 const AUTOSAVE_SECONDS := 30.0        ## 30초마다 저장 (배속과 상관없이 진짜 30초)
@@ -57,8 +60,12 @@ var _ui_scale := 1.0               ## 전체 화면 글자·간격 배수 (창 �
 var _panel_spot := Vector2.ZERO    ## 차고 오른쪽 위 모서리 (흔들림 빼고)
 var _panel_shake := Vector2.ZERO   ## 실패 연출: 차고 흔들림
 
-## 강화 뜸 중 (결과 기다리는 중). 이때는 강화 버튼을 또 눌러도 무시
+## 강화 뜸 중 (결과 기다리는 중). 이때는 강화·튜닝 버튼을 또 눌러도 무시
 var enhancing := false
+## 튜닝 뜸 중. 이때도 강화·튜닝 버튼을 또 눌러도 무시
+var tuning := false
+## 뜸(강화·튜닝 결과 나오기 전 기다림) 길이 배수. 확인 스크립트가 튜닝을 수백 번 누를 때만 줄임 (1 = 그대로)
+var suspense_scale := 1.0
 
 
 func _ready() -> void:
@@ -93,6 +100,7 @@ func _ready() -> void:
 	add_child(panel)
 	panel.enhance_pressed.connect(_on_enhance_pressed)
 	panel.spare_pressed.connect(_on_spare_pressed)
+	panel.tune_pressed.connect(_on_tune_pressed)
 
 	small_button = Button.new()
 	small_button.text = "작게 (Esc)"
@@ -204,6 +212,7 @@ func _place_panel() -> void:
 func _process(delta: float) -> void:
 	town.truck.star = state.star
 	town.truck.running = not state.broken
+	town.truck.tune_grade = state.best_grade()
 	town.set_hud(state.money, state.star)
 	if panel.visible:
 		panel.refresh(balance, state)
@@ -219,13 +228,16 @@ func _process(delta: float) -> void:
 		_update_debug_label()
 
 
-func _on_delivered(_house: int, seconds: float) -> void:
-	var pay := Economy.delivery_pay(balance, state.star, seconds)
+## 집에 들름: 대박인지 굴리고(Tune) → 그 배송 돈(GameState) → 동네에 "+금액" 또는 "대박! ×N +금액"
+func _on_delivered(house: int, seconds: float) -> void:
+	var jackpot := Tune.roll_jackpot(state, balance, rng)
+	var pay := state.delivery_pay(balance, seconds, jackpot)
 	state.money += pay
 	earned_total += pay
 	if _measuring:
 		_measure_earned += pay
-	town.show_payout(_house, pay)   # 글자만 만듦 (돈은 위에서 이미 넣음)
+	# 글자만 만듦 (돈은 위에서 이미 넣음)
+	town.show_payout(house, pay, state.jackpot_mult(balance) if jackpot else 0.0)
 
 
 # ---------------- 저장 · 꺼둔 동안 수익 ----------------
@@ -238,7 +250,7 @@ func _load_save() -> String:
 		Save.Status.OK:
 			state = r["state"]
 			var away := Time.get_unix_time_from_system() - float(r["saved_at"])
-			var earned := Economy.offline_earnings(balance, state.star, state.broken, away)
+			var earned := state.offline_earnings(balance, away)   # 연료 탱크·내비 반영
 			state.money += earned
 			offline_report = { "away_seconds": away, "earned": earned }
 		Save.Status.BROKEN:
@@ -253,7 +265,9 @@ func _open_return_popup() -> void:
 	if away >= 0.0 and away < RETURN_POPUP_MIN_AWAY:
 		return
 	var note := "꺼둔 동안은 %s만, 최대 %s시간치까지 쌓입니다." % [
-		Fmt.percent(balance.offline_rate), Fmt.num(balance.offline_cap_hours)]
+		Fmt.percent(state.offline_rate(balance)), Fmt.num(state.offline_cap_hours(balance))]
+	if state.grade("fuel_tank") > 0 or state.grade("navigation") > 0:
+		note += " (연료 탱크·내비 포함)"
 	if away < 0.0:
 		note = "컴퓨터 시계가 저장했을 때보다 %s 이전이라 0원입니다." % Fmt.away(away)
 	elif state.broken:
@@ -326,12 +340,12 @@ func _on_style_picked(style: ScreenMode.FullStyle) -> void:
 ## 강화 버튼: 뜸 → 굴리기(enhance.gd) → 결과 연출
 ## 굴리기는 뜸이 끝난 뒤에 한다 (뜸 동안 꺼도 돈이 안 빠짐)
 func _on_enhance_pressed() -> void:
-	if enhancing or Enhance.block_reason(state, balance) != Enhance.Block.NONE:
+	if enhancing or tuning or Enhance.block_reason(state, balance) != Enhance.Block.NONE:
 		return
 	enhancing = true
-	var danger: bool = Enhance.chances(balance, state.star)["destroy"] > 0.0
+	var danger: bool = state.enhance_chances(balance)["destroy"] > 0.0
 	panel.begin_suspense()
-	var wait := Feel.SUSPENSE_DANGER if danger else Feel.SUSPENSE_SAFE
+	var wait := (Feel.SUSPENSE_DANGER if danger else Feel.SUSPENSE_SAFE) * suspense_scale
 	if danger:
 		town.truck.shake(wait, Feel.ENGINE_SHAKE_PX)   # 트럭 자기 좌표라 동네가 커지면 같이 커짐
 	await get_tree().create_timer(wait, true, false, true).timeout   # 배속과 상관없이 진짜 시간
@@ -374,6 +388,35 @@ func _on_spare_pressed() -> void:
 	panel.refresh(balance, state)
 
 
+# ---------------- 튜닝 ----------------
+
+## [튜닝] 버튼: 짧은 뜸 → 굴리기(tune.gd) → 등급업이면 번쩍 + 등급 글자 커짐, 실패는 조용히 "그대로"
+## 굴리기는 뜸이 끝난 뒤에 한다 (뜸 동안 꺼도 돈이 안 빠짐). 고장 중에도 된다 (이미 있는 돈으로)
+func _on_tune_pressed(part: String) -> void:
+	if enhancing or tuning or Tune.block_reason(state, balance, part) != Tune.Block.NONE:
+		return
+	tuning = true
+	panel.tune.begin_suspense()
+	await get_tree().create_timer(Feel.TUNE_SUSPENSE * suspense_scale, true, false, true).timeout   # 진짜 시간
+
+	var before := state.grade(part)
+	var result := Tune.try_tune(state, balance, part, rng)
+	panel.tune.end_suspense()
+	var part_name := TuneText.part_name(part)
+	match result:
+		Tune.Result.UP:
+			var after := state.grade(part)
+			panel.tune.show_result("%s 등급업!  %s → %s" % [part_name, Tune.grade_name(balance, before),
+					Tune.grade_name(balance, after)], TuneTab.grade_color(after))
+			panel.celebrate_tune(part, after)
+		Tune.Result.SAME:
+			panel.tune.show_result("%s 그대로 (%s)" % [part_name, Tune.grade_name(balance, before)], Feel.COLOR_FAIL)
+		Tune.Result.BLOCKED:
+			panel.tune.clear_result()
+	panel.refresh(balance, state)
+	tuning = false
+
+
 # ---------------- 클릭 · 치트 키 ----------------
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -394,6 +437,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_F3: _cheat_reset()
 		KEY_F4: _cheat_star_up()
 		KEY_F5: _cheat_break()
+		KEY_F6: _cheat_tune_up()
 		_: return
 	get_viewport().set_input_as_handled()
 
@@ -432,6 +476,7 @@ func _cheat_reset() -> void:
 	state = GameState.new()
 	earned_total = 0.0
 	panel.clear_result()
+	panel.tune.clear_result()
 	popup.visible = false
 	_save()
 	_last_cheat = "F3 저장 초기화"
@@ -449,8 +494,15 @@ func _cheat_break() -> void:
 	_last_cheat = "F5 강제 퍼짐 → ★%d 고장" % state.star
 
 
+## F6: 튜닝 7부위 전부 등급 +1 (최고 등급까지. 통계에는 안 셈)
+func _cheat_tune_up() -> void:
+	for part in Tune.PARTS:
+		state.set_grade(balance, part, state.grade(part) + 1)
+	_last_cheat = "F6 튜닝 전부 +1 (가장 높은 등급 %s)" % Tune.grade_name(balance, state.best_grade())
+
+
 func _update_debug_label() -> void:
-	var text := "[디버그] F1 돈 · F2 %s배속(%s) · F3 처음부터 · F4 ★+1 · F5 퍼짐" % [
+	var text := "[디버그] F1 돈 · F2 %s배속(%s) · F3 처음부터 · F4 ★+1 · F5 퍼짐 · F6 튜닝 +1" % [
 		Fmt.money(Feel.CHEAT_TIME_SCALE), "켜짐" if Engine.time_scale != 1.0 else "꺼짐"]
 	if _last_cheat != "":
 		text += "   ▶ " + _last_cheat

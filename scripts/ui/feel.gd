@@ -156,3 +156,35 @@ const FULL_TOWN_TEXT_MAX := 2.5   ## 동네를 확대해도 동네 글자(★·�
 ## 지금 강수에서 한 바퀴(물류센터 → 마지막 집 → 물류센터) 달리는 초 (멈춘 시간 빼고)
 static func town_drive_seconds(star: int) -> float:
 	return maxf(TOWN_DRIVE_SECONDS_MIN, TOWN_DRIVE_SECONDS_BASE * pow(TRIP_SPEEDUP_PER_STAR, star))
+
+
+# --- v2: 튜닝 (화면 담당) ---
+## 등급 색: 일반 회색 / 레어 파랑 / 에픽 보라 / 전설 금색 (docs/PROTOTYPE_V2.md)
+const TUNE_GRADE_COLORS: Array[Color] = [
+	Color(0.68, 0.70, 0.74), Color(0.35, 0.62, 1.00), Color(0.74, 0.45, 1.00), Color(1.00, 0.78, 0.20),
+]
+const TUNE_TAB_SIZE := 16          ## [엔진 강화] [튜닝] 칸 글자 (v0 패널 크기 기준)
+const TUNE_ROW_SIZE := 14          ## 7부위 목록 한 줄 글자
+const TUNE_ROW_PAD := 4.0          ## 목록 한 줄 안쪽 여백
+const TUNE_ROW_GAP := 3            ## 목록 줄 사이 간격
+const TUNE_ROW_BORDER := 2         ## 고른 줄 테두리 두께
+const COLOR_TUNE_ROW := Color(0.16, 0.17, 0.21)
+const COLOR_TUNE_ROW_HOVER := Color(0.22, 0.24, 0.29)
+const COLOR_WARN := Color(1.0, 0.66, 0.28)   ## "타이어를 올려야 대박이 나와요"
+
+# 튜닝 연출: 강화보다 짧고 조용하게. 진짜 시간 기준
+const TUNE_SUSPENSE := 0.3         ## 결과 나오기 전 뜸 (초)
+const TUNE_FLASH_ALPHA := 0.45     ## 등급업 번쩍임 처음 밝기 (등급 색)
+const TUNE_FLASH_DURATION := 0.35
+const TUNE_POP_SCALE := 1.8        ## 등급업 시 등급 글자가 커지는 배수
+const TUNE_POP_DURATION := 0.5
+
+# 대박 배송 글자 (작은 화면 기준. 전체 화면은 동네 글자 배수만큼 커짐)
+const JACKPOT_FONT_SIZE := 17
+const JACKPOT_RISE := 30.0
+const JACKPOT_DURATION := 1.8
+const COLOR_JACKPOT := Color(1.0, 0.80, 0.15)
+
+# 작은 화면: 트럭 짐칸 옆면에 가장 높은 튜닝 등급 색 점 (트럭 자기 좌표)
+const TUNE_DOT_RADIUS := 5.0
+const TUNE_DOT_OUTLINE := 1.5
