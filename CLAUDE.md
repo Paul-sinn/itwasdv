@@ -28,6 +28,7 @@ docs/GAME_PLAN.md        기획서 (무엇을 왜 만드나, MVP 범위, 메이�
 docs/numbers-source.md   시트 숫자를 balance.json으로 옮긴 기록 (옮긴 숫자는 json이 기준)
 docs/PROTOTYPE_V0~V2.md  끝난 시제품 지시서 (v2 튜닝 8칸은 v3에서 지움. v4 세팅 돌리기로 새로)
 docs/PROTOTYPE_V3~V5.md  끝난 지시서: v3 경제 뼈대 (한 바퀴 계산, 고정 비용, 스페어, 저장 3, 번역), v4 세팅 돌리기 (적재함·ECU, 줄·고르기·천장), v5 기사 레벨·퀘스트·창고·야간팀·요약
+docs/PROTOTYPE_V6A.md    지금 지시서: 건물 클릭 + 건물 화면 (튜닝숍·물류센터·카센터). 화면만
 locale/strings.csv       화면 글자 (keys, ko, en). 고치면 --import 뒤 .translation 두 개도 같이 커밋
 docs/IDEAS.md            나중에 할 것 / 이미 정한 것
 tools/tune_sim.py        경제 시뮬레이터 (판정용. --table = 단계별 표)
