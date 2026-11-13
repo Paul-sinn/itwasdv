@@ -6,7 +6,7 @@
 ##   money         글자("123456789"). JSON 숫자는 2^53(약 9007조)을 넘으면 끝자리가 틀려져서 글자로 쓴다.
 ##                 읽을 때는 숫자(손으로 고친 파일)도 받는다
 ##   spares, spare_drop_carry
-##   trucks [ { star, lap_clock, lap_delivered, boost_lap, success_count, fail_count, destroy_count,
+##   trucks [ { star, lap_clock, lap_delivered, boost_lap, lap_cargo(형식 6), success_count, fail_count, destroy_count,
 ##              settings { 부품 id: { grade, lines, counters, pending: null 또는 { grade, lines } } } } ]
 ##   (형식 5) driver_level, driver_xp, ability_points, reputation, warehouse_level, night_level, quest_index,
 ##            parcels_total, setting_rolls, spares_bought, parts_rolled { 부품 id: true }, milestones_done [ 단계 ]
@@ -14,7 +14,8 @@
 ## 세팅: 모르는 부품·그 부품에 없는 옵션 id는 버리고, 등급·카운터는 범위로 자르고, 줄은 그 등급 줄 수까지 (앞에서부터).
 ## 형식 5 칸: 숫자가 아니면 깨진 저장, 숫자는 범위로 자름 (레벨 1~만렙, 경험치 0~다음 레벨 필요량−1, 창고·야간팀 1~표 끝,
 ##            퀘스트 번호 0~목록 길이, 개수·평판 0 이상). 모르는 부품·보너스 단계가 아닌 값은 버림.
-## 형식 3·4 파일은 그대로 읽는다 (없는 칸은 처음 값: 세팅 없음, 오버부스트 안 걸린 바퀴, 레벨 1, 창고·야간팀 Lv1, 퀘스트 처음부터).
+## 형식 3·4·5 파일은 그대로 읽는다 (없는 칸은 처음 값: 세팅 없음, 오버부스트 안 걸린 바퀴, 레벨 1, 창고·야간팀 Lv1, 퀘스트 처음부터,
+##   lap_cargo 0 = 지금 바퀴 건수를 다음 진행 때 굴림).
 ##
 ## 백업: 쓸 때마다 지금 파일을 path.bak1(가장 최근) → bak2 → bak3 으로 돌린다.
 ## 본 파일이 깨졌으면 path.broken 으로 옮기고 bak1 → bak2 → bak3 중 읽히는 첫 파일로 살린다.
@@ -30,7 +31,8 @@ const Setting = preload("res://scripts/core/setting.gd")
 const TruckState = preload("res://scripts/core/truck_state.gd")
 
 const DEFAULT_PATH := "user://save.json"
-const FORMAT_VERSION := 5   ## 1: v0·v1 / 2: 튜닝(v2) / 3: 한 바퀴 경제·트럭 여러 대(v3) / 4: 세팅 돌리기(v4) / 5: 기사 레벨·퀘스트·창고(v5)
+const FORMAT_VERSION := 6   ## 1: v0·v1 / 2: 튜닝(v2) / 3: 한 바퀴 경제·트럭 여러 대(v3) / 4: 세팅 돌리기(v4) / 5: 기사 레벨·퀘스트·창고(v5)
+                            ## 6: 트럭 lap_cargo (지금 바퀴에 실은 건수, v6-bal)
 const OLDEST_READABLE := 3  ## 이보다 옛 형식은 변환하지 않고 옮겨 둔다
 
 enum Status { OK, NONE, BROKEN }   ## 읽음 / 저장 파일 없음(새 게임) / 깨짐(새 게임)
@@ -55,6 +57,7 @@ static func to_dict(s: GameState, saved_at_unix: int) -> Dictionary:
 			"lap_clock": t.lap_clock,
 			"lap_delivered": t.lap_delivered,
 			"boost_lap": t.boost_lap,
+			"lap_cargo": t.lap_cargo,
 			"success_count": t.success_count,
 			"fail_count": t.fail_count,
 			"destroy_count": t.destroy_count,
@@ -121,6 +124,10 @@ static func from_dict(d, b: Balance) -> Dictionary:
 		if typeof(boost) != TYPE_BOOL:
 			return _broken("trucks[%d].boost_lap 이 true/false가 아님: %s" % [k, boost])
 		t.boost_lap = boost
+		var lap_cargo = td.get("lap_cargo", 0)   # 형식 5까지는 없음 → 다음 진행 때 굴림
+		if not _is_finite_number(lap_cargo):
+			return _broken("trucks[%d].lap_cargo 가 숫자가 아님: %s" % [k, lap_cargo])
+		t.lap_cargo = clampi(floori(lap_cargo), 0, 1 << 30)
 		var settings = _settings_from(td.get("settings", {}), b)   # 형식 3에는 없음
 		if settings == null:
 			return _broken("trucks[%d].settings 모양이 틀림" % k)

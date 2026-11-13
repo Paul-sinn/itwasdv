@@ -71,8 +71,7 @@ var ceiling: PackedInt64Array           ## [등급] = 천장. 이 횟수째 돌�
 var roll_cost: PackedInt64Array         ## [등급] = 돌리기 1번 비용 (원)
 var cost_cut_cap: float                 ## 기름값 + 정비비 절감 합의 상한
 var engine_guard_cap: float             ## 엔진 보호 합의 상한
-var overboost_seconds: float            ## 오버부스트: 몇 초 동안
-var overboost_mult: float               ## 오버부스트: 속도 몇 배
+var overboost_mult: float               ## 오버부스트: 걸린 바퀴 내내 운전 속도 몇 배
 var setting_parts: Dictionary = {}      ## 부품 id → { "unlock_star": int, "options": PackedStringArray } (json 순서)
 var setting_options: Dictionary = {}    ## 옵션 id → { "kind": String, "weight": float, "values": PackedFloat64Array (잡옵은 전부 0) }
 
@@ -164,7 +163,6 @@ static func from_dict(d: Dictionary) -> RefCounted:
 	b.roll_cost = PackedInt64Array(setting["roll_cost"])
 	b.cost_cut_cap = float(setting["cost_cut_cap"])
 	b.engine_guard_cap = float(setting["engine_guard_cap"])
-	b.overboost_seconds = float(setting["overboost_seconds"])
 	b.overboost_mult = float(setting["overboost_mult"])
 	for id in setting["options"]:
 		var o: Dictionary = setting["options"][id]
@@ -347,7 +345,6 @@ static func _validate_setting(setting: Dictionary, max_star: int, errs: PackedSt
 		_check_not_decreasing(setting["roll_cost"], "setting.roll_cost", errs)
 	_check_number(setting, "setting", "cost_cut_cap", errs, "0~1 사이여야 함", rate)
 	_check_number(setting, "setting", "engine_guard_cap", errs, "0~1 사이여야 함", rate)
-	_check_number(setting, "setting", "overboost_seconds", errs, "0 이상이어야 함", func(v): return v >= 0.0)
 	_check_number(setting, "setting", "overboost_mult", errs, "1 이상이어야 함", func(v): return v >= 1.0)
 
 	var options = setting.get("options")

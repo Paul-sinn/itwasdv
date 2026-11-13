@@ -35,19 +35,19 @@ func test_chances_for_display() -> void:
 		check_eq(c["success"], b.success[star], "%d강 성공" % star)
 		check_eq(c["destroy"], b.destroy[star], "%d강 퍼짐" % star)
 	var c18 := Enhance.chances(b, 18)
-	check_near(c18["fail"], 0.75, 1e-9, "+18 실패(유지)")
+	check_near(c18["fail"], 0.68, 1e-9, "+18 실패(유지)")
 
 
-## 경계값: 18강 (성공 0.2, 퍼짐 0.05)
+## 경계값: 18강 (성공 0.3, 퍼짐 0.02)
 func test_decide_boundaries() -> void:
 	var S := Enhance.Result.SUCCESS
 	var D := Enhance.Result.DESTROY
 	var F := Enhance.Result.FAIL
 	check_eq(Enhance.decide(b, 18, 0.0), S, "r=0")
-	check_eq(Enhance.decide(b, 18, 0.1999), S, "r=0.1999")
-	check_eq(Enhance.decide(b, 18, 0.2), D, "r=0.2 (성공 확률과 같음 → 퍼짐 구간)")
-	check_eq(Enhance.decide(b, 18, 0.2499), D, "r=0.2499")
-	check_eq(Enhance.decide(b, 18, 0.25), F, "r=0.25 (성공+퍼짐과 같음 → 실패)")
+	check_eq(Enhance.decide(b, 18, 0.2999), S, "r=0.2999")
+	check_eq(Enhance.decide(b, 18, 0.3), D, "r=0.3 (성공 확률과 같음 → 퍼짐 구간)")
+	check_eq(Enhance.decide(b, 18, 0.3199), D, "r=0.3199")
+	check_eq(Enhance.decide(b, 18, 0.32), F, "r=0.32 (성공+퍼짐과 같음 → 실패)")
 	check_eq(Enhance.decide(b, 18, 0.9999999), F, "r=0.9999999")
 
 
@@ -74,6 +74,29 @@ func test_rates_match_table() -> void:
 	note("표와 가장 크게 차이 난 곳: %s, %.3f%%p (허용 1%%p)" % [worst_where, worst * 100.0])
 
 
+## v6-bal B1 ②: +0~+29 어느 단계든 실패하면 단계 유지 (하락 없음). 진짜 강화 버튼(try_enhance)으로 실패가 나올 때까지 누름
+func test_fail_keeps_star_at_every_step() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 2026
+	var kept := 0
+	for star in b.max_star:
+		var s := _game(star, 10 ** 15)
+		s.spares = 1000
+		var t := s.truck(0)
+		var result := Enhance.Result.SUCCESS
+		for i in 1000:
+			t.star = star
+			result = Enhance.try_enhance(s, b, 0, rng)
+			if result == Enhance.Result.FAIL:
+				break
+		check_eq(result, Enhance.Result.FAIL, "+%d: 1000번 안에 실패가 안 나옴" % star)
+		check_eq(t.star, star, "+%d 실패 뒤 단계" % star)
+		if result == Enhance.Result.FAIL and t.star == star:
+			kept += 1
+		check_eq(Enhance.decide(b, star, 0.9999999), Enhance.Result.FAIL, "+%d 맨 끝 난수 = 실패" % star)
+	note("+0~+%d 중 %d개 단계에서 실패 뒤 단계 그대로" % [b.max_star - 1, kept])
+
+
 ## 17강 이하에서는 어떤 난수가 나와도 절대 안 퍼짐
 func test_never_destroys_at_17_or_below() -> void:
 	for star in range(0, 18):
@@ -94,7 +117,7 @@ func test_destroy_uses_spare() -> void:
 	check_eq(Enhance.try_enhance(s, b, 0, rng), Enhance.Result.BLOCKED, "+18 스페어 0인데 강화가 됨")
 	check_eq(s.money, 10 ** 12, "막혔는데 돈이 빠짐")
 
-	# 스페어 2개 들고 +20에서 퍼질 때까지 누른다 (+20 퍼짐 7%)
+	# 스페어 2개 들고 +20에서 퍼질 때까지 누른다 (+20 퍼짐 4%)
 	s.spares = 2
 	var result := Enhance.Result.FAIL
 	var tries := 0

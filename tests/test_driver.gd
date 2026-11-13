@@ -31,14 +31,14 @@ func _of_type(events: Array, type: String) -> Array:
 
 ## v5 C1 ②: 레벨 1~6 필요량이 시트 값, 만렙 0
 func test_xp_need() -> void:
-	var want := [100, 230, 374, 528, 690, 859]
+	var want := [100, 251, 431, 632, 850, 1084]   # v6-bal 지수 1.33 (스냅샷 7번: Lv2 100, Lv3 251, Lv4 431, Lv5 632)
 	var got := []
 	for lv in range(1, 7):
 		got.append(Driver.xp_need(b, lv))
 	check_eq(got, want, "레벨 1~6 다음 레벨까지")
 	check_eq(Driver.max_level(b), 50, "만렙")
 	check_eq(Driver.xp_need(b, 50), 0, "만렙 필요량")
-	check_eq(Driver.xp_need(b, 49), roundi(100.0 * pow(49.0, 1.2)), "레벨 49 필요량 = round(100 × 49^1.2)")
+	check_eq(Driver.xp_need(b, 49), roundi(100.0 * pow(49.0, 1.33)), "레벨 49 필요량 = round(100 × 49^1.33)")
 	note("다음 레벨까지 (레벨 1~6): %s, 레벨 49: %d, 레벨 1→50 합 %d" % [got, Driver.xp_need(b, 49), _xp_to(50)])
 
 
@@ -155,8 +155,8 @@ func test_enhance_success_calls_milestone() -> void:
 func test_take_events_in_order() -> void:
 	var s := GameState.new_game()
 	check_eq(s.take_events(), [], "처음엔 알림 없음")
-	Driver.add_xp(s, b, 330)   # 100 + 230 → 레벨 3
-	Driver.on_star_reached(s, b, 10)   # 보너스 500 → 374 넘김 → 레벨 4
+	Driver.add_xp(s, b, 351)   # 100 + 251 → 레벨 3
+	Driver.on_star_reached(s, b, 10)   # 보너스 500 → 431 넘김 → 레벨 4
 	var events := s.take_events()
 	check_eq(events, [
 		{ "type": "level_up", "level": 2, "points": 1 },
@@ -165,4 +165,4 @@ func test_take_events_in_order() -> void:
 		{ "type": "level_up", "level": 4, "points": 1 },
 	], "알림 순서")
 	check_eq(s.take_events(), [], "꺼낸 뒤에는 비어 있음")
-	check_eq([s.driver_level, s.driver_xp], [4, 126], "레벨 4 + 남은 126")
+	check_eq([s.driver_level, s.driver_xp], [4, 69], "레벨 4 + 남은 69")

@@ -8,6 +8,7 @@ var star: int = 0              ## 강화 단계 0~max_star
 var lap_clock: float = 0.0     ## 지금 바퀴에서 흐른 초
 var lap_delivered: int = 0     ## 지금 바퀴에서 배송 끝낸 집 수
 var boost_lap: bool = false    ## 지금 바퀴에 오버부스트가 걸렸나
+var lap_cargo: int = 0         ## 지금 바퀴에 실은 건수 (바퀴 출발할 때 굴림). 0 = 아직 안 굴림 → 다음 Trip.advance에서 굴림
 
 # 통계 (강화 버튼을 눌러서 나온 결과만 센다)
 var success_count: int = 0

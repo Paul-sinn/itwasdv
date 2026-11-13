@@ -15,3 +15,9 @@
 | 2026-11-13 | 경험치 얻는 법 (B2, B7) | `driver.xp_per_parcel`, `driver.star_milestone_xp` | PROTOTYPE_V5 | 시내·장거리·주간 목표 경험치는 v6~v7 |
 | 2026-11-13 | 레벨 곡선 (B1:B4) | `driver.base_xp`, `driver.exponent`, `driver.points_per_level`, `driver.bonus_points_every_10` | PROTOTYPE_V5 | |
 | 2026-11-13 | 오프라인 (C2:C9) | `depot.warehouse_hours`, `depot.night_rates` | PROTOTYPE_V5 | `offline.cap_hours` 8, `offline.rate` 0.5를 대신함 (시작 4시간·50%). 가격은 시트에 없어 임시값 |
+| 2026-11-13 | 강화 단계 (스냅샷 1번, 시트 버전 22) | `engine.success`, `engine.destroy` | PROTOTYPE_V6_BAL | Q1. `engine.power_gain`은 이미 같음 (확인만). 실패 = 모든 단계 단계 유지 |
+| 2026-11-13 | 세팅 옵션 수치 (스냅샷 5번) | `setting.options.fuel_cut.values`, `setting.options.overboost.values`, `trip.fuel_rate` | PROTOTYPE_V6_BAL | Q7-3. 기름값 10% → 20%. `setting.overboost_seconds` 지움 (오버부스트 = 걸린 바퀴 내내 운전 속도 2배) |
+| 2026-11-13 | 세팅 규칙 (스냅샷 3번) | `setting.options.speed.weight` | PROTOTYPE_V6_BAL | Q7-3 (다). 6 → 10 |
+| 2026-11-13 | 시트에 없음 (사용자 답 Q7-1) | `setting.roll_cost` | PROTOTYPE_V6_BAL | 스포츠 160만, 레이싱 600만 |
+| 2026-11-13 | 레벨 곡선 (스냅샷 7번) | `driver.exponent` | PROTOTYPE_V6_BAL | Q14-1. 1.2 → 1.33 |
+| 2026-11-13 | 시트에 없음 (사용자 답 Q14-3) | `quests` star_15·level_20·setting_racing·star_18의 `money` | PROTOTYPE_V6_BAL | 100만·100만·100만·150만 |
