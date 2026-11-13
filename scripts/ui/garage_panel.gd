@@ -2,6 +2,7 @@
 ## 크기는 set_ui_scale()로 정한다 (1 = v0 패널 크기).
 ## v3: 트럭 0의 엔진 강화 + 스페어 엔진(들고 있는 개수, 언제든 구매). 고장 상태는 없음 (퍼지면 스페어를 써서 +15)
 ## v4: 위쪽 [엔진 강화] / [세팅] 두 칸 (처음엔 [엔진 강화]). [세팅] 칸은 setting_tab.gd
+## v5: [기사·물류센터] 칸 더함 (driver_tab.gd: 기사 레벨·다음 할 일·창고 확장·야간 배송팀)
 ## 보여주기만 한다. 버튼을 누르면 신호만 보내고, 실제 강화·구매·돌리기는 main.gd → scripts/core 가 한다.
 extends PanelContainer
 
@@ -14,17 +15,20 @@ const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const Town = preload("res://scripts/ui/town.gd")
 const SettingTab = preload("res://scripts/ui/setting_tab.gd")
+const DriverTab = preload("res://scripts/ui/driver_tab.gd")
 
 signal enhance_pressed
 signal spare_pressed
 
 const TRUCK := 0   ## 지금은 트럭 1대 (고르는 탭은 v7)
 
-enum Tab { ENGINE, SETTING }
+enum Tab { ENGINE, SETTING, DRIVER }
 
 var engine_tab_button: Button    ## 위쪽 [엔진 강화]
 var setting_tab_button: Button   ## 위쪽 [세팅]
+var driver_tab_button: Button    ## 위쪽 [기사·물류센터]
 var setting: SettingTab          ## [세팅] 칸
+var driver: DriverTab            ## [기사·물류센터] 칸
 
 var _style: StyleBoxFlat
 var _tabs: HBoxContainer
@@ -68,7 +72,8 @@ func _ready() -> void:
 	var group := ButtonGroup.new()
 	engine_tab_button = _button(_tabs, tr("GARAGE_TAB_ENGINE"), Feel.SETTING_TAB_SIZE)
 	setting_tab_button = _button(_tabs, tr("GARAGE_TAB_SETTING"), Feel.SETTING_TAB_SIZE)
-	for b in [engine_tab_button, setting_tab_button]:
+	driver_tab_button = _button(_tabs, tr("GARAGE_TAB_DRIVER"), Feel.SETTING_TAB_SIZE)
+	for b in [engine_tab_button, setting_tab_button, driver_tab_button]:
 		b.toggle_mode = true
 		b.button_group = group
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -76,6 +81,7 @@ func _ready() -> void:
 		b.add_theme_color_override("font_hover_pressed_color", Feel.COLOR_STAR)
 	engine_tab_button.pressed.connect(func(): show_tab(Tab.ENGINE))
 	setting_tab_button.pressed.connect(func(): show_tab(Tab.SETTING))
+	driver_tab_button.pressed.connect(func(): show_tab(Tab.DRIVER))
 
 	var e := VBoxContainer.new()
 	_engine_box = e
@@ -103,6 +109,8 @@ func _ready() -> void:
 
 	setting = SettingTab.new()
 	_box.add_child(setting)
+	driver = DriverTab.new()
+	_box.add_child(driver)
 
 	# 성공 번쩍임 (패널 위에 겹쳐 놓은 하얀 판, 평소엔 투명)
 	_flash = ColorRect.new()
@@ -128,6 +136,7 @@ func set_ui_scale(s: float) -> void:
 		c.add_theme_font_size_override("font_size", _px(_font_sizes[c]))
 	_result.add_theme_font_size_override("font_size", _px(_result_size))
 	setting.set_ui_scale(s)
+	driver.set_ui_scale(s)
 	reset_size()
 
 
@@ -139,13 +148,15 @@ func _px(base: float) -> int:
 	return maxi(1, int(roundf(base * _scale)))
 
 
-## [엔진 강화] / [세팅] 칸 바꾸기
+## [엔진 강화] / [세팅] / [기사·물류센터] 칸 바꾸기
 func show_tab(t: Tab) -> void:
 	_tab = t
 	_engine_box.visible = t == Tab.ENGINE
 	setting.visible = t == Tab.SETTING
+	driver.visible = t == Tab.DRIVER
 	engine_tab_button.set_pressed_no_signal(t == Tab.ENGINE)
 	setting_tab_button.set_pressed_no_signal(t == Tab.SETTING)
+	driver_tab_button.set_pressed_no_signal(t == Tab.DRIVER)
 
 
 func current_tab() -> Tab:
@@ -231,6 +242,8 @@ func refresh(b: Balance, s: GameState) -> void:
 
 	if setting.visible:
 		setting.refresh(b, s, _busy)
+	if driver.visible:
+		driver.refresh(b, s)
 
 
 ## 방금 일어난 일을 한 줄로 (+ 아래 작은 설명). font_size는 v0 패널 기준 (배수는 여기서 곱함)

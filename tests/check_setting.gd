@@ -15,6 +15,8 @@
 ##   <GODOT_CONSOLE> --headless --path <프로젝트> -s tests/check_setting.gd
 extends SceneTree
 
+const ErrorWatch = preload("res://tests/error_watch.gd")   ## 실행 중 스크립트 오류가 나면 실패로 끝냄
+
 const MAIN_SCENE := "res://scenes/main.tscn"
 const Balance = preload("res://scripts/core/balance.gd")
 const Enhance = preload("res://scripts/core/enhance.gd")
@@ -37,6 +39,7 @@ var _hangul := RegEx.create_from_string("[가-힣ㄱ-ㅎㅏ-ㅣ]")
 
 
 func _initialize() -> void:
+	OS.add_logger(ErrorWatch.new(self))
 	_run.call_deferred()
 
 

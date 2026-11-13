@@ -13,6 +13,8 @@
 ##   <GODOT_CONSOLE> --headless --path <프로젝트> -s tests/check_garage.gd
 extends SceneTree
 
+const ErrorWatch = preload("res://tests/error_watch.gd")   ## 실행 중 스크립트 오류가 나면 실패로 끝냄
+
 const MAIN_SCENE := "res://scenes/main.tscn"
 const Save = preload("res://scripts/core/save.gd")
 const Economy = preload("res://scripts/core/economy.gd")
@@ -34,6 +36,7 @@ var full_size := Vector2i(1600, 900)   ## 큰 화면일 때 창 크기 (창 담�
 
 
 func _initialize() -> void:
+	OS.add_logger(ErrorWatch.new(self))
 	_run.call_deferred()
 
 

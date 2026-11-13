@@ -10,6 +10,8 @@
 ##   <GODOT_CONSOLE> --headless --path <프로젝트> --fixed-fps 60 -s tests/check_town_hour.gd
 extends SceneTree
 
+const ErrorWatch = preload("res://tests/error_watch.gd")   ## 실행 중 스크립트 오류가 나면 실패로 끝냄
+
 const MAIN_SCENE := "res://scenes/main.tscn"
 const Save = preload("res://scripts/core/save.gd")
 const Trip = preload("res://scripts/core/trip.gd")
@@ -44,6 +46,7 @@ var _flame_out := 0           ## 그중 가장 긴 불꽃이 보이는 곳 밖�
 
 
 func _initialize() -> void:
+	OS.add_logger(ErrorWatch.new(self))
 	process_frame.connect(_on_frame)
 	# 트리가 돌기 시작한 뒤에 띄워야 main의 _ready가 바로 불린다
 	_start.call_deferred()

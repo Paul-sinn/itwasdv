@@ -83,3 +83,12 @@ static func duration(seconds: float) -> String:
 	if h > 0:
 		return "%d:%02d:%02d" % [h, m, s]
 	return "%d:%02d" % [m, s]
+
+
+## 다음 할 일 이름·설명 (번역 키 QUEST_<ID 대문자>, QUEST_<ID 대문자>_DESC. id는 balance.json quests)
+static func quest_name(id: String) -> String:
+	return _t("QUEST_" + id.to_upper())
+
+
+static func quest_desc(id: String) -> String:
+	return _t("QUEST_" + id.to_upper() + "_DESC")

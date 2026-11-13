@@ -73,7 +73,7 @@ func _run() -> void:
 	await _shot_rects("small_spare_visible")
 
 	# 3) 작은 화면 위 복귀 팝업 (백업 복구 안내 + 꺼둔 동안 요약)
-	m.offline_report = { "money": 54321, "parcels": 123, "spares": 1, "hours": 3.0, "away_seconds": 3.0 * 3600.0 }
+	m.offline_report = { "money": 54321, "parcels": 123, "spares": 1, "hours": 3.0, "xp": 0, "full": false, "ignored": false, "away_seconds": 3.0 * 3600.0 }
 	m._open_return_popup(m.tr("LOAD_RECOVERED") % "save.json.broken")
 	await _wait(0.1)
 	await _shot("small_popup")
@@ -153,6 +153,27 @@ func _run() -> void:
 	await _wait(0.3)
 	await _shot("small_overboost")
 	await _shot_rects("small_overboost_visible")
+
+	# 8) v5: 차고 [기사·물류센터] 칸 (1600x900, 1280x720) + 작은 화면 "Lv.N"·다음 할 일 줄·알림 (할 일 끝 + 레벨업이 한 알림)
+	t.boost_lap = false
+	m.screen.enter_full()
+	vp.size = FULL_SIZES[1]
+	m.state.driver_level = 7
+	m.state.driver_xp = 300
+	m.state.ability_points = 6
+	m.state.quest_index = 8   # 창고 확장 (balance.json quests 순서). 돈이 모자라서 "모자람" 줄도 보임
+	m.state.money = 1500000
+	m.panel.show_tab(m.panel.Tab.DRIVER)
+	await _wait(0.3)
+	await _shot("full_driver_1600x900")
+	vp.size = FULL_SIZES[0]
+	await _wait(0.3)
+	await _shot("full_driver_1280x720")
+	m.screen.enter_small()
+	m._show_events([{ "type": "quest_done", "id": "warehouse_2", "xp": 300, "money": 200000 }, { "type": "level_up", "level": 8, "points": 1 }])
+	await _wait(0.5)
+	await _shot("small_notice")
+	await _shot_rects("small_notice_visible")
 
 	Save.delete_file(TEST_SAVE)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SETTINGS))

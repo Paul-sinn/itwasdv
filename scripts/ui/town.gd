@@ -1,5 +1,6 @@
 ## v1 동네: 꼬불꼬불한 길 하나, 길가에 집 TOWN_HOUSES채, 길 끝(시작점)에 물류센터, 트럭,
-## 구석 강화 단계("+N")·돈, 집 앞 "+금액"·"스페어 엔진 +1", 트럭 위 "오버부스트!".
+## 구석 강화 단계("+N")·돈·기사 레벨("Lv.N") + 그 아래 "다음 할 일" 한 줄, 집 앞 "+금액"·"스페어 엔진 +1", 트럭 위 "오버부스트!",
+## 오른쪽 위 알림(할 일 끝·레벨업 등. 여러 개면 하나씩 차례로).
 ## 동네 설계 좌표(feel.gd TOWN_SIZE = 작은 화면 크기)로 만들고, 전체 화면에서는 같은 동네를 통째로 확대한다.
 ## 길·집·트럭은 확대해서 그리고(선명함), 글자는 확대 배수에 맞춘 글자 크기로 따로 놓는다.
 ## 그리기만 한다. 돈·배송은 main.gd → scripts/core/trip.gd (배송 이벤트가 오면 show_payout)
@@ -19,11 +20,16 @@ var show_ground := false     ## 동네 바닥을 칠할까 (전체 화면에서�
 var payouts_shown := 0       ## 지금까지 띄운 "+금액" 수 (확인용)
 var spares_shown := 0        ## 지금까지 띄운 "스페어 엔진 +1" 수 (확인용)
 var boosts_shown := 0        ## 지금까지 띄운 "오버부스트!" 수 (확인용)
+var notices_shown: Array[String] = []   ## 지금까지 띄운 알림 글자, 띄운 순서대로 (확인용)
 
 var _houses: Array[Vector2] = []     ## 집 자리 (길 가운데 선 위, 설계 좌표)
 var _hud: HBoxContainer
 var _star_label: Label
 var _money_label: Label
+var _level_label: Label
+var _quest_label: Label   ## "다음 할 일: 배송 20건 3/20"
+var _notice: Label        ## 지금 떠 있는 알림 (하나만)
+var _notice_queue: Array[String] = []   ## 차례를 기다리는 알림
 var _depot_label: Label
 var _payouts: Array[Label] = []   ## 떠오르는 중인 "+금액"·"스페어 엔진 +1"들
 
@@ -46,8 +52,16 @@ func _ready() -> void:
 	add_child(_hud)
 	_star_label = make_label(Feel.HUD_FONT_SIZE, Feel.COLOR_STAR)
 	_money_label = make_label(Feel.HUD_FONT_SIZE, Feel.COLOR_TEXT)
+	_level_label = make_label(Feel.HUD_FONT_SIZE, Feel.COLOR_LEVEL)
 	_hud.add_child(_star_label)
 	_hud.add_child(_money_label)
+	_hud.add_child(_level_label)
+	_quest_label = make_label(Feel.QUEST_FONT_SIZE, Feel.COLOR_QUEST)
+	add_child(_quest_label)
+	_notice = make_label(Feel.NOTICE_FONT_SIZE, Feel.COLOR_NOTICE)
+	_notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_notice.visible = false
+	add_child(_notice)
 
 	_depot_label = make_label(Feel.LABEL_FONT_SIZE, Feel.COLOR_TEXT)
 	_depot_label.text = tr("TOWN_DEPOT")
@@ -67,6 +81,11 @@ func layout(top_left: Vector2, z: float, text_k: float) -> void:
 		_set_font(l, Feel.HUD_FONT_SIZE)
 	_hud.reset_size()
 	_hud.position = to_view(Feel.TOWN_HUD_POS)
+	_set_font(_quest_label, Feel.QUEST_FONT_SIZE)
+	_quest_label.reset_size()
+	_quest_label.position = to_view(Feel.TOWN_QUEST_POS)
+	_set_font(_notice, Feel.NOTICE_FONT_SIZE)
+	_place_notice()
 
 	_set_font(_depot_label, Feel.LABEL_FONT_SIZE)
 	_depot_label.reset_size()
@@ -95,9 +114,50 @@ func area() -> Rect2:
 	return view_rect(Rect2(Vector2.ZERO, Feel.TOWN_SIZE))
 
 
-func set_hud(money: int, star: int) -> void:
+func set_hud(money: int, star: int, level: int) -> void:
 	_star_label.text = "+%d" % star
 	_money_label.text = tr("MONEY") % Fmt.money(money)
+	_level_label.text = tr("TOWN_LEVEL") % level
+
+
+## "다음 할 일" 한 줄 (글자는 main.gd가 만듦)
+func set_quest(text: String) -> void:
+	if _quest_label.text != text:
+		_quest_label.text = text
+		_quest_label.reset_size()
+
+
+## 알림을 줄 세운다. 앞의 알림이 사라진 뒤에 하나씩 뜬다 (진짜 시간)
+func notify(text: String) -> void:
+	_notice_queue.append(text)
+	if not _notice.visible:
+		_next_notice()
+
+
+func _next_notice() -> void:
+	if _notice_queue.is_empty():
+		_notice.visible = false
+		return
+	var text: String = _notice_queue.pop_front()
+	notices_shown.append(text)
+	_notice.text = text
+	_notice.modulate.a = 0.0
+	_notice.visible = true
+	_place_notice()
+	var hold := Feel.NOTICE_SECONDS_BUSY if _notice_queue.size() >= Feel.NOTICE_BUSY_QUEUE else Feel.NOTICE_SECONDS
+	var tw := _notice.create_tween().set_ignore_time_scale(true)
+	tw.tween_property(_notice, "modulate:a", 1.0, Feel.NOTICE_FADE)
+	tw.tween_interval(hold)
+	tw.tween_property(_notice, "modulate:a", 0.0, Feel.NOTICE_FADE)
+	tw.tween_callback(_next_notice)
+
+
+## 알림: 오른쪽 맞춤, 동네 왼쪽 밖으로는 안 나감
+func _place_notice() -> void:
+	_notice.reset_size()
+	var right_top := to_view(Feel.NOTICE_RIGHT_TOP)
+	_notice.position = Vector2(maxf(area().position.x, right_top.x - _notice.size.x), right_top.y)
+
 
 
 
@@ -179,7 +239,11 @@ func visible_rects(truck_pad: float) -> Array:
 		out.append(view_rect(_house_rect(spot)).grow(1.0))
 	# "+N" 숫자가 커졌다 돌아올 때 잘리지 않게 넉넉하게
 	var pop_room := Feel.HUD_FONT_SIZE * text_scale * (Feel.STAR_POP_SCALE - 1.0)
-	out.append(Rect2(_hud.position, _hud.get_combined_minimum_size()).grow(o + pop_room))
+	# 바로 아래 "다음 할 일" 줄과 한 사각형으로 (사각형 수를 늘리지 않게. 둘 다 왼쪽 맞춤이라 빈 곳이 거의 안 생김)
+	var hud := Rect2(_hud.position, _hud.get_combined_minimum_size()).grow(o + pop_room)
+	out.append(hud.merge(Rect2(_quest_label.position, _quest_label.size).grow(o)))
+	if _notice.visible:
+		out.append(Rect2(_notice.position, _notice.size).grow(o))
 	out.append(truck.click_rect().grow(truck_pad))
 	var smoke := truck.smoke_rect()
 	if smoke.has_area():

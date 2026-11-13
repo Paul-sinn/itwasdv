@@ -55,7 +55,7 @@ GARAGE_NEED_SPARE,퍼질 수 있는 단계라 스페어 엔진이 있어야 강�
 RESULT_DESTROY_NOTE,스페어 엔진 1개 사용 → +%d (남은 스페어 %d개),Used 1 spare engine → +%d (%d spares left)
 RESULT_SPARE_BOUGHT,스페어 엔진 구매! (가진 것 %d개),Bought a spare engine! (you have %d)
 TOWN_SPARE,스페어 엔진 +1,Spare engine +1
-RETURN_DETAIL,배송 %d건 · 스페어 엔진 +%d개,%d deliveries · spare engines +%d
+RETURN_DETAIL,배송 %d건 · 경험치 +%d · 스페어 엔진 +%d개,%d deliveries · +%d XP · spare engines +%d
 LOAD_RECOVERED,"저장 파일이 깨져서 백업에서 되살렸습니다.
 (깨진 파일은 %s 로 남겨 둠)","The save file was broken, so it was restored from a backup.
 (The broken file was kept as %s)"
@@ -105,3 +105,73 @@ SETTING_RESULT_SAME,새 줄이 나왔어요. 둘 중 하나를 고르세요,New 
 SETTING_TOOK_NEW,새 것으로 바꿨어요,Switched to the new one
 SETTING_KEPT_OLD,예전 것을 그대로 써요,Kept the old one
 TOWN_BOOST,오버부스트!,Overboost!
+RETURN_FULL,창고가 꽉 참: %s시간치까지만 쌓였어요 (꺼둔 동안은 %s만),Warehouse full: only %s hours' worth stored (%s rate while off)
+TOWN_LEVEL,Lv.%d,Lv.%d
+TOWN_QUEST,다음 할 일: %s %d/%d,Next: %s %d/%d
+QUEST_NONE,다음 할 일 없음,No next task
+GARAGE_TAB_DRIVER,기사·물류센터,Driver & Depot
+DRIVER_LEVEL,기사 Lv.%d,Driver Lv.%d
+DRIVER_LEVEL_MAX,기사 Lv.%d (만렙),Driver Lv.%d (max)
+DRIVER_XP,경험치 %d / %d,XP %d / %d
+DRIVER_REPUTATION,만렙이라 경험치는 회사 평판으로: %d,"Max level, so XP goes to company reputation: %d"
+DRIVER_POINTS,능력치 포인트 %d (쓰는 곳은 다음 버전에),Skill points: %d (you can spend them in a later version)
+DRIVER_QUEST_HEAD,다음 할 일 · 끝낸 것 %d/%d,Next task · done %d/%d
+DRIVER_QUEST_PROGRESS,진행 %d/%d · 보상 +%s원 · 경험치 +%d,Progress %d/%d · reward +₩%s · +%d XP
+DEPOT_WAREHOUSE,창고 확장 Lv.%d,Warehouse Lv.%d
+DEPOT_NIGHT,야간 배송팀 Lv.%d,Night crew Lv.%d
+DEPOT_WAREHOUSE_VALUE,꺼둔 동안 쌓이는 시간 %s,Stores up to %s while off
+DEPOT_NIGHT_VALUE,꺼둔 동안 버는 비율 %s,Earns %s while off
+DEPOT_HOURS,%s시간,%s h
+DEPOT_NEXT,%s → %s,%s → %s
+DEPOT_AGENCY,%s · 다음(%s)은 대리점부터,%s · next (%s) needs your own agency
+DEPOT_TOP,%s (최고 단계),%s (top level)
+DEPOT_BUY,올리기 (%s원),Upgrade (₩%s)
+DEPOT_SHORT,%s원 모자람 · %s,₩%s short · %s
+NOTICE_QUEST,할 일 끝! %s  +%s원 · 경험치 +%d,Done: %s  +₩%s · +%d XP
+NOTICE_MILESTONE,엔진 +%d 첫 달성! 경험치 +%d,First time at engine +%d! +%d XP
+NOTICE_LEVEL,Lv.%d! 포인트 +%d,Lv.%d! Skill points +%d
+NOTICE_MAX_LEVEL,Lv.%d 만렙! 이제 경험치는 회사 평판으로,Max level %d! XP now goes to company reputation
+QUEST_FIRST_PARCEL,첫 배송,First delivery
+QUEST_FIRST_PARCEL_DESC,트럭이 택배를 1건 배송하면 끝나요,Done when your truck delivers 1 parcel
+QUEST_PARCELS_20,배송 20건,20 deliveries
+QUEST_PARCELS_20_DESC,택배를 모두 20건 배송하기,Deliver 20 parcels in total
+QUEST_FIRST_ENHANCE,첫 엔진 강화,First engine upgrade
+QUEST_FIRST_ENHANCE_DESC,차고 [엔진 강화]에서 엔진을 +1로 올리기,Upgrade the engine to +1 in the garage's Engine tab
+QUEST_FIRST_SETTING,첫 세팅 돌리기,First setup roll
+QUEST_FIRST_SETTING_DESC,차고 [세팅 돌리기]에서 한 번 돌리기,Roll a setup once in the garage's Setups tab
+QUEST_STAR_3,엔진 +3,Engine +3
+QUEST_STAR_3_DESC,엔진을 +3까지 강화하기,Upgrade the engine to +3
+QUEST_SETTING_STREET,스트리트 세팅,Street setup
+QUEST_SETTING_STREET_DESC,부품 하나를 스트리트 등급으로 (새 것 쓰기로 골라야 해요),Get any part to Street grade (choose Use new)
+QUEST_STAR_5,엔진 +5,Engine +5
+QUEST_STAR_5_DESC,엔진을 +5까지 강화하기,Upgrade the engine to +5
+QUEST_ECU_FIRST,첫 ECU 세팅,First ECU setup
+QUEST_ECU_FIRST_DESC,[세팅 돌리기]에서 ECU를 한 번 돌리기,Roll the ECU once in the Setups tab
+QUEST_WAREHOUSE_2,창고 확장,Bigger warehouse
+QUEST_WAREHOUSE_2_DESC,[기사·물류센터]에서 창고 확장을 Lv.2로 (꺼둔 동안 더 오래 쌓임),Upgrade the warehouse to Lv.2 in Driver & Depot (stores longer while off)
+QUEST_LEVEL_5,기사 Lv.5,Driver Lv.5
+QUEST_LEVEL_5_DESC,배송과 할 일로 경험치를 모아 기사 레벨 5 되기,Reach driver level 5 with XP from deliveries and tasks
+QUEST_STAR_8,엔진 +8,Engine +8
+QUEST_STAR_8_DESC,엔진을 +8까지 강화하기,Upgrade the engine to +8
+QUEST_SETTING_SPORT,스포츠 세팅,Sport setup
+QUEST_SETTING_SPORT_DESC,부품 하나를 스포츠 등급으로,Get any part to Sport grade
+QUEST_NIGHT_2,야간 배송팀,Night crew
+QUEST_NIGHT_2_DESC,[기사·물류센터]에서 야간 배송팀을 Lv.2로 (꺼둔 동안 더 많이 범),Upgrade the night crew to Lv.2 in Driver & Depot (earn more while off)
+QUEST_STAR_10,엔진 +10,Engine +10
+QUEST_STAR_10_DESC,엔진을 +10까지 강화하기,Upgrade the engine to +10
+QUEST_LEVEL_10,기사 Lv.10,Driver Lv.10
+QUEST_LEVEL_10_DESC,기사 레벨 10 되기,Reach driver level 10
+QUEST_WAREHOUSE_3,창고 확장 Lv.3,Warehouse Lv.3
+QUEST_WAREHOUSE_3_DESC,창고 확장을 Lv.3으로,Upgrade the warehouse to Lv.3
+QUEST_STAR_12,엔진 +12,Engine +12
+QUEST_STAR_12_DESC,엔진을 +12까지 강화하기,Upgrade the engine to +12
+QUEST_FIRST_SPARE,스페어 엔진 사기,Buy a spare engine
+QUEST_FIRST_SPARE_DESC,[엔진 강화]에서 스페어 엔진을 1개 사기 (퍼질 수 있는 단계에서 필요),Buy 1 spare engine in the Engine tab (needed where the engine can blow up)
+QUEST_STAR_15,엔진 +15,Engine +15
+QUEST_STAR_15_DESC,엔진을 +15까지 강화하기,Upgrade the engine to +15
+QUEST_LEVEL_20,기사 Lv.20,Driver Lv.20
+QUEST_LEVEL_20_DESC,기사 레벨 20 되기,Reach driver level 20
+QUEST_SETTING_RACING,레이싱 세팅,Racing setup
+QUEST_SETTING_RACING_DESC,부품 하나를 레이싱 등급으로,Get any part to Racing grade
+QUEST_STAR_18,엔진 +18,Engine +18
+QUEST_STAR_18_DESC,엔진을 +18까지 강화하기,Upgrade the engine to +18

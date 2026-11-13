@@ -10,11 +10,16 @@
 ##     → 창 크기가 바뀔 때마다 _layout() (최소 1280x720에서도 안 깨지게)
 ## v3: 돈은 정수. 화면 트럭은 연출이고, 자리만 계산 쪽 바퀴 진행(TruckState)에서 정한다 (_lap_phase)
 ## v4: 차고 [세팅] 칸 → Setting.try_roll / Setting.choose (굴리기·고르기는 scripts/core/setting.gd)
+## v5: 계산 쪽 알림(state.take_events: 할 일 끝·레벨업·만렙·강화 첫 달성)을 프레임마다 꺼내 동네에 하나씩,
+##     차고 [기사·물류센터] → Depot.upgrade, 강화·세팅·스페어·올리기 직후 Quest.check (바로 반응하게)
 extends Control
 
 const Balance = preload("res://scripts/core/balance.gd")
+const Depot = preload("res://scripts/core/depot.gd")
+const Driver = preload("res://scripts/core/driver.gd")
 const Enhance = preload("res://scripts/core/enhance.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
+const Quest = preload("res://scripts/core/quest.gd")
 const Save = preload("res://scripts/core/save.gd")
 const Setting = preload("res://scripts/core/setting.gd")
 const Trip = preload("res://scripts/core/trip.gd")
@@ -27,7 +32,6 @@ const SettingsPanel = preload("res://scripts/ui/settings_panel.gd")
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
 
 const AUTOSAVE_SECONDS := 30.0        ## 30초마다 저장 (배속과 상관없이 진짜 30초)
-const RETURN_POPUP_MIN_AWAY := 60.0   ## 이보다 짧게 껐다 켜면 복귀 팝업 안 띄움 (돈은 넣음)
 const TRUCK := 0   ## 지금은 트럭 1대 (번호 0). 사는 화면·고르는 탭은 v7
 
 ## 저장 파일 위치. 확인 스크립트는 진짜 저장을 건드리지 않게 add_child 전에 바꾼다.
@@ -44,7 +48,8 @@ var settings_button: Button  ## 큰 화면 [설정]
 var settings: SettingsPanel  ## [설정]을 누르면 가운데 뜨는 "화면: 전체 화면 / 창 모드"
 var rng := RandomNumberGenerator.new()
 
-## 켰을 때 넣은 꺼둔 동안 (Trip.apply_offline 결과 + away_seconds): { money, parcels, spares, hours, away_seconds }.
+## 켰을 때 넣은 꺼둔 동안 (Trip.apply_offline 결과 + away_seconds):
+##   { money, parcels, spares, hours, xp, full, ignored, away_seconds }.
 ## 저장이 없었으면 빈 묶음
 var offline_report := {}
 
@@ -107,6 +112,7 @@ func _ready() -> void:
 	panel.spare_pressed.connect(_on_spare_pressed)
 	panel.setting.roll_pressed.connect(_on_roll_pressed)
 	panel.setting.choose_pressed.connect(_on_choose_pressed)
+	panel.driver.upgrade_pressed.connect(_on_upgrade_pressed)
 	_open_pending_setting()
 
 	small_button = Button.new()
@@ -235,7 +241,9 @@ func _process(delta: float) -> void:
 			"boost":   # 이 바퀴는 오버부스트 (트럭 뒤 불꽃은 boosting으로 바퀴 내내)
 				town.show_boost()
 				boosts_found += 1
-	town.set_hud(state.money, t.star)
+	_show_events(state.take_events())
+	town.set_hud(state.money, t.star, state.driver_level)
+	town.set_quest(_quest_line())
 	if panel.visible:
 		panel.refresh(balance, state)
 		_place_panel()
@@ -291,19 +299,63 @@ func _open_return_popup(notice: String) -> void:
 		popup.open(away_lines[0], away_lines[1])
 
 
-## 꺼둔 동안 요약 두 줄 [큰 글자, 작은 글자]. 저장이 없었거나 1분 안에 다시 켰으면 빈 목록
+## 돌아왔을 때 요약 두 줄 [큰 글자, 작은 글자]: 번 돈 / 배송·경험치·스페어 + 창고가 꽉 찼는지.
+## 저장이 없었거나 3분 안에 다시 켰으면(계산 쪽 ignored) 빈 목록. 시계가 거꾸로 갔으면 0원인 이유
 func _offline_lines() -> PackedStringArray:
 	if offline_report.is_empty():
 		return PackedStringArray()
 	var away: float = offline_report["away_seconds"]
-	if away >= 0.0 and away < RETURN_POPUP_MIN_AWAY:
-		return PackedStringArray()
-	if away < 0.0:
+	if away < 0.0:   # 계산 쪽은 ignored로 주지만, 0원인 이유를 알려 줌
 		return PackedStringArray([tr("RETURN_MAIN_ZERO"), tr("RETURN_CLOCK_BACK") % Fmt.away(away)])
+	if offline_report["ignored"]:
+		return PackedStringArray()
 	var main_text := tr("RETURN_MAIN") % [Fmt.away(away), Fmt.money(offline_report["money"])]
-	var note := tr("RETURN_DETAIL") % [offline_report["parcels"], offline_report["spares"]] + "\n" \
-			+ tr("RETURN_NOTE") % [Fmt.percent(balance.offline_rate), Fmt.num(balance.offline_cap_hours)]
+	var cap := Fmt.num(Depot.cap_hours(balance, state))
+	var rate := Fmt.percent(Depot.rate(balance, state))
+	var rule := tr("RETURN_FULL") % [cap, rate] if offline_report["full"] else tr("RETURN_NOTE") % [rate, cap]
+	var note := tr("RETURN_DETAIL") % [offline_report["parcels"], offline_report["xp"], offline_report["spares"]] + "\n" + rule
 	return PackedStringArray([main_text, note])
+
+
+## 작은 화면 "다음 할 일" 한 줄: 이름 + 진행 "3/20". 다 끝났으면 "다음 할 일 없음"
+func _quest_line() -> String:
+	var q := Quest.current(balance, state)
+	if q.is_empty():
+		return tr("QUEST_NONE")
+	var pr := Quest.progress(balance, state)
+	return tr("TOWN_QUEST") % [Fmt.quest_name(q["id"]), mini(pr[0], pr[1]), pr[1]]
+
+
+## 계산 쪽 알림 → 동네 알림 (동네가 하나씩 차례로 띄움).
+## 할 일 끝·강화 첫 달성 바로 뒤에 온 레벨업·만렙은 같은 알림에 줄을 더해 하나로 (한 번에 여러 레벨이면 마지막 레벨, 포인트는 합)
+func _show_events(events: Array) -> void:
+	var cur := {}
+	for e: Dictionary in events:
+		match e["type"]:
+			"quest_done":
+				_notify(cur)
+				cur = { "head": tr("NOTICE_QUEST") % [Fmt.quest_name(e["id"]), Fmt.money(e["money"]), e["xp"]] }
+			"milestone":
+				_notify(cur)
+				cur = { "head": tr("NOTICE_MILESTONE") % [e["star"], e["xp"]] }
+			"level_up":
+				cur["level"] = e["level"]
+				cur["points"] = cur.get("points", 0) + e["points"]
+			"max_level":
+				cur["max"] = true
+	_notify(cur)
+
+
+func _notify(n: Dictionary) -> void:
+	var lines := PackedStringArray()
+	if n.has("head"):
+		lines.append(n["head"])
+	if n.has("level"):
+		lines.append(tr("NOTICE_LEVEL") % [n["level"], n["points"]])
+	if n.has("max"):
+		lines.append(tr("NOTICE_MAX_LEVEL") % Driver.max_level(balance))
+	if not lines.is_empty():
+		town.notify("\n".join(lines))
 
 
 ## 복귀 팝업: 창 가운데 (작은 화면이면 480x220 안에)
@@ -404,6 +456,7 @@ func _on_enhance_pressed() -> void:
 			_shake(func(o): position = o, Feel.DESTROY_SHAKE_PX * fx, Feel.DESTROY_SHAKE_DURATION)
 		Enhance.Result.BLOCKED:
 			panel.clear_result()
+	Quest.check(state, balance)   # 다음 할 일이 바로 반응하게 (알림은 다음 프레임에 동네로)
 	_save()   # 기획서 15.5: 강화 버튼 직후 저장
 	panel.refresh(balance, state)
 	enhancing = false
@@ -422,6 +475,7 @@ func _shake(setter: Callable, px: float, seconds: float) -> void:
 func _on_spare_pressed() -> void:
 	if state.buy_spare(balance):
 		panel.show_result(tr("RESULT_SPARE_BOUGHT") % state.spares, Feel.COLOR_SUCCESS)
+		Quest.check(state, balance)
 		_save()
 	panel.refresh(balance, state)
 
@@ -447,6 +501,7 @@ func _on_roll_pressed(part: String) -> void:
 			var c: Color = Feel.SETTING_GRADE_COLORS[after]
 			c.a = Feel.SETTING_FLASH_ALPHA
 			panel.flash(c, Feel.SETTING_FLASH_DURATION)
+		Quest.check(state, balance)
 		_save()   # 돌린 직후 저장 (고르기 전에 꺼도 다음에 고름)
 	panel.refresh(balance, state)
 	rolling = false
@@ -458,7 +513,19 @@ func _on_choose_pressed(part: String, take_new: bool) -> void:
 		return
 	Setting.choose(state, TRUCK, part, take_new)
 	panel.setting.show_choice(take_new)
+	Quest.check(state, balance)   # 새 것을 고르면 등급이 바뀜 (세팅 등급 할 일)
 	_save()   # 고른 직후 저장
+	panel.refresh(balance, state)
+
+
+# ---------------- 기사·물류센터 ----------------
+
+## 창고 확장 / 야간 배송팀 [올리기] → Depot.upgrade → 다음 할 일 바로 확인 → 저장
+func _on_upgrade_pressed(kind: String) -> void:
+	if Depot.upgrade(balance, state, kind):
+		Quest.check(state, balance)
+		panel.driver.show_bought(kind)
+		_save()   # 산 직후 저장
 	panel.refresh(balance, state)
 
 

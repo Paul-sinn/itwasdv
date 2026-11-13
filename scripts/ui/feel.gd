@@ -179,3 +179,21 @@ const SETTING_SUSPENSE := 0.35        ## 돌리기 결과 나오기 전 뜸 (초
 const SETTING_FLASH_ALPHA := 0.45     ## 등급업 번쩍임 처음 밝기 (등급 색)
 const SETTING_FLASH_DURATION := 0.5
 const SETTING_COLUMN_GAP := 10        ## 고르는 화면 두 칸 사이
+
+# --- v5: 기사 레벨·다음 할 일·물류센터 ---
+const TOWN_QUEST_POS := Vector2(8, 22)   ## 작은 화면 "다음 할 일" 한 줄 왼쪽 위 (구석 "+N"·돈 아래)
+const QUEST_FONT_SIZE := 10              ## 그 줄 글자 (작은 화면 기준)
+const COLOR_LEVEL := Color(0.55, 0.80, 1.0)   ## "Lv.N"
+const COLOR_QUEST := Color(0.85, 0.88, 0.92)  ## "다음 할 일" 줄
+## 알림 (할 일 끝·레벨업·만렙·강화 첫 달성): 동네 오른쪽 위에 작게, 하나씩 차례로 (기획서: 방해되지 않게)
+const NOTICE_RIGHT_TOP := Vector2(472, 4)     ## 알림 오른쪽 위 끝 (동네 설계 좌표. 오른쪽에 맞춤)
+const NOTICE_FONT_SIZE := 11
+const NOTICE_SECONDS := 2.5       ## 알림 하나가 떠 있는 시간 (진짜 시간)
+const NOTICE_FADE := 0.25         ## 나타나기·사라지기 시간
+const NOTICE_BUSY_QUEUE := 3      ## 밀린 알림이 이만큼 넘으면 (예전 저장으로 켜서 할 일이 줄줄이 끝날 때) …
+const NOTICE_SECONDS_BUSY := 0.8  ## … 하나당 이 시간만 띄움
+const COLOR_NOTICE := Color(1.0, 0.85, 0.30)
+## 차고 [기사·물류센터] 칸 (크기는 v0 패널 기준)
+const XP_BAR_HEIGHT := 10.0
+const COLOR_XP_BAR := Color(0.35, 0.62, 1.0)
+const COLOR_XP_BAR_BG := Color(0.22, 0.24, 0.28)

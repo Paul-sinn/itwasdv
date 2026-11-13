@@ -15,6 +15,8 @@
 ## check_switch.ps1 용 줄: "PID n", "SAMPLE 이름 ...", "WIN 이름 hwnd 종류 x y w h"(Windows 좌표)
 extends SceneTree
 
+const ErrorWatch = preload("res://tests/error_watch.gd")   ## 실행 중 스크립트 오류가 나면 실패로 끝냄
+
 const Save = preload("res://scripts/core/save.gd")
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
 const DesktopWindow = preload("res://scripts/ui/desktop_window.gd")
@@ -45,6 +47,7 @@ var big_expected := Rect2i()     ## 창 모드 큰 화면이 있어야 할 자�
 
 
 func _initialize() -> void:
+	OS.add_logger(ErrorWatch.new(self))
 	_run.call_deferred()
 
 
