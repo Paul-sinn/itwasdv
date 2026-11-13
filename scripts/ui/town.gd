@@ -225,10 +225,15 @@ func _set_font(l: Label, base: int) -> void:
 static func pop(c: Control, pivot := Vector2(0.5, 0.5), k := Feel.STAR_POP_SCALE,
 		seconds := Feel.STAR_POP_DURATION) -> void:
 	c.pivot_offset_ratio = pivot
+	# 앞의 커지기가 아직 돌고 있으면 멈춤 (두 개가 같은 크기를 서로 바꾸며 싸우지 않게: 연달아 등급업 등)
+	var old: Tween = c.get_meta(&"pop_tween") if c.has_meta(&"pop_tween") else null
+	if old != null and old.is_valid():
+		old.kill()
 	c.scale = Vector2.ONE * k
 	var tw := c.create_tween().set_ignore_time_scale(true)
 	tw.tween_property(c, "scale", Vector2.ONE, seconds) \
 			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	c.set_meta(&"pop_tween", tw)
 
 
 ## 글자 (바탕화면 위에서도 읽히게 테두리를 두름)

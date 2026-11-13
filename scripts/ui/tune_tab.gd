@@ -122,18 +122,18 @@ func refresh(b: Balance, s: GameState, locked: bool) -> void:
 		var r: Dictionary = rows[part]
 		var g := s.grade(part)
 		r["grade"].text = Tune.grade_name(b, g)
-		r["grade"].add_theme_color_override("font_color", grade_color(g))
+		_set_color(r["grade"], grade_color(g))
 		r["effect"].text = TuneText.effect_text(part, Tune.effect(b, part, g))
 		# 짐칸: 타이어가 일반이면 효과가 없으니 흐리게
 		var dim: bool = part == "cargo" and no_jackpot
-		r["effect"].add_theme_color_override("font_color", Feel.COLOR_DIM if dim else Feel.COLOR_TEXT)
+		_set_color(r["effect"], Feel.COLOR_DIM if dim else Feel.COLOR_TEXT)
 
 	var part := selected
 	var g := s.grade(part)
 	var at_max := g >= Tune.max_grade(b)
 	_detail_name.text = TuneText.part_name(part)
 	_detail_grade.text = Tune.grade_name(b, g)
-	_detail_grade.add_theme_color_override("font_color", grade_color(g))
+	_set_color(_detail_grade, grade_color(g))
 	_info.text = TuneText.info(part)
 	var now := TuneText.effect_text(part, Tune.effect(b, part, g))
 	if at_max:
@@ -287,3 +287,9 @@ func _label(parent: Node, font_size: int, color: Color) -> Label:
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(l)
 	return l
+
+
+## 글자 색 바꾸기 (같은 색이면 안 건드림: 매 프레임 불려서 쓸데없이 다시 그리지 않게)
+func _set_color(l: Label, c: Color) -> void:
+	if l.get_theme_color("font_color") != c:
+		l.add_theme_color_override("font_color", c)

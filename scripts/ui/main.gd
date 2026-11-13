@@ -7,6 +7,8 @@
 ##   큰 화면: 왼쪽에 같은 동네를 크게 + 오른쪽에 차고 + [설정] [작게] 버튼
 ##     큰 화면은 전체 화면 또는 창 모드(사용자가 [설정]에서 고름). 창 모드는 창 크기가 수시로 바뀜
 ##     → 창 크기가 바뀔 때마다 _layout() (최소 1280x720에서도 안 깨지게)
+## v2 튜닝: 차고 [튜닝] 칸 → Tune.try_tune, 배송마다 Tune.roll_jackpot → state.delivery_pay,
+##   돈 숫자는 전부 GameState의 튜닝 반영 함수 (current_hourly, enhance_cost, offline_earnings …)
 extends Control
 
 const Balance = preload("res://scripts/core/balance.gd")
@@ -153,6 +155,8 @@ func is_full() -> bool:
 
 ## 창 크기·화면이 바뀌면 다시 배치 (mode_changed, size_changed)
 func _layout() -> void:
+	if not is_inside_tree():
+		return   # 트리에서 빠진 뒤 창 크기 신호가 늦게 와도 (확인 스크립트가 main을 바꿔 끼울 때)
 	var view := get_viewport_rect().size
 	_bg.visible = not screen.is_transparent()
 	var full := is_full()

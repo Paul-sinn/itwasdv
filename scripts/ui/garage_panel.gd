@@ -217,8 +217,7 @@ func refresh(b: Balance, s: GameState) -> void:
 		_set_visible([_income], [_chances, _danger, _danger_note, _cost, _reserve, _wait, _enhance_button, _spare_button])
 	else:
 		var now := s.current_hourly(b)
-		# 성공하면: 튜닝은 엔진 수익에 곱해지니 엔진만 값이 오르는 비율만큼 오름
-		var next := now * Economy.hourly_income(b, s.star + 1) / Economy.hourly_income(b, s.star)
+		var next := s.hourly_at(b, s.star + 1)   # 성공하면 (지금 튜닝 그대로)
 		var c := s.enhance_chances(b)
 		var cost := s.enhance_cost(b)
 		var need := s.enhance_need(b)

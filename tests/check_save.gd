@@ -3,6 +3,7 @@
 ## - 저장 시각을 3시간 전 / 20시간 전 / 미래로 → 3시간치의 절반 / 8시간치의 절반 / 0
 ## - 고장이면 0, 깨진 저장 파일이면 새로 시작, F3이면 저장 지움, 30초 자동 저장
 ## - 복귀 팝업은 작은 화면(480x220) 위에, 그 안에 다 들어감 (v1)
+## - 연료 탱크·내비 전설이면 최대 시간·비율이 늘고, 팝업 문구도 그 값 (v2)
 ## 진짜 게임 화면(main.tscn)을 작은 화면 크기로 띄워서 확인한다. 진짜 저장 파일은 건드리지 않는다.
 ##
 ## 실행:
@@ -13,6 +14,8 @@ const MAIN_SCENE := "res://scenes/main.tscn"
 const Save = preload("res://scripts/core/save.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Economy = preload("res://scripts/core/economy.gd")
+const Balance = preload("res://scripts/core/balance.gd")
+const Fmt = preload("res://scripts/ui/fmt.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const TEST_SAVE := "user://test_town_save.json"
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
@@ -59,8 +62,18 @@ func _run() -> void:
 		{ "name": "20시간 전", "shift": -20 * HOUR, "broken": false, "hours": 8.0 * 0.5, "note": "최대" },
 		{ "name": "5시간 뒤(미래)", "shift": 5 * HOUR, "broken": false, "hours": 0.0, "note": "시계" },
 		{ "name": "3시간 전 + 고장", "shift": -3 * HOUR, "broken": true, "hours": 0.0, "note": "고장" },
+		# 연료 탱크 전설 +8시간 → 최대 16시간, 내비 전설 +30%p → 80%
+		{ "name": "20시간 전 + 연료 탱크·내비 전설", "shift": -20 * HOUR, "broken": false, "tuned": true },
 	]:
 		var s := GameState.new()
+		if c.get("tuned", false):
+			var b := Balance.load_file()
+			s.set_grade(b, "fuel_tank", 3)
+			s.set_grade(b, "navigation", 3)
+			c["hours"] = s.offline_cap_hours(b) * s.offline_rate(b)
+			c["note"] = "%s만, 최대 %s시간치" % [Fmt.percent(s.offline_rate(b)), Fmt.num(s.offline_cap_hours(b))]
+			_check(s.offline_cap_hours(b) > b.offline_cap_hours and s.offline_rate(b) > b.offline_rate,
+					"연료 탱크·내비 전설인데 최대 시간·비율이 안 늘어남")
 		s.star = 10
 		s.money = 1000.0
 		s.broken = c["broken"]
@@ -68,6 +81,7 @@ func _run() -> void:
 		Save.write_file(TEST_SAVE, s, int(Time.get_unix_time_from_system()) + c["shift"])
 		m = await _launch()
 		hourly = Economy.hourly_income(m.balance, 10)
+		_check(absf(m.state.current_hourly(m.balance) - (0.0 if c["broken"] else hourly)) < 0.001, "%s: 시간당 수익이 엔진만 값과 다름" % c["name"])
 		var expected: float = hourly * c["hours"]
 		var got: float = m.state.money - 1000.0
 		_check(absf(got - expected) <= maxf(0.01, hourly * 3.0 / HOUR),   # 켜는 데 걸린 몇 초는 봐줌

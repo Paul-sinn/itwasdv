@@ -107,6 +107,7 @@ func _run() -> void:
 	await _frames(1)
 	_check(not t.tune_button.disabled and not t._wait.visible, "비용만큼 있는데 [튜닝]이 막힘")
 	var presses0: int = m.state.tune_press_count
+	var earned0: float = m.earned_total   # 뜸 동안 배송으로 들어온 돈은 빼고 봄
 	_click(t.tune_button.get_global_rect().get_center())
 	await _frames(2)
 	_check(m.tuning and t.tune_button.disabled and t.tune_button.text.contains("중"), "누른 뒤 뜸(버튼 잠김)이 없음")
@@ -118,7 +119,7 @@ func _run() -> void:
 	var waited := (Time.get_ticks_msec() - started) / 1000.0
 	_check(waited >= Feel.TUNE_SUSPENSE * 0.8 and waited < Feel.TUNE_SUSPENSE + 0.5, "튜닝 뜸이 %.2f초 (기대 %.1f초)" % [waited, Feel.TUNE_SUSPENSE])
 	_check(m.state.tune_press_count == presses0 + 1, "한 번 눌렀는데 튜닝 횟수가 %d 늘어남" % (m.state.tune_press_count - presses0))
-	_check(absf(m.state.money) < 0.001, "튜닝 비용이 안 빠짐: %.1f원 남음" % m.state.money)
+	_check(absf(m.state.money - (m.earned_total - earned0)) < 0.001, "튜닝 비용이 안 빠짐: %.1f원 남음" % m.state.money)
 	_check(t.result_text() != "", "튜닝 결과 한 줄이 없음")
 	_check(t._stats.text.contains("튜닝 누른 횟수 %d" % m.state.tune_press_count), "튜닝 통계 줄이 안 맞음: '%s'" % t._stats.text)
 
@@ -143,13 +144,15 @@ func _run() -> void:
 			await _frames(1)
 			var before: int = m.state.grade(part)
 			var money_before: float = m.state.money
+			var earned_before: float = m.earned_total
 			_click(t.tune_button.get_global_rect().get_center())
 			await _wait_tune()
 			clicks += 1
 			var after: int = m.state.grade(part)
 			if after != before and after != before + 1:
 				bad_step += 1
-			if absf(money_before - m.state.money - Tune.cost(b, before)) > 0.001:
+			var paid: float = money_before + (m.earned_total - earned_before) - m.state.money   # 그 사이 배송 돈은 빼고
+			if absf(paid - Tune.cost(b, before)) > 0.001:
 				bad_money += 1
 			if after == before + 1:
 				ups += 1
@@ -206,6 +209,7 @@ func _run() -> void:
 	var susp: float = Tune.effect(b, "suspension", s.grade("suspension"))
 	var c: Dictionary = s.enhance_chances(b)
 	_check(p._income.text.begins_with("시간당 %s원" % Fmt.money(s.current_hourly(b))), "시간당 수익이 튜닝 반영 값이 아님: '%s' (기대 %s)" % [p._income.text, Fmt.money(s.current_hourly(b))])
+	_check(p._income.text.ends_with("성공하면 %s원" % Fmt.money(s.hourly_at(b, 19))), "성공하면 수익이 hourly_at(19강)이 아님: '%s'" % p._income.text)
 	_check(p._cost.text.contains(Fmt.money(s.enhance_cost(b)) + "원"), "강화 비용이 튜닝 반영 값이 아님: '%s'" % p._cost.text)
 	_check(p._cost.text.contains("엔진오일 −%s" % Fmt.percent(oil)), "엔진오일 깎은 표시가 없음: '%s'" % p._cost.text)
 	_check(p._danger.text.contains(Fmt.percent(c["destroy"])), "퍼질 확률이 튜닝 반영 값이 아님: '%s'" % p._danger.text)
@@ -335,6 +339,9 @@ func _check_sizes(size: Vector2i) -> void:
 	for part in Tune.PARTS:
 		var row: Rect2 = t.rows[part]["row"].get_global_rect()
 		_check(row.grow(0.5).encloses(t.rows[part]["effect"].get_global_rect()), "%s: %s 줄 효과 글자가 줄 밖" % [tag, part])
+		var el: Label = t.rows[part]["effect"]
+		var need: float = el.get_theme_font("font").get_string_size(el.text, HORIZONTAL_ALIGNMENT_LEFT, -1, el.get_theme_font_size("font_size")).x
+		_check(need <= el.size.x + 0.5, "%s: %s 효과 글자가 잘림 '%s' (%.0f > %.0f)" % [tag, part, el.text, need, el.size.x])
 	# [엔진 강화]: 전부 전설(서스펜션 표시) + 18강 돈 모자람 + "엔진 퍼짐!" 결과
 	m.state.set_grade(b, "tire", Tune.max_grade(b))
 	m.state.set_grade(b, "cargo", Tune.max_grade(b))

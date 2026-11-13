@@ -8,6 +8,7 @@ extends SceneTree
 const Save = preload("res://scripts/core/save.gd")
 const Enhance = preload("res://scripts/core/enhance.gd")
 const Economy = preload("res://scripts/core/economy.gd")
+const Tune = preload("res://scripts/core/tune.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
 const TEST_SAVE := "user://test_town_shot.json"
@@ -120,6 +121,54 @@ func _run() -> void:
 		await _wait(0.2)
 		await _shot("full_settings_1280x720")
 
+	# 7) 튜닝 (v2): 큰 화면 [튜닝] 칸이 가장 길 때 (짐칸 레어 + 타이어 일반 경고 + 돈 모자람)
+	if m.has_method("close_settings"):
+		m.close_settings()
+	vp.size = FULL_SIZES[1]
+	m.state.broken = false
+	m.state.star = 18
+	m.state.money = 500.0
+	var grades := { "turbo": 3, "tire": 0, "cargo": 1, "suspension": 2, "fuel_tank": 1, "navigation": 0, "engine_oil": 2 }
+	for part in grades:
+		m.state.set_grade(b, part, grades[part])
+	m.state.tune_press_count = 57
+	m.state.tune_up_count = 6
+	m.state.jackpot_count = 0
+	m.panel.show_tab(m.panel.Tab.TUNE)
+	m.panel.tune.select("cargo")
+	for size in [FULL_SIZES[1], FULL_SIZES[0], FULL_SIZES[3]]:
+		vp.size = size
+		await _wait(0.3)
+		await _shot("full_tune_%dx%d" % [size.x, size.y])
+	# 튜닝 연출 (1600x900): 뜸 → 등급업 (등급 색 번쩍 + 등급 글자 커짐)
+	vp.size = FULL_SIZES[1]
+	m.state.money = 1e9
+	m.panel.tune.select("navigation")
+	_seed_tune_up(m.state.grade("navigation"))
+	m._on_tune_pressed("navigation")
+	await _wait(Feel.TUNE_SUSPENSE * 0.5)
+	await _shot("full_tune_suspense")
+	await _wait(Feel.TUNE_SUSPENSE * 0.5 + 0.06)
+	await _shot("full_tune_up")
+	await _until(func(): return not m.tuning, 3.0)
+	# [엔진 강화] 칸: 튜닝 반영 값 (엔진오일·서스펜션 깎은 표시)
+	m.panel.show_tab(m.panel.Tab.ENGINE)
+	m.panel.clear_result()
+	m.state.star = 19
+	m.state.money = 0.0
+	await _wait(0.3)
+	await _shot("full_engine_tuned")
+	# 작은 화면: 트럭 짐칸 색 점 + "대박!" 글자
+	m.screen.enter_small()
+	m.state.set_grade(b, "tire", 3)
+	m.state.set_grade(b, "cargo", 3)
+	await _wait(0.2)
+	m.town.show_payout(Feel.TOWN_HOUSES - 1, 12345.0, m.state.jackpot_mult(b))
+	m.town.show_payout(1, 2469.0, m.state.jackpot_mult(b))
+	await _wait(0.3)
+	await _shot("small_jackpot")
+	await _shot_rects("small_jackpot_visible")
+
 	Save.delete_file(TEST_SAVE)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SETTINGS))
 	print("사진 저장: ", out_dir)
@@ -132,6 +181,16 @@ func _seed_for(want: int, star: int) -> void:
 	for s in 100000:
 		probe.seed = s
 		if Enhance.roll(m.balance, star, probe) == want:
+			m.rng.seed = s
+			return
+
+
+## 다음 튜닝 굴리기가 등급업이 나오게 m.rng 씨앗을 고른다
+func _seed_tune_up(grade: int) -> void:
+	var probe := RandomNumberGenerator.new()
+	for s in 100000:
+		probe.seed = s
+		if Tune.decide(m.balance, grade, Enhance.random01(probe)) == Tune.Result.UP:
 			m.rng.seed = s
 			return
 
