@@ -6,13 +6,14 @@
 extends RefCounted
 
 const Balance = preload("res://scripts/core/balance.gd")
+const Economy = preload("res://scripts/core/economy.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 
 ## 강화 결과. BLOCKED = 강화할 수 없는 상태라 아무 일도 안 일어남.
 enum Result { BLOCKED = -1, SUCCESS, FAIL, DESTROY }
 
 ## 강화할 수 없는 이유. NONE이면 강화 가능.
-enum Block { NONE, BROKEN, MAX_STAR, NO_MONEY }
+enum Block { NONE, MAX_STAR, NO_MONEY, NO_SPARE }
 
 const RANDI_RANGE := 4294967296.0  # randi()는 0 ~ 4294967295 를 낸다 (4.6.3에서 직접 확인함)
 
@@ -22,18 +23,18 @@ static func random01(rng: RandomNumberGenerator) -> float:
 	return rng.randi() / RANDI_RANGE
 
 
-## 튜닝 없는 엔진만의 확률 세 개: { "success", "fail", "destroy" } (합 = 1)
-## 실패(유지) = 1 - 성공 - 퍼짐. 서스펜션을 반영한 확률은 GameState.enhance_chances(b)
+## 그 단계의 확률 세 개: { "success", "fail", "destroy" } (합 = 1)
+## 실패(유지) = 1 - 성공 - 퍼짐
 static func chances(b: Balance, star: int) -> Dictionary:
 	var s := b.success[star]
 	var d := b.destroy[star]
 	return { "success": s, "fail": maxf(0.0, 1.0 - s - d), "destroy": d }
 
 
-## 확률 세 개(chances / GameState.enhance_chances 모양)와 난수 r(0 이상 1 미만) 하나로 결과를 정한다.
+## 확률 세 개(chances 모양)와 난수 r(0 이상 1 미만) 하나로 결과를 정한다.
 ##   r < success                → 성공
 ##   r < success + destroy      → 퍼짐
-##   그 외                      → 실패 (강수 그대로)
+##   그 외                      → 실패 (단계 그대로)
 static func decide_chances(c: Dictionary, r: float) -> Result:
 	var p_success: float = c["success"]
 	if r < p_success:
@@ -43,54 +44,58 @@ static func decide_chances(c: Dictionary, r: float) -> Result:
 	return Result.FAIL
 
 
-## 튜닝 없는 엔진만의 확률로 결과를 정한다 (위와 같은 규칙)
+## 그 단계의 확률로 결과를 정한다 (위와 같은 규칙)
 static func decide(b: Balance, star: int, r: float) -> Result:
 	return decide_chances(chances(b, star), r)
 
 
-## 생성기로 난수를 뽑아 결과를 정한다 (튜닝 없는 엔진만). 상태는 바꾸지 않는다.
+## 생성기로 난수를 뽑아 결과를 정한다. 상태는 바꾸지 않는다.
 static func roll(b: Balance, star: int, rng: RandomNumberGenerator) -> Result:
 	return decide(b, star, random01(rng))
 
 
-## 지금 강화할 수 있나? 못 하면 그 이유.
-## 퍼질 수 있는 강수에서는 강화 비용 + 스페어값이 있어야 한다 (GameState.enhance_need: 엔진오일 반영).
-static func block_reason(state: GameState, b: Balance) -> Block:
-	if state.broken:
-		return Block.BROKEN
-	if state.star >= b.max_star:
+## 퍼질 수 있는 단계(destroy[단계] > 0)라서 스페어를 1개 이상 들고 있어야 누를 수 있나
+static func needs_spare(b: Balance, star: int) -> bool:
+	return star >= 0 and star < b.max_star and b.destroy[star] > 0.0
+
+
+## 트럭 i를 지금 강화할 수 있나? 못 하면 그 이유.
+## 둘 다 모자라면 스페어부터 알려 준다 (스페어를 사는 데도 돈이 들어서, 모을 목표를 먼저 보여 줌)
+static func block_reason(state: GameState, b: Balance, i: int) -> Block:
+	var star := state.truck(i).star
+	if star >= b.max_star:
 		return Block.MAX_STAR
-	if state.money < state.enhance_need(b):
+	if needs_spare(b, star) and state.spares < 1:
+		return Block.NO_SPARE
+	if state.money < Economy.enhance_cost(b, star):
 		return Block.NO_MONEY
 	return Block.NONE
 
 
-## 강화 버튼 1번: 비용을 내고, 굴리고, 결과를 상태에 반영하고, 통계를 센다.
-## 비용·확률은 튜닝 반영 값 (엔진오일: 비용 −, 서스펜션: 퍼짐 −). 튜닝 등급은 퍼져도 그대로.
+## 트럭 i 강화 버튼 1번: 비용을 내고, 굴리고, 결과를 상태에 반영하고, 통계를 센다.
+## 퍼지면 스페어 1개를 자동으로 써서 broken_drop_to로. 트럭은 안 멈춘다.
 ## 강화할 수 없는 상태면 아무것도 안 하고 BLOCKED.
-static func try_enhance(state: GameState, b: Balance, rng: RandomNumberGenerator) -> Result:
-	if block_reason(state, b) != Block.NONE:
+static func try_enhance(state: GameState, b: Balance, i: int, rng: RandomNumberGenerator) -> Result:
+	if block_reason(state, b, i) != Block.NONE:
 		return Result.BLOCKED
-	state.money -= state.enhance_cost(b)
-	var result := decide_chances(state.enhance_chances(b), random01(rng))
+	var t := state.truck(i)
+	state.money -= Economy.enhance_cost(b, t.star)
+	var result := roll(b, t.star, rng)
 	match result:
 		Result.SUCCESS:
-			state.star += 1
-			state.success_count += 1
+			t.star += 1
+			t.success_count += 1
 		Result.FAIL:
-			state.fail_count += 1
+			t.fail_count += 1
 		Result.DESTROY:
-			break_engine(state, b)
-			state.destroy_count += 1
+			force_destroy(state, b, i)
+			t.destroy_count += 1
 	return result
 
 
-## 퍼짐 처리: 직전 강수 기억 → broken_drop_to로 내림 → 고장.
-## (강화에서 퍼졌을 때와, 테스트용 F5 "강제로 퍼지게 하기"에서 같이 쓴다)
-## 이미 고장이면 아무것도 안 한다. broken_drop_to보다 낮은 강수에서는 강수를 올리지 않는다.
-static func break_engine(state: GameState, b: Balance) -> void:
-	if state.broken:
-		return
-	state.star_before_break = state.star
-	state.star = mini(state.star, b.broken_drop_to)
-	state.broken = true
+## 퍼짐 처리: 스페어가 있으면 1개 쓰고, 단계를 broken_drop_to로 내린다 (그보다 낮으면 그대로).
+## 강화에서 퍼졌을 때와 치트 F5 "강제로 퍼지게 하기"에서 같이 쓴다. 통계는 안 센다 (강화 버튼 결과만 셈).
+static func force_destroy(state: GameState, b: Balance, i: int) -> void:
+	var t := state.truck(i)
+	state.spares = maxi(0, state.spares - 1)
+	t.star = mini(t.star, b.broken_drop_to)

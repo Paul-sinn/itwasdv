@@ -10,90 +10,125 @@ func test_real_file_is_ok() -> void:
 	check_eq(b.max_star, 30, "max_star")
 	check_eq(b.success.size(), b.max_star, "success 길이")
 	check_eq(b.destroy.size(), b.max_star, "destroy 길이")
-	check_eq(b.cost_hours.size(), b.max_star, "cost_hours 길이")
 	check_eq(b.broken_drop_to, 15, "broken_drop_to")
-	check_eq(b.tune_grades, PackedStringArray(["일반", "레어", "에픽", "전설"]), "tune_grades")
-	check_eq(b.tune_cost_hours.size(), 3, "tune_cost_hours 길이")
-	check_eq(b.tune_up_chance.size(), 3, "tune_up_chance 길이")
-	check_eq(b.tune_effects.keys(), Balance.TUNE_EFFECT_KEYS.keys(), "튜닝 부위 7개")
-	for part in b.tune_effects:
-		check_eq(b.tune_effects[part].size(), 4, "%s 효과 길이" % part)
-	check_eq(b.tune_effect("turbo", 3), 0.5, "터보 전설 효과")
-	check_eq(b.tune_effect("cargo", 0), 2.0, "짐칸 일반 효과")
-	check_eq(b.tune_effect("fuel_tank", 9), 8.0, "범위 밖 등급 → 최고 등급 효과")
+	# 지시서 "옮길 숫자": 시트 강화 단계 B1, E4:E33
+	check_eq(b.base_power, 100, "base_power")
+	var gain := PackedInt64Array()
+	for pair in [[5, 10], [10, 5], [20, 5], [35, 5], [60, 5]]:
+		for k in pair[1]:
+			gain.append(pair[0])
+	check_eq(b.power_gain, gain, "power_gain (5×10, 10×5, 20×5, 35×5, 60×5)")
+	# 지시서 "임시 시작값"
+	check_eq([b.unit_price, b.base_cargo, b.road_length, b.load_seconds, b.stop_seconds],
+			[100, 5, 12000.0, 10.0, 2.0], "trip 숫자")
+	check_eq([b.fuel_rate, b.maint_rate], [0.1, 0.05], "기름값·정비비 비율")
+	check_eq([b.cost_base, b.cost_mult, b.spare_drop_chance], [350.0, 1.5, 0.0002], "강화 비용·스페어 드랍")
+	# 원래 json에 있던 값 그대로
+	check_eq(b.spare_price, 50000, "spare_price")
+	check_eq([b.offline_cap_hours, b.offline_rate], [8.0, 0.5], "꺼둔 동안 8시간·0.5")
+	check_eq(typeof(b.spare_price), TYPE_INT, "spare_price는 정수")
 
 
-func test_missing_tune_is_reported() -> void:
+## 지운 묶음(income, tune 등)이 다시 생기지 않게: v3 json은 trip / engine / offline + version
+func test_real_file_shape() -> void:
 	var d := real_balance_dict()
-	d.erase("tune")
-	var b: Balance = Balance.from_dict(d)
-	check(_has_error(b, "\"tune\" 묶음이 없음"), "tune 묶음이 빠진 걸 못 찾음: %s" % ", ".join(b.errors))
+	var keys := d.keys()
+	keys.sort()
+	check_eq(keys, ["engine", "offline", "trip", "version"], "json 묶음")
+	check_eq(d["version"], "0.6", "version")
+	check(not d["engine"].has("cost_hours"), "engine.cost_hours 가 남아 있음")
 
 
-func test_tune_wrong_lengths_are_reported() -> void:
+func test_missing_section_is_reported() -> void:
+	for section in ["trip", "engine", "offline"]:
+		var d := real_balance_dict()
+		d.erase(section)
+		var b: Balance = Balance.from_dict(d)
+		check(_has_error(b, "\"%s\" 묶음이 없음" % section), "%s 묶음이 빠진 걸 못 찾음: %s" % [section, ", ".join(b.errors)])
+
+
+## 지시서 C1 ⑧: power_gain 길이 30, 음수 없음
+func test_power_gain_length_and_negative() -> void:
 	var d := real_balance_dict()
-	d["tune"]["tune_grades"].append("신화")
-	d["tune"]["tune_cost_hours"].append(100)
-	d["tune"]["tune_up_chance"].pop_back()
-	d["tune"]["cargo_jackpot_mult"].pop_back()
-	d["tune"].erase("oil_cost_cut")
+	d["engine"]["power_gain"].pop_back()
 	var b: Balance = Balance.from_dict(d)
-	check(_has_error(b, "tune.tune_grades 길이가 5개"), "등급 5개를 못 찾음")
-	check(_has_error(b, "tune.tune_cost_hours 길이가 4개"), "비용 4개를 못 찾음")
-	check(_has_error(b, "tune.tune_up_chance 길이가 2개"), "확률 2개를 못 찾음")
-	check(_has_error(b, "tune.cargo_jackpot_mult 길이가 3개"), "짐칸 효과 3개를 못 찾음")
-	check(_has_error(b, "tune.oil_cost_cut 이 없음"), "빠진 엔진오일 목록을 못 찾음")
-	note("찾은 문제: " + " / ".join(b.errors))
+	check(_has_error(b, "engine.power_gain 길이가 29개"), "power_gain 29개를 못 찾음: %s" % ", ".join(b.errors))
 
-
-func test_tune_bad_values_are_reported() -> void:
-	var d := real_balance_dict()
-	var t: Dictionary = d["tune"]
-	t["tune_grades"][1] = 7
-	t["tune_cost_hours"][0] = 0
-	t["tune_up_chance"][2] = 0
-	t["tune_up_chance"][1] = 1.2
-	t["turbo_income_bonus"][0] = -0.1
-	t["tire_jackpot_chance"][3] = 1.5
-	t["cargo_jackpot_mult"][0] = 0.5
-	t["suspension_destroy_cut"][3] = 1.0
-	t["fuel_extra_hours"][2] = "많이"
-	t["oil_cost_cut"][3] = 1
-	var b: Balance = Balance.from_dict(d)
-	check(_has_error(b, "tune.tune_grades[1] 가 이름(글자)이 아님"), "글자가 아닌 등급 이름을 못 찾음")
-	check(_has_error(b, "tune.tune_cost_hours[0]"), "0원 튜닝 비용을 못 찾음")
-	check(_has_error(b, "tune.tune_up_chance[2]"), "0% 등급업 확률을 못 찾음")
-	check(_has_error(b, "tune.tune_up_chance[1]"), "1 넘는 등급업 확률을 못 찾음")
-	check(_has_error(b, "tune.turbo_income_bonus[0]"), "음수 터보를 못 찾음")
-	check(_has_error(b, "tune.tire_jackpot_chance[3]"), "1 넘는 대박 확률을 못 찾음")
-	check(_has_error(b, "tune.cargo_jackpot_mult[0]"), "1 미만 짐칸 배수를 못 찾음")
-	check(_has_error(b, "tune.suspension_destroy_cut[3]"), "서스펜션 1(퍼짐 0%)을 못 찾음")
-	check(_has_error(b, "tune.fuel_extra_hours[2] 가 숫자가 아님"), "숫자 아닌 연료 탱크를 못 찾음")
-	check(_has_error(b, "tune.oil_cost_cut[3]"), "엔진오일 1(비용 0원)을 못 찾음")
-	note("찾은 문제: " + " / ".join(b.errors))
-
-
-## 효과 목록은 등급이 오를수록 줄면 안 됨
-func test_tune_decreasing_list_is_reported() -> void:
-	var d := real_balance_dict()
-	d["tune"]["turbo_income_bonus"] = [0.0, 0.25, 0.1, 0.5]
-	var b: Balance = Balance.from_dict(d)
-	check(_has_error(b, "tune.turbo_income_bonus[2] = 0.1 (앞 등급 0.25보다 작음"), "줄어드는 목록을 못 찾음: %s" % ", ".join(b.errors))
 	var d2 := real_balance_dict()
-	d2["tune"]["navi_extra_rate"] = [0.0, 0.1, 0.1, 0.3]   # 같은 건 괜찮음
-	check(Balance.from_dict(d2).is_ok(), "같은 값이 이어지는데 막힘")
-
-
-## 꺼둔 동안 비율 + 내비 최고는 1 이하
-func test_offline_rate_plus_navi_over_one_is_reported() -> void:
-	var d := real_balance_dict()
-	d["income"]["offline_rate"] = 0.8   # + 내비 최고 0.3 = 1.1
-	var b: Balance = Balance.from_dict(d)
-	check(_has_error(b, "income.offline_rate + tune.navi_extra_rate 최고"), "1 넘는 꺼둔 동안 비율을 못 찾음: %s" % ", ".join(b.errors))
-	var d2 := real_balance_dict()
-	d2["income"]["offline_rate"] = 0.7   # 0.7 + 0.3 = 1 (딱 1은 괜찮음)
+	d2["engine"]["power_gain"][7] = -5
+	d2["engine"]["power_gain"][8] = 2.5
 	var b2: Balance = Balance.from_dict(d2)
-	check(b2.is_ok(), "꺼둔 동안 비율이 딱 1인데 막힘: %s" % ", ".join(b2.errors))
+	check(_has_error(b2, "engine.power_gain[7] = -5"), "음수 출력 증가를 못 찾음: %s" % ", ".join(b2.errors))
+	check(_has_error(b2, "engine.power_gain[8] = 2.5"), "정수가 아닌 출력 증가를 못 찾음: %s" % ", ".join(b2.errors))
+
+	var d3 := real_balance_dict()
+	d3["engine"]["power_gain"][0] = 0   # 0은 괜찮음 (출력이 안 줄기만 하면 됨)
+	check(Balance.from_dict(d3).is_ok(), "출력 증가 0인데 막힘")
+
+
+## 지시서 C1 ⑧: 비율은 0~1
+func test_rates_must_be_0_to_1() -> void:
+	var cases := [
+		["trip", "fuel_rate", 1.2],
+		["trip", "maint_rate", -0.1],
+		["offline", "rate", 1.5],
+		["engine", "spare_drop_chance", 2.0],
+	]
+	for c in cases:
+		var d := real_balance_dict()
+		d[c[0]][c[1]] = c[2]
+		var b: Balance = Balance.from_dict(d)
+		check(_has_error(b, "%s.%s = %s (0~1 사이여야 함)" % c), "%s.%s = %s 를 못 찾음: %s" % [c[0], c[1], c[2], ", ".join(b.errors)])
+	for c in [["trip", "fuel_rate", 0.0], ["offline", "rate", 1.0], ["engine", "spare_drop_chance", 0.0]]:
+		var d := real_balance_dict()
+		d[c[0]][c[1]] = c[2]
+		check(Balance.from_dict(d).is_ok(), "%s.%s = %s (경계값)인데 막힘" % c)
+
+
+## 기름값 + 정비비가 단가를 넘어 배송 1건 돈이 마이너스가 되면 막음
+func test_negative_parcel_pay_is_reported() -> void:
+	var d := real_balance_dict()
+	d["trip"]["fuel_rate"] = 0.7
+	d["trip"]["maint_rate"] = 0.4
+	var b: Balance = Balance.from_dict(d)
+	check(_has_error(b, "배송 1건 돈 = -10"), "마이너스 배송 돈을 못 찾음: %s" % ", ".join(b.errors))
+	# 비율 합이 1 이하여도 반올림으로 넘칠 수 있음: 단가 1, 0.5 + 0.5 → 1 − 1 − 1 = −1
+	var d2 := real_balance_dict()
+	d2["trip"]["unit_price"] = 1
+	d2["trip"]["fuel_rate"] = 0.5
+	d2["trip"]["maint_rate"] = 0.5
+	check(_has_error(Balance.from_dict(d2), "배송 1건 돈 = -1"), "반올림으로 생긴 마이너스를 못 찾음")
+
+
+## 지시서 C1 ⑧: cost_mult > 1
+func test_cost_mult_over_one() -> void:
+	for v in [1, 0.9, 0]:
+		var d := real_balance_dict()
+		d["engine"]["cost_mult"] = v
+		var b: Balance = Balance.from_dict(d)
+		check(_has_error(b, "engine.cost_mult = %s (1보다 커야 함)" % v), "cost_mult = %s 를 못 찾음: %s" % [v, ", ".join(b.errors)])
+	var d2 := real_balance_dict()
+	d2["engine"]["cost_mult"] = 1.0001
+	check(Balance.from_dict(d2).is_ok(), "cost_mult 1.0001인데 막힘")
+
+
+func test_bad_values_are_reported() -> void:
+	var d := real_balance_dict()
+	d["trip"].erase("unit_price")
+	d["trip"]["base_cargo"] = 0
+	d["trip"]["road_length"] = 0
+	d["trip"]["stop_seconds"] = -1
+	d["engine"]["base_power"] = 0
+	d["engine"]["cost_base"] = 0
+	d["engine"]["spare_price"] = 100.5
+	d["engine"]["success"][5] = "많이"
+	d["offline"]["cap_hours"] = -1
+	var b: Balance = Balance.from_dict(d)
+	for part in ["trip.unit_price 이 없음", "trip.base_cargo = 0", "trip.road_length = 0", "trip.stop_seconds = -1",
+			"engine.base_power = 0", "engine.cost_base = 0", "engine.spare_price = 100.5",
+			"engine.success[5] 가 숫자가 아님", "offline.cap_hours = -1"]:
+		check(_has_error(b, part), "못 찾음: %s" % part)
+	note("찾은 문제: " + " / ".join(b.errors))
 
 
 func test_wrong_length_is_reported() -> void:
@@ -119,27 +154,6 @@ func test_sum_exactly_one_is_ok() -> void:
 	check(b.is_ok(), "성공+퍼짐이 딱 1인데 막힘: %s" % ", ".join(b.errors))
 
 
-func test_bad_values_are_reported() -> void:
-	var d := real_balance_dict()
-	d["income"].erase("base_hourly")
-	d["income"]["offline_rate"] = 1.5
-	d["engine"]["cost_hours"][3] = 0
-	d["engine"]["success"][5] = "많이"
-	var b: Balance = Balance.from_dict(d)
-	check(_has_error(b, "income.base_hourly 이 없음"), "빠진 숫자를 못 찾음")
-	check(_has_error(b, "income.offline_rate"), "0~1 밖의 비율을 못 찾음")
-	check(_has_error(b, "engine.cost_hours[3]"), "0원 비용을 못 찾음")
-	check(_has_error(b, "engine.success[5] 가 숫자가 아님"), "숫자 아닌 칸을 못 찾음")
-	note("찾은 문제: " + " / ".join(b.errors))
-
-	var d2 := real_balance_dict()
-	d2["income"]["high_from_star"] = 20.5
-	d2["engine"].erase("spare_price")
-	var b2: Balance = Balance.from_dict(d2)
-	check(_has_error(b2, "income.high_from_star"), "정수가 아닌 high_from_star를 못 찾음")
-	check(_has_error(b2, "engine.spare_price 이 없음"), "빠진 spare_price를 못 찾음")
-
-
 func test_bad_max_star_is_reported() -> void:
 	var d := real_balance_dict()
 	d["engine"]["max_star"] = 30.5
@@ -148,7 +162,7 @@ func test_bad_max_star_is_reported() -> void:
 
 
 func test_broken_json_is_reported() -> void:
-	var b: Balance = Balance.from_text("{ \"income\": { \"base_hourly\": 1000, }")
+	var b: Balance = Balance.from_text("{ \"trip\": { \"unit_price\": 100, }")
 	check(not b.is_ok(), "깨진 JSON이 통과됨")
 	check(_has_error(b, "JSON 형식이 깨짐"), "JSON이 깨졌다고 안 알려줌: %s" % ", ".join(b.errors))
 
