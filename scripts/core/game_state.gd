@@ -88,10 +88,19 @@ func steady_hourly(b: Balance) -> float:
 	return Economy.hourly_income(b, star) * (1.0 + _effect(b, "turbo"))
 
 
-## 평균 시간당 수익 = 보통 수익 × 대박 평균. 고장이면 0.
+## 평균 시간당 수익 = 보통 수익 × 대박 평균. 고장이면 0 (아니면 hourly_at(b, star)와 같음).
 ## 화면의 "시간당", 모으는 데 걸리는 시간, 꺼둔 동안 수익에 쓴다.
 func current_hourly(b: Balance) -> float:
-	return steady_hourly(b) * _jackpot_average(b)
+	if broken:
+		return 0.0
+	return hourly_at(b, star)
+
+
+## 엔진이 star_value강일 때의 평균 시간당 수익 (지금 튜닝 반영, 고장 여부는 무시)
+##   = 엔진 수익(star_value) × (1 + 터보) × 대박 평균
+## 차고의 "성공하면 시간당 N원" (hourly_at(b, star + 1))용.
+func hourly_at(b: Balance, star_value: int) -> float:
+	return Economy.hourly_income(b, star_value) * (1.0 + _effect(b, "turbo")) * _jackpot_average(b)
 
 
 ## 배송 1번이 대박일 확률 (타이어)

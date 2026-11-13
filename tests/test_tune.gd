@@ -259,6 +259,38 @@ func test_income_effects() -> void:
 	check_eq(c.current_hourly(b), Economy.hourly_income(b, 0), "타이어 일반 + 짐칸 전설: 효과 없음")
 
 
+## hourly_at(b, 강수): 그 강수일 때 평균 시간당 수익 (지금 튜닝 반영, 고장 무시). current_hourly = hourly_at(b, star) (고장 아니면)
+func test_hourly_at() -> void:
+	for turbo in 4:
+		for tire in 4:
+			for cargo in 4:
+				var s := GameState.new()
+				s.set_grade(b, "turbo", turbo)
+				s.set_grade(b, "tire", tire)
+				s.set_grade(b, "cargo", cargo)
+				var m := (1.0 + Tune.effect(b, "turbo", turbo)) * (1.0 + Tune.effect(b, "tire", tire) * (Tune.effect(b, "cargo", cargo) - 1.0))
+				for star in b.max_star + 1:
+					var where := "%d강 터보%d 타이어%d 짐칸%d" % [star, turbo, tire, cargo]
+					var expected := Economy.hourly_income(b, star) * m
+					s.star = star
+					s.broken = false
+					check_near(s.hourly_at(b, star), expected, expected * 1e-12, where + " hourly_at")
+					check_eq(s.current_hourly(b), s.hourly_at(b, star), where + " current_hourly = hourly_at(star)")
+					s.broken = true
+					check_eq(s.current_hourly(b), 0.0, where + " 고장이면 current_hourly 0")
+					check_near(s.hourly_at(b, star), expected, expected * 1e-12, where + " 고장이어도 hourly_at은 그대로")
+	# 튜닝 없음 = 엔진만
+	var zero := GameState.new()
+	for star in b.max_star + 1:
+		check_eq(zero.hourly_at(b, star), Economy.hourly_income(b, star), "%d강 튜닝 없음: hourly_at = 엔진만" % star)
+	# 차고 "성공하면 시간당 N원": 18강, 터보 전설 → 19강 엔진 수익 × 1.5. 지금 강수와 상관없이 그 강수 값
+	var s18 := GameState.new()
+	s18.star = 18
+	s18.set_grade(b, "turbo", 3)
+	check_near(s18.hourly_at(b, 19), 1000.0 * pow(1.1, 19) * 1.5, 1e-6, "18강 터보 전설: 성공하면 19강 수익 × 1.5")
+	check_near(s18.hourly_at(b, 20), 1000.0 * pow(1.1, 19) * 1.3 * 1.5, 1e-6, "20강 값 (1.3배 구간)")
+
+
 ## 대박을 굴려 가며 오래 배송하면 평균이 "평균 시간당 수익"과 맞음 (seed 고정, 100시간)
 func test_jackpot_average_adds_up() -> void:
 	var rng := RandomNumberGenerator.new()
