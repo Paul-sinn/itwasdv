@@ -1,10 +1,11 @@
-## enhance.gd + game_state.gd: 강화 굴리기, 퍼짐, 스페어
+## enhance.gd + game_state.gd: 강화 굴리기, 퍼짐, 스페어 (사기·자동으로 쓰기)
 extends "res://tests/test_base.gd"
 
 const Balance = preload("res://scripts/core/balance.gd")
 const Economy = preload("res://scripts/core/economy.gd")
 const Enhance = preload("res://scripts/core/enhance.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
+const TruckState = preload("res://scripts/core/truck_state.gd")
 
 const ROLLS_PER_STAR := 100000
 const RATE_TOLERANCE := 0.01   # 1%p
@@ -34,7 +35,7 @@ func test_chances_for_display() -> void:
 		check_eq(c["success"], b.success[star], "%d강 성공" % star)
 		check_eq(c["destroy"], b.destroy[star], "%d강 퍼짐" % star)
 	var c18 := Enhance.chances(b, 18)
-	check_near(c18["fail"], 0.75, 1e-9, "18강 실패(유지)")
+	check_near(c18["fail"], 0.75, 1e-9, "+18 실패(유지)")
 
 
 ## 경계값: 18강 (성공 0.2, 퍼짐 0.05)
@@ -83,151 +84,147 @@ func test_never_destroys_at_17_or_below() -> void:
 		check_eq(destroyed, 0, "%d강에서 퍼지는 난수가 있음" % star)
 
 
-## 퍼지면 15강 + 고장, 스페어 사면 고장만 풀림
-func test_destroy_then_spare() -> void:
+## 지시서 C1 ⑤: 퍼지는 단계에서 스페어 0이면 NO_SPARE, 퍼지면 스페어 −1·단계 15·통계 +1
+func test_destroy_uses_spare() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 99
-	var s := GameState.new()
+	var s := _game(18, 10 ** 12)
+	check(Enhance.needs_spare(b, 18), "+18은 스페어가 있어야 함")
+	check_eq(Enhance.block_reason(s, b, 0), Enhance.Block.NO_SPARE, "+18 스페어 0: 막힌 이유")
+	check_eq(Enhance.try_enhance(s, b, 0, rng), Enhance.Result.BLOCKED, "+18 스페어 0인데 강화가 됨")
+	check_eq(s.money, 10 ** 12, "막혔는데 돈이 빠짐")
 
-	# 20강에서 퍼질 때까지 누른다 (20강 퍼짐 7%)
+	# 스페어 2개 들고 +20에서 퍼질 때까지 누른다 (+20 퍼짐 7%)
+	s.spares = 2
 	var result := Enhance.Result.FAIL
 	var tries := 0
 	while result != Enhance.Result.DESTROY and tries < 1000:
 		tries += 1
-		s.star = 20   # 성공해서 21강이 되면 다시 20강으로
-		s.money = 1e12
-		result = Enhance.try_enhance(s, b, rng)
+		s.truck(0).star = 20   # 성공해서 +21이 되면 다시 +20으로
+		result = Enhance.try_enhance(s, b, 0, rng)
 	check_eq(result, Enhance.Result.DESTROY, "1000번 안에 안 퍼짐")
-	check_eq(s.star, 15, "퍼진 뒤 강수")
-	check(s.broken, "퍼졌는데 고장 상태가 아님")
-	check_eq(s.star_before_break, 20, "퍼지기 직전 강수")
-	check_eq(s.destroy_count, 1, "퍼짐 횟수")
-	check_eq(s.current_hourly(b), 0.0, "고장인데 수익이 있음")
+	var t := s.truck(0)
+	check_eq(t.star, 15, "퍼진 뒤 단계")
+	check_eq(s.spares, 1, "퍼진 뒤 스페어 (2 → 1)")
+	check_eq(t.destroy_count, 1, "퍼짐 횟수")
+	note("스페어 2개, +20에서 %d번째에 퍼짐 → +%d, 스페어 %d" % [tries, t.star, s.spares])
 
-	# 고장 상태에서는 강화 불가
-	s.money = 1e12
-	check_eq(Enhance.block_reason(s, b), Enhance.Block.BROKEN, "고장인데 강화 가능으로 나옴")
-	check_eq(Enhance.try_enhance(s, b, rng), Enhance.Result.BLOCKED, "고장인데 강화가 됨")
-	check_eq(s.money, 1e12, "고장 상태 강화 시도에서 돈이 빠짐")
+	# +15는 안 퍼지는 단계 → 스페어 없어도 누름
+	s.spares = 0
+	check(not Enhance.needs_spare(b, 15), "+15에 스페어가 필요하다고 나옴")
+	check_eq(Enhance.block_reason(s, b, 0), Enhance.Block.NONE, "퍼진 뒤 +15: 스페어 없이 강화 가능")
 
-	# 돈 모자라면 스페어 못 삼
-	var price := s.spare_price(b)
-	check_eq(price, Economy.spare_price(b), "스페어 가격이 고정 금액이 아님")
-	check_eq(price, 50000.0, "스페어 가격")
-	s.money = price - 1.0
+
+## 스페어는 언제든 고정가로 산다
+func test_buy_spare() -> void:
+	var s := _game(0, 0)
+	var price := Economy.spare_price(b)
+	s.money = price - 1
+	check(not s.can_buy_spare(b), "1원 모자란데 살 수 있다고 나옴")
 	check(not s.buy_spare(b), "돈이 모자란데 스페어를 삼")
-	check(s.broken, "스페어를 못 샀는데 고장이 풀림")
-
-	# 스페어 사면 고장만 풀림 (강수는 15 그대로)
-	s.money = price + 500.0
-	check(s.buy_spare(b), "돈이 있는데 스페어를 못 삼")
-	check(not s.broken, "스페어를 샀는데 아직 고장")
-	check_eq(s.star, 15, "스페어 산 뒤 강수")
-	check_near(s.money, 500.0, 1e-6, "스페어 산 뒤 남은 돈")
-	check(s.current_hourly(b) > 0.0, "수리했는데 수익이 0")
-	check(not s.buy_spare(b), "고장이 아닌데 스페어를 또 삼")
-	check_eq(Enhance.block_reason(s, b), Enhance.Block.NO_MONEY, "수리 뒤 돈 500으로 15강 강화 가능으로 나옴")
+	check_eq(s.spares, 0, "못 샀는데 스페어가 늚")
+	s.money = price * 2 + 500
+	check(s.buy_spare(b) and s.buy_spare(b), "돈이 있는데 스페어를 못 삼")
+	check_eq(s.spares, 2, "2개 산 뒤 스페어")
+	check_eq(s.money, 500, "2개 산 뒤 남은 돈")
+	check(not s.buy_spare(b), "500원으로 스페어를 삼")
 
 
-## 강화 1번마다: 비용이 빠지고, 결과대로 강수가 바뀌고, 통계가 맞게 쌓임
+## 퍼질 수 있는 단계 = destroy > 0. 그 단계는 스페어 1개 이상 + 비용이 있어야 누름
+func test_needs_spare_matches_destroy() -> void:
+	for star in b.max_star:
+		check_eq(Enhance.needs_spare(b, star), b.destroy[star] > 0.0, "+%d 스페어 필요 여부" % star)
+		var s := _game(star, Economy.enhance_cost(b, star))
+		s.spares = 1
+		check_eq(Enhance.block_reason(s, b, 0), Enhance.Block.NONE, "+%d: 비용 딱 + 스페어 1개인데 막힘" % star)
+		s.money -= 1
+		check_eq(Enhance.block_reason(s, b, 0), Enhance.Block.NO_MONEY, "+%d: 1원 모자란데 강화 가능" % star)
+	check(not Enhance.needs_spare(b, b.max_star), "+30(최고)에서 스페어 필요로 나옴")
+
+
+## 강화 1번마다: 비용이 빠지고, 결과대로 단계가 바뀌고, 통계가 맞게 쌓임
 func test_each_press_updates_state() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 2024
-	var s := GameState.new()
-	s.money = 1e15
+	var s := _game(0, 10 ** 15)
+	var t := s.truck(0)
 	for i in 2000:
-		if s.broken:
-			s.buy_spare(b)
-		if s.star >= b.max_star:
-			s.star = 0
-		var star0 := s.star
+		s.spares = 1
+		if t.star >= b.max_star:
+			t.star = 0
+		var star0 := t.star
 		var money0 := s.money
 		var cost := Economy.enhance_cost(b, star0)
-		var result := Enhance.try_enhance(s, b, rng)
-		check_near(s.money, money0 - cost, 1e-3, "%d번째: 비용이 정확히 안 빠짐" % i)
+		var result := Enhance.try_enhance(s, b, 0, rng)
+		check_eq(s.money, money0 - cost, "%d번째: 비용이 정확히 안 빠짐" % i)
 		match result:
 			Enhance.Result.SUCCESS:
-				check_eq(s.star, star0 + 1, "%d번째 성공인데 강수" % i)
+				check_eq(t.star, star0 + 1, "%d번째 성공인데 단계" % i)
 			Enhance.Result.FAIL:
-				check_eq(s.star, star0, "%d번째 실패인데 강수가 바뀜" % i)
+				check_eq(t.star, star0, "%d번째 실패인데 단계가 바뀜" % i)
 			Enhance.Result.DESTROY:
-				check(star0 >= 18, "%d번째: %d강에서 퍼짐" % [i, star0])
-				check_eq(s.star, 15, "%d번째 퍼짐인데 강수" % i)
+				check(star0 >= 18, "%d번째: +%d에서 퍼짐" % [i, star0])
+				check_eq(t.star, 15, "%d번째 퍼짐인데 단계" % i)
+				check_eq(s.spares, 0, "%d번째 퍼짐인데 스페어를 안 씀" % i)
 			_:
 				check(false, "%d번째: 강화가 막힘" % i)
-	check_eq(s.press_count(), 2000, "누른 횟수")
-	note("2000번: 성공 %d / 실패 %d / 퍼짐 %d" % [s.success_count, s.fail_count, s.destroy_count])
+	check_eq(t.success_count + t.fail_count + t.destroy_count, 2000, "누른 횟수")
+	note("2000번: 성공 %d / 실패 %d / 퍼짐 %d" % [t.success_count, t.fail_count, t.destroy_count])
 
 
 func test_blocked_when_no_money_or_max() -> void:
 	var rng := RandomNumberGenerator.new()
-	var s := GameState.new()
-	s.money = 19.0   # 0→1강 비용 20
-	check_eq(Enhance.block_reason(s, b), Enhance.Block.NO_MONEY, "19원으로 강화 가능으로 나옴")
-	check_eq(Enhance.try_enhance(s, b, rng), Enhance.Result.BLOCKED, "돈이 모자란데 강화가 됨")
-	check_eq(s.money, 19.0, "막혔는데 돈이 빠짐")
-	check_eq(s.press_count(), 0, "막혔는데 횟수가 셈")
-	s.money = 20.0
-	check_eq(Enhance.block_reason(s, b), Enhance.Block.NONE, "20원 딱 맞는데 강화 불가로 나옴")
+	var s := _game(0, 349)   # +0 비용 350
+	check_eq(Enhance.block_reason(s, b, 0), Enhance.Block.NO_MONEY, "349원으로 강화 가능으로 나옴")
+	check_eq(Enhance.try_enhance(s, b, 0, rng), Enhance.Result.BLOCKED, "돈이 모자란데 강화가 됨")
+	check_eq(s.money, 349, "막혔는데 돈이 빠짐")
+	check_eq(s.truck(0).fail_count + s.truck(0).success_count, 0, "막혔는데 횟수가 셈")
+	s.money = 350
+	check_eq(Enhance.block_reason(s, b, 0), Enhance.Block.NONE, "350원 딱 맞는데 강화 불가로 나옴")
 
-	s.star = b.max_star
-	s.money = 1e15
-	check_eq(Enhance.block_reason(s, b), Enhance.Block.MAX_STAR, "30강인데 강화 가능으로 나옴")
-	check_eq(Enhance.try_enhance(s, b, rng), Enhance.Result.BLOCKED, "30강인데 강화가 됨")
+	s.truck(0).star = b.max_star
+	s.money = 10 ** 15
+	s.spares = 5
+	check_eq(Enhance.block_reason(s, b, 0), Enhance.Block.MAX_STAR, "+30인데 강화 가능으로 나옴")
+	check_eq(Enhance.try_enhance(s, b, 0, rng), Enhance.Result.BLOCKED, "+30인데 강화가 됨")
+
+	# 돈도 스페어도 없으면 스페어부터 알려 줌
+	var s2 := _game(18, 0)
+	check_eq(Enhance.block_reason(s2, b, 0), Enhance.Block.NO_SPARE, "+18 돈·스페어 둘 다 없음")
 
 
-## 퍼질 수 있는 강수: 강화 비용만 있으면 막힘, 스페어값까지 있어야 누를 수 있음
-func test_blocked_without_spare_reserve() -> void:
+## 트럭 번호(i)대로 그 트럭만 강화됨
+func test_enhance_picks_truck_i() -> void:
 	var rng := RandomNumberGenerator.new()
-	var s := GameState.new()
-	s.star = 17   # 안 퍼지는 강수: 비용만 있으면 됨
-	s.money = Economy.enhance_cost(b, 17)
-	check_eq(Enhance.block_reason(s, b), Enhance.Block.NONE, "17강: 비용이 딱 있는데 막힘")
-
-	s.star = 18
-	s.money = Economy.enhance_cost(b, 18)
-	check_eq(Enhance.block_reason(s, b), Enhance.Block.NO_MONEY, "18강: 스페어값 없이 강화 가능으로 나옴")
-	check_eq(Enhance.try_enhance(s, b, rng), Enhance.Result.BLOCKED, "18강: 스페어값 없이 강화가 됨")
-	check_eq(s.money, Economy.enhance_cost(b, 18), "막혔는데 돈이 빠짐")
-	s.money = Economy.enhance_need(b, 18) - 1.0
-	check_eq(Enhance.block_reason(s, b), Enhance.Block.NO_MONEY, "18강: 1원 모자란데 강화 가능으로 나옴")
-	s.money = Economy.enhance_need(b, 18)
-	check_eq(Enhance.block_reason(s, b), Enhance.Block.NONE, "18강: 비용 + 스페어값이 딱 있는데 막힘")
+	rng.seed = 5
+	var s := _game(0, 10 ** 9)
+	s.spares = 50   # +18 넘어가도 막히지 않게
+	s.trucks.append(TruckState.new())
+	s.truck(1).star = 3
+	for k in 50:
+		Enhance.try_enhance(s, b, 1, rng)
+	var t1 := s.truck(1)
+	check_eq(s.truck(0).star, 0, "트럭 0이 바뀜")
+	check_eq(t1.success_count + t1.fail_count + t1.destroy_count, 50, "트럭 1 누른 횟수")
 
 
-## 이 규칙의 목적: 18~29강 어디서 퍼져도 스페어는 반드시 살 수 있음 (수익 0으로 갇히지 않음)
-## 누를 수 있는 가장 적은 돈(비용 + 스페어값 딱 맞게)으로 퍼질 때까지 눌러 본다.
-func test_destroy_never_leaves_you_stuck() -> void:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 99
-	for star in range(b.max_star):
-		if b.destroy[star] <= 0.0:
-			continue
-		var s := GameState.new()
-		var result := Enhance.Result.FAIL
-		var tries := 0
-		while result != Enhance.Result.DESTROY and tries < 2000:
-			tries += 1
-			s.star = star
-			s.money = Economy.enhance_need(b, star)
-			result = Enhance.try_enhance(s, b, rng)
-		check_eq(result, Enhance.Result.DESTROY, "%d강: 2000번 안에 안 퍼짐" % star)
-		check(s.can_buy_spare(b), "%d강에서 퍼졌는데 스페어를 못 삼 (돈 %s, 스페어 %s)" % [star, s.money, s.spare_price(b)])
-		check(s.buy_spare(b), "%d강: 스페어 구매 실패" % star)
-		check(s.current_hourly(b) > 0.0, "%d강: 수리 뒤에도 수익 0" % star)
+## 치트 F5 "강제로 퍼지게 하기": 스페어가 있으면 −1, 단계 내림, 통계는 안 셈
+func test_force_destroy() -> void:
+	var s := _game(5, 0)
+	Enhance.force_destroy(s, b, 0)
+	check_eq(s.truck(0).star, 5, "+5에서 퍼졌는데 단계가 올라감")
+	check_eq(s.spares, 0, "스페어 0인데 음수가 됨")
+
+	var s2 := _game(22, 0)
+	s2.spares = 3
+	Enhance.force_destroy(s2, b, 0)
+	check_eq(s2.truck(0).star, 15, "+22 퍼진 뒤 단계")
+	check_eq(s2.spares, 2, "스페어 3 → 2")
+	check_eq(s2.truck(0).destroy_count, 0, "치트 퍼짐을 통계에 셈")
 
 
-## F5(강제로 퍼지게 하기)에서도 쓰는 퍼짐 처리
-func test_break_engine_edge_cases() -> void:
-	var s := GameState.new()
-	s.star = 5
-	Enhance.break_engine(s, b)
-	check_eq(s.star, 5, "5강에서 퍼졌는데 강수가 올라감")
-	check(s.broken, "퍼졌는데 고장이 아님")
-
-	var s2 := GameState.new()
-	s2.star = 22
-	Enhance.break_engine(s2, b)
-	Enhance.break_engine(s2, b)   # 이미 고장인데 또
-	check_eq(s2.star_before_break, 22, "두 번 퍼뜨리면 직전 강수가 덮어써짐")
-	check_eq(s2.star, 15, "퍼진 뒤 강수")
+func _game(star: int, money: int) -> GameState:
+	var s := GameState.new_game()
+	s.truck(0).star = star
+	s.money = money
+	return s
