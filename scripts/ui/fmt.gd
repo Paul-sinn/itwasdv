@@ -29,6 +29,11 @@ static func money(v: int) -> String:
 	return "%d.%d%s" % [tenths / 10, tenths % 10, units[i - 1]]
 
 
+## 건수·경험치처럼 단위를 안 붙이는 수: 12340 → "12,340" (돈은 money: "1.2만")
+static func count(n: int) -> String:
+	return _commas(n)
+
+
 ## 1234567 → "1,234,567"
 static func _commas(n: int) -> String:
 	var digits := str(n)

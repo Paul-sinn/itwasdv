@@ -214,3 +214,15 @@ NPC_DEPOT,물류센터 팀장,Depot manager
 NPC_DEPOT_HELLO,오늘도 안전 운전! 다음 할 일은 여기서 봐요.,Drive safe! Check your next task here.
 NPC_CAR_CENTER,카센터 사장,Car Center owner
 NPC_CAR_CENTER_HELLO,스페어 엔진 하나쯤은 챙겨 두는 게 좋아요.,It's smart to keep a spare engine around.
+TOWN_PAY_LARGE,대형,Large
+TOWN_PAY_VIP,VIP,VIP
+TOWN_PAY_RUSH,급송,Rush
+TOWN_RUSH_CALL,급송 요청!,Rush order!
+TOWN_RUSH_ACCEPT,받기,Accept
+TOWN_RUSH_LEFT,급송 %d건 남음,Rush: %d left
+SETTINGS_RUSH,급송 요청 전화,Rush order calls
+SETTINGS_ON,켜기,On
+SETTINGS_OFF,끄기,Off
+DEPOT_WEEKLY,이번 주 배송 %s / %s건 → 보험 쿠폰 %d장 + 경험치 %s,This week %s / %s → %d coupon + %s XP
+DEPOT_WEEKLY_DONE,이번 주 달성! (배송 %s건),Weekly goal done! (%s deliveries)
+NOTICE_WEEKLY,주간 배송 목표 달성! 보험 쿠폰 +%d장 · 경험치 +%s,Weekly goal done! +%d insurance coupon · +%s XP

@@ -15,12 +15,16 @@
 ## v6-bal: 처음 켰을 때 작은 화면 말풍선 "건물을 눌러보세요". 건물·작은 버튼을 한 번 누르면(open_building) 다시 안 뜸
 ## v5b: 물류센터 능력치 [+] → Ability.add, [초기화] → Ability.reset (직후 저장). 팁 이벤트 → 동네 "팁!",
 ##      찍을 포인트가 남으면 구석 줄 점, 꺼둔 동안 노하우 경험치 한 줄
+## v6b: 현지 시각(now_local)을 만들어 Master.tick(켤 때는 꺼둔 동안 계산보다 먼저, 그 뒤 프레임마다)·Rush.tick(프레임마다).
+##      대형·VIP·급송 "+금액", 급송 전화 말풍선 [받기] → Rush.accept, [설정] 급송 전화 켜기/끄기, 주간 목표 달성 알림
 extends Control
 
 const Ability = preload("res://scripts/core/ability.gd")
 const Balance = preload("res://scripts/core/balance.gd")
 const Depot = preload("res://scripts/core/depot.gd")
 const Driver = preload("res://scripts/core/driver.gd")
+const Master = preload("res://scripts/core/master.gd")
+const Rush = preload("res://scripts/core/rush.gd")
 const Enhance = preload("res://scripts/core/enhance.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Quest = preload("res://scripts/core/quest.gd")
@@ -43,6 +47,8 @@ const HINT_KEY := "building_hint_seen"
 
 ## 저장 파일 위치. 확인 스크립트는 진짜 저장을 건드리지 않게 add_child 전에 바꾼다.
 var save_path := Save.DEFAULT_PATH
+## 현지 시각을 바꿔 넣기 (확인 스크립트용. 0 이상이면 now_local()이 이 값). 켤 때부터 쓰려면 add_child 전에
+var now_local_override := -1
 
 var balance: Balance
 var state: GameState
@@ -150,6 +156,8 @@ func _ready() -> void:
 	add_child(settings)
 	settings.style_picked.connect(_on_style_picked)
 	settings.close_pressed.connect(close_settings)
+	settings.rush_picked.connect(_on_rush_picked)
+	town.rush_accept_pressed.connect(_on_rush_accept)
 	screen.full_style_changed.connect(func(style): settings.show_style(style))
 
 	popup = ReturnPopup.new()
@@ -239,6 +247,8 @@ func _place_panel() -> void:
 
 func _process(delta: float) -> void:
 	var t := state.truck(TRUCK)
+	Master.tick(state, balance, now_local(), rng)
+	Rush.tick(state, balance, delta, rng)
 	var events := Trip.advance(state, balance, TRUCK, delta, rng)
 	town.truck.follow(_lap_phase(t))
 	town.truck.boosting = t.boost_lap
@@ -246,7 +256,7 @@ func _process(delta: float) -> void:
 	for e in events:
 		match e["type"]:
 			"parcel":
-				town.show_payout(house, e["pay"])
+				town.show_payout(house, e["pay"], e.get("kind", "normal"), e.get("rush", false))
 				earned_total += e["pay"]
 				parcels_total += 1
 				if _measuring:
@@ -267,6 +277,7 @@ func _process(delta: float) -> void:
 	_show_events(state.take_events())
 	town.set_hud(state.money, t.star, state.driver_level)
 	town.set_point_dot(Ability.points_left(state) > 0)
+	town.set_rush(Rush.is_ringing(state), state.rush_ring / balance.rush_ring_seconds, Rush.parcels_left(state))
 	town.set_quest(_quest_line())
 	if panel.visible:
 		panel.refresh(balance, state)
@@ -300,6 +311,7 @@ func _load_save() -> String:
 		Save.Status.OK:
 			state = r["state"]
 			var away := Time.get_unix_time_from_system() - float(r["saved_at"])
+			Master.tick(state, balance, now_local(), rng)   # 주가 바뀐 뒤 켰으면 꺼둔 동안 배송이 새 주에 들어가게 (먼저)
 			offline_report = Trip.apply_offline(state, balance, away)
 			offline_report["away_seconds"] = away
 			if r["recovered"]:
@@ -370,6 +382,9 @@ func _show_events(events: Array) -> void:
 				cur["points"] = cur.get("points", 0) + e["points"]
 			"max_level":
 				cur["max"] = true
+			"weekly_done":   # 경험치 보상으로 레벨업하면 그 줄이 이 알림에 붙음
+				_notify(cur)
+				cur = { "head": tr("NOTICE_WEEKLY") % [e["coupons"], Fmt.count(e["xp"])] }
 	_notify(cur)
 
 
@@ -434,11 +449,32 @@ func open_settings() -> void:
 	if not is_full():
 		return
 	settings.show_style(screen.full_style)
+	settings.show_rush(state.rush_enabled)
 	settings.visible = true
 
 
 func close_settings() -> void:
 	settings.visible = false
+
+
+## [설정] 급송 요청 전화 켜기/끄기 → 게임 저장에 (끄면 벨이 안 울림. 울리던 벨도 Rush.tick이 끔)
+func _on_rush_picked(on: bool) -> void:
+	state.rush_enabled = on
+	settings.show_rush(on)
+	_save()
+
+
+## 급송 전화 [받기] → Rush.accept (벨이 울릴 때만) → 저장
+func _on_rush_accept() -> void:
+	if Rush.accept(state, balance):
+		_save()
+
+
+## 지금 현지 시각 = 현지 시각을 1970-01-01 0시(현지)부터 센 초 (Master가 요일·주를 셈). 확인 스크립트는 now_local_override
+func now_local() -> int:
+	if now_local_override >= 0:
+		return now_local_override
+	return Time.get_unix_time_from_datetime_dict(Time.get_datetime_dict_from_system())
 
 
 ## 전체 화면 / 창 모드 고름 → 창 바꾸기·저장은 screen_mode.gd. 실제로 바뀐 값을 다시 표시

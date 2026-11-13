@@ -2,7 +2,8 @@
 ##   위: 기사 레벨, 경험치 막대(driver_xp / xp_need) (만렙이면 회사 평판)
 ##   그 아래 두 칸 고르기 (v5b. 한 화면에 다 넣으면 1280x720에서 창 밖으로 나감):
 ##     [능력치]: 남은 포인트 + [초기화](두 번 눌러야), 능력치 5줄 (이름 n/최대 · 지금 효과 / 한 줄 설명, [+]), 예시 빌드 4줄
-##     [창고·할 일]: 다음 할 일 (끝낸 수 n/22, 이름·설명·진행·보상), 창고 확장·야간 배송팀 (지금 값 → 다음 값, 가격, [올리기], 모자란 금액)
+##     [창고·할 일]: 다음 할 일 (끝낸 수 n/22, 이름·설명·진행·보상), 주간 배송 목표 (v6b),
+##                   창고 확장·야간 배송팀 (지금 값 → 다음 값, 가격, [올리기], 모자란 금액)
 ## 숫자는 scripts/core 의 Driver·Quest·Depot·Ability 값을 그대로 보여 준다 (효과를 여기서 계산하지 않음).
 ## 버튼은 신호만 → main.gd → Depot.upgrade / Ability.add / Ability.reset
 ## 다음 할 일 이름·설명은 번역 파일 QUEST_<ID>, QUEST_<ID>_DESC (Fmt.quest_name / quest_desc)
@@ -15,6 +16,7 @@ const Economy = preload("res://scripts/core/economy.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Quest = preload("res://scripts/core/quest.gd")
 const Ability = preload("res://scripts/core/ability.gd")
+const Weekly = preload("res://scripts/core/weekly.gd")
 const Trip = preload("res://scripts/core/trip.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
@@ -66,6 +68,7 @@ var _depot_box: VBoxContainer
 var _ability_lines := {} ## 능력치 id → "협상  7/20 · 단가 +7%"
 var _ability_descs := {} ## 능력치 id → 한 줄 설명
 var _builds: Label       ## 예시 빌드 4줄
+var _weekly: Label       ## "이번 주 배송 12,340 / 30,000건 → 보험 쿠폰 1장 + 경험치 2,000" / "이번 주 달성!"
 var _reset_armed_ms := -1   ## [초기화]를 한 번 누른 시각 (진짜 시간 ms). -1 = 안 누름
 var _scale := 1.0
 var _font_sizes := {}    ## 글자 → 배수 곱하기 전 크기
@@ -114,13 +117,19 @@ func _ready() -> void:
 	_quest_name = _label(_depot_box, Feel.PANEL_TEXT_SIZE, Feel.COLOR_STAR)
 	_quest_desc = _label(_depot_box, Feel.PANEL_SMALL_SIZE, Feel.COLOR_TEXT)
 	_quest_progress = _label(_depot_box, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
+	_weekly = _label(_depot_box, Feel.PANEL_SMALL_SIZE, Feel.COLOR_TEXT)
 
 	for kind: String in KINDS:
-		_titles[kind] = _label(_depot_box, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
+		# 이름과 [올리기]를 한 줄에 (v6b 주간 목표 줄이 들어갈 자리를 만들려고: 1280x720 높이)
+		var row := HBoxContainer.new()
+		_depot_box.add_child(row)
+		_titles[kind] = _label(row, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
 		_titles[kind].size_flags_horizontal = Control.SIZE_SHRINK_BEGIN   # 산 순간 커질 기준점
+		_titles[kind].size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		_titles[kind].autowrap_mode = TextServer.AUTOWRAP_OFF
+		var btn := _button(row, "")
+		btn.size_flags_horizontal = Control.SIZE_EXPAND | Control.SIZE_SHRINK_END   # 오른쪽 끝에
 		_values[kind] = _label(_depot_box, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
-		var btn := _button(_depot_box, "")
 		btn.pressed.connect(func(): upgrade_pressed.emit(kind))
 		buy_buttons[kind] = btn
 		_waits[kind] = _label(_depot_box, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
@@ -196,6 +205,13 @@ func refresh(b: Balance, s: GameState) -> void:
 		_quest_progress.text = tr("DRIVER_QUEST_PROGRESS") % [mini(pr[0], pr[1]), pr[1], Fmt.money(q["money"]), q["xp"]]
 	_quest_desc.visible = not q.is_empty()
 	_quest_progress.visible = not q.is_empty()
+
+	# 주간 배송 목표 (보상 숫자는 balance 그대로 보여 줌)
+	var done := Weekly.is_done(s)
+	var target := Weekly.target(b)
+	_weekly.text = tr("DEPOT_WEEKLY_DONE") % Fmt.count(Weekly.progress(s)) if done \
+			else tr("DEPOT_WEEKLY") % [Fmt.count(mini(Weekly.progress(s), target)), Fmt.count(target), b.weekly_coupons, Fmt.count(b.weekly_xp)]
+	_weekly.add_theme_color_override("font_color", Feel.COLOR_STAR if done else Feel.COLOR_TEXT)
 
 	for kind: String in KINDS:
 		var lv := Depot.level(s, kind)

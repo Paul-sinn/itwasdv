@@ -243,3 +243,21 @@ const COLOR_TIP := Color(1.0, 0.62, 0.86)  ## 동네 "팁! +금액" ("+금액" �
 const TIP_GAP := 4.0                       ## "+금액"과 "팁!" 사이 (설계 좌표)
 const POINT_DOT_SIZE := 6.0                ## 구석 줄 레벨 옆 점 지름 (작은 화면 기준). 찍을 포인트가 남았다는 표시
 const COLOR_POINT_DOT := Color(1.0, 0.45, 0.35)
+
+# --- v6b: 대형·VIP·급송 "+금액", 급송 전화 말풍선, 구석 줄 "급송 N건 남음" ---
+const COLOR_PAYOUT_LARGE := Color(0.45, 0.80, 1.0)   ## "대형 +금액"
+const COLOR_PAYOUT_VIP := Color(0.85, 0.60, 1.0)     ## "VIP +금액"
+const COLOR_PAYOUT_RUSH := Color(1.0, 0.55, 0.30)    ## "급송 +금액" (보통 배송일 때. 대형·VIP면 그 색)
+## 급송 전화 말풍선: 위 길(y 68)과 구석 줄 사이, 위 길의 두 집 사이를 꽉 채움 (양옆 집과 보이는 곳 사각형 하나로 합쳐짐)
+const RUSH_BUBBLE_RECT := Rect2(260, 30, 150, 0)     ## x·폭·위쪽 (동네 설계 좌표). 높이는 글자만큼
+const RUSH_JOIN_PX := 6.0                            ## 말풍선과 이만큼 가까운 집은 같은 사각형으로 (설계 좌표)
+const RUSH_FONT_SIZE := 11
+const RUSH_BUTTON_FONT_SIZE := 11
+const RUSH_PAD := Vector2(6, 2)                      ## 말풍선 안 여백 (좌우, 위아래)
+const RUSH_RADIUS := 5
+const RUSH_BAR_HEIGHT := 3.0                         ## 남은 시간 막대
+const COLOR_RUSH_BG := Color(1.0, 0.93, 0.80)
+const COLOR_RUSH_TEXT := Color(0.15, 0.13, 0.10)
+const COLOR_RUSH_BUTTON := Color(0.90, 0.42, 0.20)
+const COLOR_RUSH_BAR_BG := Color(0.80, 0.72, 0.60)
+const COLOR_RUSH_LEFT := Color(1.0, 0.65, 0.40)      ## 구석 줄 "급송 N건 남음"
