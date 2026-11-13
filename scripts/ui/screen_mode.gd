@@ -9,6 +9,7 @@
 ## 더한 것 (창 담당):
 ##   quit_game(): 저장하고 끝내기 (알림 영역 메뉴 "끝내기")
 ##   static var settings_path: 설정 파일 위치. 확인 스크립트는 main을 만들기 전에 바꾼다 (진짜 설정을 안 건드리게)
+##   open_menu_at_mouse() / signal menu_asked: 작은 동네 오른쪽 클릭 → 알림 영역 아이콘과 같은 메뉴 (2026-11-12)
 ##
 ## 창 세 가지:
 ##   투명 창 (보통 실행): 작은 화면 = 오른쪽 아래 구석 투명 창,
@@ -37,6 +38,8 @@ enum FullStyle { FULLSCREEN, WINDOWED }
 signal mode_changed(mode: Mode)
 ## 큰 화면 띄우는 방식이 바뀐 뒤에 보냄 (큰 화면에 있었으면 창도 이미 바뀐 상태)
 signal full_style_changed(style: FullStyle)
+## open_menu_at_mouse()가 불림 (메뉴를 띄우기 전에 보냄. 화면 없는 테스트에서는 아이콘이 없어 이것만)
+signal menu_asked
 
 ## 설정 파일 위치 (고른 full_style을 저장). 확인 스크립트는 main을 만들기 전에 바꾼다.
 static var settings_path := "user://settings.cfg"
@@ -78,6 +81,7 @@ func _ready() -> void:
 		tray.small_pressed.connect(enter_small)
 		tray.quit_pressed.connect(quit_game)
 		add_child(tray)
+		_sync_menu()
 
 
 ## 지금 창이 투명(바탕화면 위)인가. 화면 배경을 칠할지 정할 때 쓴다.
@@ -93,6 +97,7 @@ func enter_full() -> void:
 		_desktop.apply_full(full_style == FullStyle.WINDOWED)
 	elif _plain:
 		get_window().size = Feel.WINDOWED_FULL_SIZE
+	_sync_menu()
 	mode_changed.emit(mode)
 
 
@@ -104,6 +109,7 @@ func enter_small() -> void:
 		_desktop.apply_small()
 	elif _plain:
 		get_window().size = Feel.SMALL_SIZE
+	_sync_menu()
 	mode_changed.emit(mode)
 	# 화면 내용이 작은 화면에 맞게 다시 놓인 뒤의 사각형으로 클릭 영역을 바로 만든다
 	# (안 그러면 다음 갱신 전까지 한순간 창 전체가 보이고 클릭을 받음)
@@ -145,6 +151,21 @@ static func save_full_style(style: FullStyle) -> void:
 func quit_game() -> void:
 	get_tree().root.propagate_notification(NOTIFICATION_WM_CLOSE_REQUEST)
 	get_tree().quit()
+
+
+## 작은 동네를 오른쪽 클릭했을 때 (main.gd가 버튼을 뗄 때 부름): 알림 영역 아이콘과 같은 메뉴를 마우스 자리에.
+## 2026-11-12 사용자: 움직이는 트럭을 맞히기 어려움 → 아이콘을 찾지 않아도 동네에서 바로 메뉴.
+## 메뉴가 닫힐 때까지 여기서 멈춘다. 아이콘이 없으면(화면 없는 테스트) menu_asked만 보냄
+func open_menu_at_mouse() -> void:
+	menu_asked.emit()
+	if tray != null:
+		tray.open_menu_at_mouse()
+
+
+## 메뉴 "작게"는 큰 화면에서만 누를 수 있게
+func _sync_menu() -> void:
+	if tray != null:
+		tray.small_enabled = mode == Mode.FULL
 
 
 ## 알림 영역 아이콘 클릭: 큰 화면으로. 이미 큰 화면이면 앞으로 가져오기

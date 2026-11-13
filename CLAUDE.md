@@ -138,6 +138,7 @@ python -X utf8 "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\
   (v0 기록 1시간 44분: GDI·USER·핸들 그대로, 작업 메모리만 98~472MB 오르내림. 원인 모름 → 평소 쓸 때 지켜보기)
 - 사용자가 손으로: 알림 영역 아이콘 왼쪽 클릭(다른 프로그램을 쓰던 중에도 큰 화면이 앞으로 오나), 오른쪽 클릭 메뉴
 - v1 플레이 테스트 (지시서 맨 아래 5문항)
-- 튜닝(큐브): `docs/PROTOTYPE_V2.md` 확정 (2026-11-12, 추천안). 계산 담당(window 에이전트, 가지 `v2-core`) /
-  화면 담당(town 에이전트, 가지 `v2-ui`)이 병렬로 만들고 `prototype-v2`에 합침.
-  `scripts/core/tune.gd`와 `game_state.gd`의 튜닝 부분은 처음엔 껍데기 (이름만 약속대로)
+- 튜닝(큐브): `docs/PROTOTYPE_V2.md` 1~3단계 끝 (2026-11-12, 추천안). 계산 담당(window 에이전트, 가지 `v2-core`) /
+  화면 담당(town 에이전트, 가지 `v2-ui`)이 병렬로 만들고 `prototype-v2`에 합침. 화면 없는 확인 전부 통과.
+  시뮬 `python -I -X utf8 tools/tune_sim.py`: 튜닝 있으면 20강 1.7배·25강 4배 빨라짐 (너무 세면 `tune` 숫자부터)
+  남은 것: 튜닝 화면을 눈으로 확인(스크린샷은 `tests/shot_screens.gd`, 창이 뜨니 사용자에게 먼저 물어봄), v2 플레이 테스트

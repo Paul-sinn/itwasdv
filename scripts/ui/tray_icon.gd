@@ -1,6 +1,7 @@
 ## 알림 영역(시계 옆) 아이콘. screen_mode.gd가 만든다 (화면 없는 테스트에서는 안 만듦).
 ##   왼쪽 클릭 → full_pressed
 ##   오른쪽 클릭 → (버튼을 뗀 뒤) 메뉴: 전체 화면 / 작게 / 끝내기
+##   작은 동네를 오른쪽 클릭해도 같은 메뉴 (screen_mode.open_menu_at_mouse → open_menu_at_mouse)
 ##
 ## Godot 4.6.3 + Windows에서 직접 확인한 것:
 ##   - StatusIndicator 노드로 아이콘이 뜨고, 왼쪽 클릭이 pressed 신호로 들어온다.
@@ -26,6 +27,8 @@ enum Item { FULL = 1, SMALL = 2, QUIT = 3 }
 var indicator: StatusIndicator
 ## false면 메뉴를 진짜로 띄우지 않고 menu_requested만 보낸다 (확인 스크립트가 끔. 띄우면 메뉴가 닫힐 때까지 멈춤)
 var popup_enabled := true
+## false면 메뉴의 "작게"를 흐리게 (이미 작은 화면일 때. screen_mode.gd가 바꿈)
+var small_enabled := true
 
 var _menu_rid := RID()
 var _menu_pending := false
@@ -78,18 +81,36 @@ func _open_menu_later() -> void:
 	_menu_pending = true
 	await get_tree().create_timer(Feel.TRAY_MENU_DELAY, true, false, true).timeout
 	_menu_pending = false
+	open_menu(menu_position())
+
+
+## 메뉴를 마우스 자리에 (작은 동네 오른쪽 클릭. 부르는 쪽이 버튼을 뗀 뒤에 부른다)
+func open_menu_at_mouse() -> void:
+	open_menu(to_windows(DisplayServer.mouse_get_position()))
+
+
+## 메뉴 띄우기 (at = Windows 화면 좌표). 메뉴가 닫힐 때까지 여기서 기다림
+func open_menu(at: Vector2i) -> void:
 	menu_requested.emit()
-	if popup_enabled and _menu_rid.is_valid():
-		NativeMenu.popup(_menu_rid, menu_position())   # 메뉴가 닫힐 때까지 여기서 기다림
+	if not popup_enabled or not _menu_rid.is_valid():
+		return
+	var small := NativeMenu.find_item_index_with_tag(_menu_rid, Item.SMALL)
+	if small >= 0:
+		NativeMenu.set_item_disabled(_menu_rid, small, not small_enabled)
+	NativeMenu.popup(_menu_rid, at)
 
 
 ## 메뉴를 띄울 자리 (Windows 화면 좌표): 아이콘 가운데, 모르면 마우스 자리.
-## NativeMenu.popup은 Windows 좌표를 그대로 쓴다 (Godot 좌표 = Windows 좌표 - 모든 화면의 왼쪽 위 끝).
-## Windows 좌표의 (0,0)은 주 모니터 왼쪽 위라서, Godot 좌표에서 주 모니터 위치를 빼면 된다.
 func menu_position() -> Vector2i:
 	var r := indicator.get_rect()
-	var p := Vector2i(r.get_center()) if r.has_area() else DisplayServer.mouse_get_position()
-	return p - DisplayServer.screen_get_position(DisplayServer.get_primary_screen())
+	return to_windows(Vector2i(r.get_center()) if r.has_area() else DisplayServer.mouse_get_position())
+
+
+## Godot 화면 좌표 → Windows 화면 좌표.
+## NativeMenu.popup은 Windows 좌표를 그대로 쓴다 (Godot 좌표 = Windows 좌표 - 모든 화면의 왼쪽 위 끝).
+## Windows 좌표의 (0,0)은 주 모니터 왼쪽 위라서, Godot 좌표에서 주 모니터 위치를 빼면 된다.
+static func to_windows(godot_pos: Vector2i) -> Vector2i:
+	return godot_pos - DisplayServer.screen_get_position(DisplayServer.get_primary_screen())
 
 
 ## 임시 아이콘: 투명 바탕에 짐칸(흰색) + 운전석(노랑) + 바퀴(검정)

@@ -277,6 +277,7 @@ func _check_tray() -> void:
 	_press_esc()
 	await _settle()
 	_check_small("작은 화면에서 Esc (그대로)", true)
+	await _check_town_menu()
 	if screen.tray == null:
 		return
 	signals.clear()
@@ -308,6 +309,41 @@ func _check_tray() -> void:
 	_check_full("메뉴 \"전체 화면\"")
 	screen.enter_small()
 	await _settle()
+
+
+## 작은 동네 오른쪽 클릭 → 알림 영역과 같은 메뉴 (2026-11-12). 버튼을 뗄 때 한 번, 큰 화면에서는 안 뜸, 화면은 그대로
+func _check_town_menu() -> void:
+	var asks := [0]
+	var on_ask := func(): asks[0] += 1
+	screen.menu_asked.connect(on_ask)
+	if screen.tray != null:
+		_check(not screen.tray.small_enabled, "작은 화면인데 메뉴 \"작게\"가 눌리게 되어 있음")
+	var spot: Vector2 = m.visible_rects()[0].get_center()
+	_mouse(MOUSE_BUTTON_RIGHT, spot, true)
+	_check(asks[0] == 0, "동네 오른쪽 버튼을 누르기만 했는데 메뉴를 띄우려 함")
+	_mouse(MOUSE_BUTTON_RIGHT, spot, false)
+	_check(asks[0] == 1, "동네 오른쪽 클릭: 메뉴를 한 번 띄우려 해야 함 (%d번)" % asks[0])
+	await _settle()
+	_check_small("동네 오른쪽 클릭 (그대로)", true)
+	screen.enter_full()
+	await _settle()
+	if screen.tray != null:
+		_check(screen.tray.small_enabled, "큰 화면인데 메뉴 \"작게\"가 흐림")
+	_mouse(MOUSE_BUTTON_RIGHT, spot, true)
+	_mouse(MOUSE_BUTTON_RIGHT, spot, false)
+	_check(asks[0] == 1, "큰 화면 오른쪽 클릭: 메뉴를 띄우면 안 됨 (%d번)" % asks[0])
+	screen.enter_small()
+	await _settle()
+	screen.menu_asked.disconnect(on_ask)
+
+
+func _mouse(button: MouseButton, pos: Vector2, pressed: bool) -> void:
+	var e := InputEventMouseButton.new()
+	e.button_index = button
+	e.pressed = pressed
+	e.position = pos
+	e.global_position = pos
+	root.push_input(e)
 
 
 ## 아이콘 왼쪽 클릭 (Windows가 알려 주면 StatusIndicator가 보내는 신호와 같은 것)

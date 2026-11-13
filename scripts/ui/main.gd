@@ -430,6 +430,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	if mouse != null and mouse.pressed and mouse.button_index == MOUSE_BUTTON_LEFT:
 		_on_click(mouse.position)
 		return
+	# 작은 화면 오른쪽 클릭 → 메뉴 (전체 화면 / 작게 / 끝내기). 누를 때 말고 뗄 때 띄운다
+	# (누르자마자 띄우면 떼는 순간 마우스 밑 메뉴 항목이 눌릴 수 있음)
+	if mouse != null and not mouse.pressed and mouse.button_index == MOUSE_BUTTON_RIGHT and not is_full():
+		get_viewport().set_input_as_handled()
+		screen.open_menu_at_mouse()
+		return
 	if not OS.is_debug_build():
 		return
 	var key := event as InputEventKey
