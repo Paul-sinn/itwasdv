@@ -186,8 +186,8 @@ func test_v5_numbers_match_spec() -> void:
 	check_eq(b.night_rates, PackedFloat64Array([0.5, 0.6, 0.7, 0.8]), "오프라인 C6:C9 야간팀 비율")
 	check_eq([b.driver_max_level, b.offline_ignore_under_seconds, b.warehouse_max_level_solo], [50, 180.0, 3], "기획서에서 온 값")
 	check_eq(b.driver_star_milestones, PackedInt64Array([10, 15, 18, 20, 22, 25, 28, 30]), "강화 첫 달성 단계")
-	check_eq(b.warehouse_prices, PackedInt64Array([2000000, 8000000, 40000000]), "창고 가격")
-	check_eq(b.night_prices, PackedInt64Array([3000000, 12000000, 50000000]), "야간팀 가격")
+	check_eq(b.warehouse_prices, PackedInt64Array([2000000, 3000000, 40000000]), "창고 가격 (v6-bal B2: 본전 3~5시간)")
+	check_eq(b.night_prices, PackedInt64Array([1500000, 2200000, 2500000]), "야간팀 가격 (v6-bal B2: 본전 3~5시간)")
 	var want := [
 		["first_parcel", "parcels", 1, "", 200, 10000], ["parcels_20", "parcels", 20, "", 200, 20000],
 		["first_enhance", "star", 1, "", 200, 30000], ["first_setting", "setting_rolls", 1, "", 200, 40000],

@@ -21,3 +21,4 @@
 | 2026-11-13 | 시트에 없음 (사용자 답 Q7-1) | `setting.roll_cost` | PROTOTYPE_V6_BAL | 스포츠 160만, 레이싱 600만 |
 | 2026-11-13 | 레벨 곡선 (스냅샷 7번) | `driver.exponent` | PROTOTYPE_V6_BAL | Q14-1. 1.2 → 1.33 |
 | 2026-11-13 | 시트에 없음 (사용자 답 Q14-3) | `quests` star_15·level_20·setting_racing·star_18의 `money` | PROTOTYPE_V6_BAL | 100만·100만·100만·150만 |
+| 2026-11-13 | 시트에 없음 (시뮬로 정함, Q14-2 (다) 기준) | `depot.warehouse_prices` Lv2·Lv3, `depot.night_prices` | PROTOTYPE_V6_BAL | 창고 200만·300만 (Lv4 4000만 그대로), 야간팀 150만·220만·250만. tune_sim 가볍게: 본전(켜 둔 시간) 3.5~4.8시간, 2~4일째에 다 삼 |

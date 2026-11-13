@@ -36,10 +36,10 @@
   },
   "depot": {
     "warehouse_hours": [4, 6, 8, 12],
-    "warehouse_prices": [2000000, 8000000, 40000000],
+    "warehouse_prices": [2000000, 3000000, 40000000],
     "warehouse_max_level_solo": 3,
     "night_rates": [0.5, 0.6, 0.7, 0.8],
-    "night_prices": [3000000, 12000000, 50000000]
+    "night_prices": [1500000, 2200000, 2500000]
   },
   "setting": {
     "lines_by_grade": [1, 2, 3, 3, 3],

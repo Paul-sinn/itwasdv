@@ -30,8 +30,8 @@ func test_levels_and_prices() -> void:
 		wp.append(Depot.price(b, s, "warehouse"))
 		np.append(Depot.price(b, s, "night"))
 		check_eq([Depot.cap_hours(b, s), Depot.rate(b, s)], [hours[lv - 1], rates[lv - 1]], "Lv%d 지금 시간·비율" % lv)
-	check_eq(wp, [2000000, 8000000, 0, 0], "창고 다음 레벨 가격 (Lv3부터 대리점 전이라 0)")
-	check_eq(np, [3000000, 12000000, 50000000, 0], "야간팀 다음 레벨 가격 (Lv4는 끝)")
+	check_eq(wp, [2000000, 3000000, 0, 0], "창고 다음 레벨 가격 (Lv3부터 대리점 전이라 0)")
+	check_eq(np, [1500000, 2200000, 2500000, 0], "야간팀 다음 레벨 가격 (Lv4는 끝)")
 	note("창고 시간 %s / 가격 %s, 야간팀 비율 %s / 가격 %s" % [hours, wp, rates, np])
 
 
@@ -56,7 +56,7 @@ func test_upgrade() -> void:
 			bought[kind] += 1
 	check_eq([rich.warehouse_level, rich.night_level], [3, 4], "끝까지 산 레벨")
 	check_eq(bought, { "warehouse": 2, "night": 3 }, "산 횟수")
-	check_eq(rich.money, 1_000_000_000 - 2000000 - 8000000 - 3000000 - 12000000 - 50000000, "쓴 돈")
+	check_eq(rich.money, 1_000_000_000 - 2000000 - 3000000 - 1500000 - 2200000 - 2500000, "쓴 돈")
 	check(not Depot.can_upgrade(b, rich, "warehouse"), "창고 Lv3인데 살 수 있음")
 
 

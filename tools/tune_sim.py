@@ -1,7 +1,7 @@
 """
-택배 방치형 - 경제 시뮬레이터 (v5 기사 레벨·퀘스트·창고·야간팀까지, 판정용)
+택배 방치형 - 경제 시뮬레이터 (v5 기사 레벨·퀘스트·창고·야간팀 + v6-bal 규칙까지, 판정용)
 
-흉내 내는 것 (v5 게임에 있는 것만):
+흉내 내는 것 (v6-bal 게임에 있는 것만):
   트럭 1대, 엔진 강화(성공 / 실패=유지 / 퍼짐 → 스페어 1개 쓰고 +15), 강화 비용 고정표,
   스페어 엔진(고정가 구매 + 배송마다 낮은 확률 드랍, 꺼둔 동안은 평균값),
   한 바퀴 수입(출력 → 속도 → 한 바퀴 초), 기름값·정비비,
@@ -11,11 +11,13 @@
   창고 확장·야간 배송팀 사기.
   능력치·명장·보험·보조 트럭은 아직 없음 (v5b~). 능력치 포인트는 쌓이기만 해서 경제에 영향 없음.
 
-계산식은 docs/PROTOTYPE_V3~V5.md "계산식" = scripts/core/trip.gd, economy.gd, enhance.gd, setting.gd,
-driver.gd, depot.gd, quest.gd 와 같다.
+계산식은 docs/PROTOTYPE_V3~V5.md "계산식" + PROTOTYPE_V6_BAL.md "바뀌는 규칙" = scripts/core/trip.gd, economy.gd,
+enhance.gd, setting.gd, driver.gd, depot.gd, quest.gd 와 같다.
   반올림은 Godot roundi와 같게 (0.5는 0에서 먼 쪽. 파이썬 round()는 짝수 쪽이라 안 씀)
-  적재량은 게임처럼 floor(… + 1e-9) (딱 떨어져야 할 값이 실수 찌꺼기로 1건 모자라지 않게)
-  오버부스트는 평균 한 바퀴 초로 (게임의 "시간당 수입"·꺼둔 동안과 같음)
+  적재량은 평균값 그대로 (게임 Trip.cargo: 21.6처럼 소수. 정수에 1e-9 안쪽이면 정수로).
+    게임은 바퀴마다 소수점을 굴려 21 또는 22건을 싣지만 평균은 같아서, 시뮬은 평균으로 센다 (게임의 시간당 수입·꺼둔 동안과 같음)
+  오버부스트: 걸린 바퀴는 바퀴 내내 운전 속도 overboost_mult배 (= 달리는 초 ÷ overboost_mult). 시뮬은 평균 한 바퀴 초로
+    (게임의 "시간당 수입"·꺼둔 동안과 같음)
 게임 숫자는 전부 data/balance.json (게임과 같은 파일)의 trip / engine / offline / setting / driver / depot / quests.
 
 실행:  python -I -X utf8 tools/tune_sim.py                   가볍게(2.5시간)·열심히(8시간) 둘 다, 세팅 있음
@@ -150,7 +152,6 @@ class Bal:
         self.roll_cost = [int(x) for x in st_["roll_cost"]]
         self.cost_cut_cap = float(st_["cost_cut_cap"])
         self.guard_cap = float(st_["engine_guard_cap"])
-        self.ob_seconds = float(st_["overboost_seconds"])
         self.ob_mult = float(st_["overboost_mult"])
         self.options = {}
         for oid, o in st_["options"].items():
@@ -180,7 +181,9 @@ class Bal:
         return self.power(star) * (1.0 + tot.get("speed", 0.0))
 
     def cargo(self, tot):
-        return math.floor(self.base_cargo * (1.0 + tot.get("cargo", 0.0)) + 1e-9)
+        """평균 적재량 (Trip.cargo, 소수점 그대로)"""
+        c = self.base_cargo * (1.0 + tot.get("cargo", 0.0))
+        return float(round(c)) if abs(c - round(c)) < 1e-9 else c
 
     def parcel_pay(self, tot):
         f, m = tot.get("fuel_cut", 0.0), tot.get("maint_cut", 0.0)
@@ -192,9 +195,10 @@ class Bal:
         return u - roundi(u * self.fuel_rate * (1.0 - f)) - roundi(u * self.maint_rate * (1.0 - m))
 
     def lap_seconds(self, star, tot, boosted=False):
+        """한 바퀴 초 (정차는 평균 적재량). 걸린 바퀴는 달리는 초 ÷ overboost_mult"""
         drive = self.road / self.speed(star, tot)
         if boosted:
-            drive -= min(self.ob_seconds, drive / self.ob_mult)
+            drive /= self.ob_mult
         return self.load + drive + self.cargo(tot) * self.stop
 
     def avg_lap_seconds(self, star, tot):
@@ -661,7 +665,7 @@ def table(b):
     lv1 = b.lv1_offline()
     print("=" * 100)
     print(f"■ 단계별 표 (balance.json v{b.version}, 세팅 없음)  배송 1건 {b.parcel_pay(tot)}원 = 단가 {b.unit_price} − 기름값 "
-          f"{roundi(b.unit_price * b.fuel_rate)} − 정비비 {roundi(b.unit_price * b.maint_rate)}, 한 바퀴 {b.cargo(tot)}건")
+          f"{roundi(b.unit_price * b.fuel_rate)} − 정비비 {roundi(b.unit_price * b.maint_rate)}, 한 바퀴 {b.cargo(tot):g}건")
     print("=" * 100)
     print("  단계 | 출력 |  한 바퀴 초 | 한 바퀴 수입 |    시간당 수입 | 하루(2.5h) | 하루(8h) |      강화 비용 | 비용÷시간당")
     for s in range(b.max_star + 1):
@@ -669,7 +673,7 @@ def table(b):
         cost = b.enhance_cost(s) if s < b.max_star else None
         cost_txt = f"{cost:>14,}" if cost is not None else f"{'-':>14}"
         hrs_txt = f"{cost / b.hourly(s, tot):8.1f}시간" if cost is not None else f"{'-':>12}"
-        print(f"  {mark}+{s:<2} | {b.power(s):>4} | {b.lap_seconds(s, tot):>11.4f} | {b.lap_income(tot):>11,} | "
+        print(f"  {mark}+{s:<2} | {b.power(s):>4} | {b.lap_seconds(s, tot):>11.4f} | {b.lap_income(tot):>11,.0f} | "
               f"{b.hourly(s, tot):>14.4f} | {won(b.daily_income(s, tot, 2.5, *lv1)):>10} | {won(b.daily_income(s, tot, 8.0, *lv1)):>8} | "
               f"{cost_txt} | {hrs_txt}")
     print("  ◀ = C1 테스트(test_trip.gd test_lap_numbers_match_formula)가 찍는 단계. 시간당 수입이 같아야 함")
@@ -801,7 +805,7 @@ def report(b, label, hours, players, seed, compare=None, v4=None):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="경제 시뮬레이터 (v5 기사 레벨·퀘스트·창고·야간팀까지)")
+    ap = argparse.ArgumentParser(description="경제 시뮬레이터 (v5 기사 레벨·퀘스트·창고·야간팀 + v6-bal 규칙까지)")
     ap.add_argument("--players", type=int, default=1000)
     ap.add_argument("--hours", type=float, default=None, help="하루 켜 두는 시간 (안 주면 가볍게 2.5 + 열심히 8)")
     ap.add_argument("--seed", type=int, default=7)
