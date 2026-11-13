@@ -12,6 +12,8 @@
 ##   <GODOT_CONSOLE> --headless --path <프로젝트> -s tests/check_desktop.gd
 extends SceneTree
 
+const ErrorWatch = preload("res://tests/error_watch.gd")   ## 실행 중 스크립트 오류가 나면 실패로 끝냄
+
 const Save = preload("res://scripts/core/save.gd")
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
 const ClickRegion = preload("res://scripts/ui/click_region.gd")
@@ -32,6 +34,7 @@ var problems := 0
 
 
 func _initialize() -> void:
+	OS.add_logger(ErrorWatch.new(self))
 	_run.call_deferred()
 
 

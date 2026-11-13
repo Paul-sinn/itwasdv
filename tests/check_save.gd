@@ -1,6 +1,7 @@
 ## 저장과 꺼둔 동안 자동 확인 (4단계 → v3 U2 ③). 진짜 게임 화면(main.tscn)을 작은 화면 크기로 띄워서 확인한다.
 ## - 껐다 켜도 상태 유지 (돈·단계·스페어·통계), 30초 자동 저장
 ## - ③ 저장 시각을 3시간 전 / 20시간 전 / 미래로 → 꺼둔 동안 돈·배송·스페어(Trip.apply_offline)가 상태에 들어가고 복귀 창에 보임
+##   (v5: 다음 할 일은 다 끝낸 상태로 저장해 둔다. 켜자마자 할 일이 끝나면 보상 돈이 섞여서)
 ## - ③ 옛 형식(형식 2) 파일 → save.v2.json으로 남기고 새 게임 + 안내, 본 파일이 깨지면 백업에서 살리고 안내,
 ##   백업까지 깨지면 새로 시작 + 안내
 ## - F3이면 저장 지움, 복귀 창은 작은 화면(480x220) 안
@@ -10,11 +11,15 @@
 ##   <GODOT_CONSOLE> --headless --path <프로젝트> -s tests/check_save.gd
 extends SceneTree
 
+const ErrorWatch = preload("res://tests/error_watch.gd")   ## 실행 중 스크립트 오류가 나면 실패로 끝냄
+
 const MAIN_SCENE := "res://scenes/main.tscn"
 const Save = preload("res://scripts/core/save.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Balance = preload("res://scripts/core/balance.gd")
 const Trip = preload("res://scripts/core/trip.gd")
+const Depot = preload("res://scripts/core/depot.gd")
+const Quest = preload("res://scripts/core/quest.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
@@ -29,6 +34,7 @@ var checks := 0
 
 
 func _initialize() -> void:
+	OS.add_logger(ErrorWatch.new(self))
 	_run.call_deferred()
 
 
@@ -51,6 +57,7 @@ func _run() -> void:
 	t.success_count = 5
 	t.fail_count = 6
 	t.destroy_count = 1
+	m.state.quest_index = Quest.count(b)
 	m.notification(Node.NOTIFICATION_WM_CLOSE_REQUEST)   # 창 닫기 = 저장
 	await _close(m)
 	m = await _launch()
@@ -58,7 +65,7 @@ func _run() -> void:
 	_check(t.star == 19 and t.success_count == 5 and t.fail_count == 6 and t.destroy_count == 1 and m.state.spares == 3,
 			"다시 켰는데 단계/통계/스페어가 다름: +%d %d/%d/%d 스페어 %d" % [t.star, t.success_count, t.fail_count, t.destroy_count, m.state.spares])
 	_check(m.state.money >= 98765 and m.state.money < 98765 + Trip.lap_income(b, t), "다시 켰는데 돈이 다름: %s" % m.state.money)
-	_check(not m.popup.visible, "바로 다시 켰는데(1분 미만) 복귀 팝업이 뜸")
+	_check(not m.popup.visible, "바로 다시 켰는데(3분 미만) 복귀 팝업이 뜸")
 	var timer: Timer = m.get_node("Autosave")
 	_check(timer.wait_time == 30.0 and timer.ignore_time_scale and not timer.is_stopped(), "30초 자동 저장 타이머가 이상함")
 	await _close(m)
@@ -74,6 +81,7 @@ func _run() -> void:
 		s.truck(0).star = 10
 		s.money = 1000
 		s.spare_drop_carry = c["carry"]
+		s.quest_index = Quest.count(b)
 		_clean()
 		Save.write_file(TEST_SAVE, s, int(Time.get_unix_time_from_system()) + c["shift"])
 		# 같은 상태에 Trip.apply_offline을 직접 불러 기대값을 만든다 (켜는 데 걸리는 몇 초는 아래에서 봐줌)
@@ -81,7 +89,7 @@ func _run() -> void:
 		m = await _launch()
 		var r: Dictionary = m.offline_report
 		var got_money: int = m.state.money - 1000
-		var slack: float = Trip.hourly_income(b, m.state.truck(0)) * b.offline_rate * 5.0 / HOUR + 1.0
+		var slack: float = Trip.hourly_income(b, m.state.truck(0)) * Depot.rate(b, m.state) * 5.0 / HOUR + 1.0
 		var ok: bool = absf(got_money - want["money"]) <= slack and got_money == r["money"] \
 				and absi(r["parcels"] - want["parcels"]) <= 1 and r["spares"] == want["spares"] and m.state.spares == want["spares"]
 		var main_text: String = m.popup.main_text()
@@ -91,7 +99,7 @@ func _run() -> void:
 			shown = shown and main_text == tr("RETURN_MAIN_ZERO") and note.contains(c["note"])
 		else:
 			shown = shown and main_text.contains("+" + Fmt.money(r["money"]) + "원") \
-					and note.contains(tr("RETURN_DETAIL") % [r["parcels"], r["spares"]])
+					and note.contains(tr("RETURN_DETAIL") % [r["parcels"], r["xp"], r["spares"]])
 		_report(ok and shown, "③ %s: 돈 +%d (Trip.apply_offline %d), 배송 %d건, 스페어 +%d개 → 복귀 창 '%s' / '%s'" % [
 				c["name"], got_money, want["money"], r["parcels"], r["spares"], main_text, note.replace("\n", " / ")])
 		await _close(m)
@@ -116,6 +124,7 @@ func _run() -> void:
 	var s2 := GameState.new_game()
 	s2.truck(0).star = 12
 	s2.money = 5000
+	s2.quest_index = Quest.count(b)
 	var at := int(Time.get_unix_time_from_system()) - 2 * HOUR
 	Save.write_file(TEST_SAVE, s2, at)
 	s2.truck(0).star = 13
@@ -123,7 +132,7 @@ func _run() -> void:
 	_write(TEST_SAVE, "{ 이건 깨진 파일")
 	m = await _launch()
 	_report(m.state.truck(0).star == 12 and m.popup.visible and m.popup.main_text() == tr("LOAD_RECOVERED") % "save.json.broken"
-			and m.popup.note_text().contains(tr("RETURN_DETAIL") % [m.offline_report["parcels"], m.offline_report["spares"]])
+			and m.popup.note_text().contains(tr("RETURN_DETAIL") % [m.offline_report["parcels"], m.offline_report["xp"], m.offline_report["spares"]])
 			and FileAccess.file_exists(TEST_SAVE + ".broken"),
 			"③ 본 파일이 깨짐 → 백업에서 +%d로 살림, 복귀 창 '%s' / '%s'" % [
 			m.state.truck(0).star, m.popup.main_text().replace("\n", " / "), m.popup.note_text().replace("\n", " / ")])

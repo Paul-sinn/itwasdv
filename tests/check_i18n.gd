@@ -12,6 +12,8 @@
 ##   <GODOT_CONSOLE> --headless --path <프로젝트> --import
 extends SceneTree
 
+const ErrorWatch = preload("res://tests/error_watch.gd")   ## 실행 중 스크립트 오류가 나면 실패로 끝냄
+
 const MAIN_SCENE := "res://scenes/main.tscn"
 const CSV_PATH := "res://locale/strings.csv"
 const UI_DIR := "res://scripts/ui/"
@@ -38,6 +40,7 @@ var _csv := {}   ## 키 → { "ko": 글, "en": 글 }
 
 
 func _initialize() -> void:
+	OS.add_logger(ErrorWatch.new(self))
 	_run.call_deferred()
 
 
@@ -53,6 +56,10 @@ func _run() -> void:
 		code_keys["SETTING_PART_" + part.to_upper()] = true
 		for op in Setting.option_chances(b, part, Setting.max_grade(b)):
 			code_keys["SETTING_OPT_" + String(op).to_upper()] = true
+	# 다음 할 일 이름·설명 키도 balance.json의 id로 만들어 씀 (Fmt.quest_name / quest_desc)
+	for q: Dictionary in b.quests:
+		code_keys["QUEST_" + String(q["id"]).to_upper()] = true
+		code_keys["QUEST_" + String(q["id"]).to_upper() + "_DESC"] = true
 	_check_keys(code_keys)
 	_check_money()
 	await _check_screen_ko()
@@ -140,7 +147,7 @@ func _check_keys(keys: Dictionary) -> void:
 				bad.append("%s %s → '%s'" % [locale, key, got])
 	for x in bad:
 		print("    " + x)
-	_report(bad.is_empty() and keys.size() > 10, "코드가 쓰는 키 %d개(세팅 부품·옵션·등급 이름 포함)가 ko·en 모두 번역됨 (ja는 en으로)" % keys.size())
+	_report(bad.is_empty() and keys.size() > 10, "코드가 쓰는 키 %d개(세팅 부품·옵션·등급, 다음 할 일 이름·설명 포함)가 ko·en 모두 번역됨 (ja는 en으로)" % keys.size())
 	var unused := PackedStringArray()
 	for key: String in _csv:
 		if not keys.has(key):
@@ -231,7 +238,7 @@ func _check_screen_en() -> void:
 	m.state.truck(0).star = 18
 	m.state.money = 0
 	p.show_result(tr("RESULT_DESTROY"), Feel.COLOR_DANGER, Feel.DESTROY_TEXT_SIZE, tr("RESULT_DESTROY_NOTE") % [15, 0])
-	m.offline_report = { "money": 54321, "parcels": 123, "spares": 1, "hours": 3.0, "away_seconds": 3.0 * 3600.0 }
+	m.offline_report = { "money": 54321, "parcels": 123, "spares": 1, "hours": 3.0, "xp": 0, "full": false, "ignored": false, "away_seconds": 3.0 * 3600.0 }
 	m._open_return_popup(tr("LOAD_RECOVERED") % "save.json.broken")
 	await _frames(2)
 	texts.append_array(_visible_texts(m))
