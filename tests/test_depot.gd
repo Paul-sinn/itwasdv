@@ -66,11 +66,11 @@ func test_offline_uses_depot() -> void:
 	var s := GameState.new_game()
 	s.warehouse_level = 2   # 6시간
 	s.night_level = 3       # 0.7
-	var hourly := Trip.hourly_income(b, s.truck(0))
+	var hourly := Trip.hourly_income(b, s, 0)
 	var r := Trip.apply_offline(s, b, 20 * hour)
 	check_eq(r["hours"], 6.0, "창고 Lv2: 20시간 → 6시간")
 	check_eq(r["money"], floori(hourly * 6.0 * 0.7), "야간팀 Lv3: 6시간 × 0.7")
-	check_eq(r["parcels"], floori(20 * 3600.0 / Trip.avg_lap_seconds(b, s.truck(0)) * 6.0 * 0.7), "배송 = 6시간 × 0.7")
+	check_eq(r["parcels"], floori(20 * 3600.0 / Trip.avg_lap_seconds(b, s, 0) * 6.0 * 0.7), "배송 = 6시간 × 0.7")
 	check(r["full"], "6시간 넘게 꺼 뒀는데 창고가 안 참")
 	var s1 := GameState.new_game()
 	var r1 := Trip.apply_offline(s1, b, 20 * hour)

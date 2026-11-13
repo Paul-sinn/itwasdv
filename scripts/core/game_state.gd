@@ -1,6 +1,7 @@
 ## 게임 상태: 돈, 스페어 엔진, 트럭들, 기사 레벨·창고·야간팀·퀘스트 진행, 화면에 띄울 알림.
 ## 화면 없이 돌아가는 계산 코드. (scripts/core 규칙)
-## 한 바퀴·배송·꺼둔 동안은 trip.gd, 강화 굴리기는 enhance.gd, 레벨은 driver.gd, 창고·야간팀은 depot.gd, 퀘스트는 quest.gd에 있다.
+## 한 바퀴·배송·꺼둔 동안은 trip.gd, 강화 굴리기는 enhance.gd, 레벨은 driver.gd, 능력치는 ability.gd, 창고·야간팀은 depot.gd,
+## 퀘스트는 quest.gd에 있다.
 extends RefCounted
 
 const Balance = preload("res://scripts/core/balance.gd")
@@ -18,6 +19,7 @@ var driver_level: int = 1
 var driver_xp: int = 0            ## 지금 레벨에서 쌓은 경험치
 var ability_points: int = 0       ## 받은 포인트 (v5에서는 쌓이기만)
 var reputation: int = 0           ## 만렙 뒤 경험치
+var abilities: Dictionary = {}    ## 능력치 id → 찍은 포인트 (없으면 0). ability.gd
 
 # --- 물류센터 (depot.gd) ---
 var warehouse_level: int = 1
