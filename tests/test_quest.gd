@@ -131,10 +131,13 @@ func test_new_game_first_hour() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 1
 	var parcels := 0
+	var tips := 0
 	for k in 3600:
 		for ev in Trip.advance(s, b, 0, 1.0, rng):
 			if ev["type"] == "parcel":
 				parcels += 1
+			elif ev["type"] == "tip":
+				tips += ev["pay"]
 	var events := s.take_events()
 	check_eq(_quest_ids(events), ["first_parcel", "parcels_20"], "1시간에 끝난 퀘스트")
 	check_eq(Quest.current(b, s)["id"], "first_enhance", "다음 차례")
@@ -142,7 +145,7 @@ func test_new_game_first_hour() -> void:
 	for lv in range(1, s.driver_level):
 		spent += Driver.xp_need(b, lv)
 	check_eq(spent + s.driver_xp, parcels * 10 + 200 + 200, "경험치 = 배송 × 10 + 퀘스트 2개 보상")
-	check_eq(s.money, parcels * 1875 + 10000 + 20000, "돈 = 배송 돈(1건 1875, 기름값 20%) + 퀘스트 보상")
+	check_eq(s.money, parcels * 1875 + tips + 10000 + 20000, "돈 = 배송 돈(1건 1875, 기름값 20%) + 팁 + 퀘스트 보상")
 	check_eq(s.parcels_total, parcels, "배송 수")
 	note("+0 새 게임 1시간: 배송 %d건, 레벨 %d (경험치 %d/%d), 포인트 %d, 끝난 퀘스트 %d개, 돈 %d원"
 			% [parcels, s.driver_level, s.driver_xp, Driver.xp_need(b, s.driver_level), s.ability_points, s.quest_index, s.money])

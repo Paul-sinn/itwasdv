@@ -1,4 +1,4 @@
-## save.gd: 저장 형식 6 쓰고 읽기(세팅, 레벨·창고·퀘스트, 지금 바퀴 건수), 형식 3·4·5 읽기, 깨진 파일, 백업 3개, 옛 형식 남기기
+## save.gd: 저장 형식 7 쓰고 읽기(세팅, 레벨·창고·퀘스트, 지금 바퀴 건수, 능력치), 형식 3~6 읽기, 깨진 파일, 백업 3개, 옛 형식 남기기
 extends "res://tests/test_base.gd"
 
 const Balance = preload("res://scripts/core/balance.gd")
@@ -6,6 +6,7 @@ const GameState = preload("res://scripts/core/game_state.gd")
 const TruckState = preload("res://scripts/core/truck_state.gd")
 const Save = preload("res://scripts/core/save.gd")
 const Trip = preload("res://scripts/core/trip.gd")
+const Ability = preload("res://scripts/core/ability.gd")
 
 # 옛 형식 파일이 "같은 폴더/save.v2.json"으로 가서, 진짜 저장 폴더와 겹치지 않게 시험용 폴더를 씀
 const DIR := "user://test_unit_save"
@@ -83,6 +84,8 @@ func _sample_state() -> GameState:
 	s.spares_bought = 2
 	s.parts_rolled = { "cargo_box": true, "ecu": true }
 	s.milestones_done = [10, 15, 18, 20]
+	# 형식 7 (받은 포인트 13 중 10)
+	s.abilities = { "nego": 7, "kind": 3 }
 	return s
 
 
@@ -119,17 +122,18 @@ func test_write_then_read_same() -> void:
 	check_eq(t.part("ecu")["pending"], null, "ECU pending 없음")
 	check_eq(got.truck(1).settings, {}, "트럭 1 세팅 없음")
 	check_eq(_progress(got), _progress(s), "형식 5 칸 (레벨·창고·퀘스트 진행)")
+	check_eq(got.abilities, { "nego": 7, "kind": 3 }, "형식 7 능력치")
 	check_eq([r["recovered"], r["old_kept"]], [false, ""], "보통 읽기: 복구·옛 형식 아님")
 	check(not FileAccess.file_exists(PATH + ".tmp"), "임시 파일이 남음")
 	_clean()
 
 
-func test_format_6_dict() -> void:
+func test_format_7_dict() -> void:
 	var d := Save.to_dict(_sample_state(), 1794000000)
-	check_eq(d["version"], 6, "저장 형식")
+	check_eq(d["version"], 7, "저장 형식")
 	var keys := d.keys()
 	keys.sort()
-	check_eq(keys, ["ability_points", "driver_level", "driver_xp", "milestones_done", "money", "night_level", "parcels_total",
+	check_eq(keys, ["abilities", "ability_points", "driver_level", "driver_xp", "milestones_done", "money", "night_level", "parcels_total",
 			"parts_rolled", "quest_index", "reputation", "saved_at_utc", "setting_rolls", "spare_drop_carry", "spares",
 			"spares_bought", "trucks", "version", "warehouse_level"], "저장 칸")
 	var tk: Array = d["trucks"][0].keys()
@@ -162,7 +166,7 @@ func test_lap_cargo_survives_restart() -> void:
 		var loaded: GameState = r["state"]
 		check_eq(loaded.truck(0).lap_cargo, n, "다시 켠 뒤 지금 바퀴 건수 (%d)" % n)
 		var rest := n - t.lap_delivered
-		var left := Trip.lap_seconds(b, t) - t.lap_clock - 0.01   # 바퀴 끝 직전까지 (새 바퀴를 굴리기 전)
+		var left := Trip.lap_seconds(b, s, 0) - t.lap_clock - 0.01   # 바퀴 끝 직전까지 (새 바퀴를 굴리기 전)
 		var got_a := _parcels(Trip.advance(s, b, 0, left, RandomNumberGenerator.new()))
 		var got_b := _parcels(Trip.advance(loaded, b, 0, left, RandomNumberGenerator.new()))
 		check_eq([got_a, got_b], [rest, rest], "%d건 바퀴: 남은 집 배송 (안 끈 쪽, 다시 켠 쪽)" % n)
@@ -172,6 +176,45 @@ func test_lap_cargo_survives_restart() -> void:
 
 func _parcels(events: Array) -> int:
 	return events.filter(func(e): return e["type"] == "parcel").size()
+
+
+## v5b C1 ⑩: 능력치 저장 → 읽기 같음, 형식 6 파일(능력치 없음) 읽힘, 0~최대로 자름, 합이 받은 포인트를 넘으면 전부 0, 숫자 아니면 깨짐
+func test_abilities_round_trip_and_clamp() -> void:
+	var s := _sample_state()
+	s.ability_points = 59
+	s.abilities = { "unload": 30, "kind": 9, "nego": 20 }
+	var r := Save.from_dict(JSON.parse_string(JSON.stringify(Save.to_dict(s, 1794000000))), b)
+	check_eq(r["status"], Save.Status.OK, "읽기 (%s)" % r["error"])
+	if r["state"] != null:
+		check_eq([r["state"].abilities, r["state"].ability_points], [{ "unload": 30, "kind": 9, "nego": 20 }, 59], "59포인트 다 찍은 것 그대로")
+	# 형식 6 (v6-bal): 능력치 칸 없음 → 없음
+	var d6 := Save.to_dict(_sample_state(), 1794000000)
+	d6["version"] = 6
+	d6.erase("abilities")
+	var r6 := Save.from_dict(d6, b)
+	check_eq(r6["status"], Save.Status.OK, "형식 6 읽기 (%s)" % r6["error"])
+	if r6["state"] != null:
+		check_eq([r6["state"].abilities, r6["state"].ability_points], [{}, 13], "형식 6: 능력치 없음, 받은 포인트 그대로")
+	# 0~최대로 자름, 소수 버림, 모르는 id 버림 (합 24 ≤ 59)
+	var dc := Save.to_dict(_sample_state(), 1794000000)
+	dc["ability_points"] = 59
+	dc["abilities"] = { "nego": 99, "kind": -3, "unload": 4.7, "luck": 5 }
+	var rc := Save.from_dict(dc, b)
+	check_eq(rc["status"], Save.Status.OK, "자르기 (%s)" % rc["error"])
+	if rc["state"] != null:
+		check_eq(rc["state"].abilities, { "nego": 20, "unload": 4 }, "협상 99 → 20, 음수 → 0, 4.7 → 4, luck 버림")
+	# 합이 받은 포인트(13)를 넘음 → 전부 0
+	var dover := Save.to_dict(_sample_state(), 1794000000)
+	dover["abilities"] = { "nego": 10, "kind": 10 }
+	var ro := Save.from_dict(dover, b)
+	check_eq(ro["status"], Save.Status.OK, "넘는 파일 읽기 (%s)" % ro["error"])
+	if ro["state"] != null:
+		check_eq([ro["state"].abilities, Ability.points_left(ro["state"])], [{}, 13], "합 20 > 받은 13 → 전부 0, 포인트 돌려받음")
+	# 숫자 아님·묶음 아님 → 깨짐
+	for bad in [{ "nego": "많이" }, ["nego"], "nego"]:
+		var db := Save.to_dict(_sample_state(), 1794000000)
+		db["abilities"] = bad
+		check_eq(Save.from_dict(db, b)["status"], Save.Status.BROKEN, "abilities = %s 를 못 걸러냄" % [bad])
 
 
 ## 형식 5 파일(v5·v6a, lap_cargo 없음)도 그대로 읽힘 → lap_cargo 0, 다음 진행 때 굴림. 숫자가 아니면 깨짐, 음수는 0
