@@ -10,6 +10,7 @@ const Setting = preload("res://scripts/core/setting.gd")
 const Trip = preload("res://scripts/core/trip.gd")
 
 const STARS := [0, 10, 18, 30]
+const TIP_AVG := 50.0   ## v5b 팁 평균 (배송 1건마다) = 기본 팁 확률 2% × 팁 2500 (단가 × 1.0). 능력치 없을 때
 
 var b: Balance = Balance.load_file()
 ## v3 숫자(단가 100, 적재량 5, 정차 2초, 스페어 드랍 0.0002): 집마다 시각이 딱 떨어져서, 시각·배송 수를 손으로 계산한 테스트에 씀
@@ -22,7 +23,15 @@ func _v3_balance() -> Balance:
 	d["trip"]["base_cargo"] = 5
 	d["trip"]["stop_seconds"] = 2
 	d["engine"]["spare_drop_chance"] = 0.0002
+	d["trip"]["tip_base_chance"] = 0.0   # v5b 팁: v3 숫자 테스트는 돈을 손으로 셈 → 팁 없이
 	return Balance.from_dict(d)
+
+
+## 트럭 하나만 있는 상태 (Trip 함수가 (b, s, i)를 받게 된 v5b부터. 능력치 없음 = 트럭만의 계산)
+func _st(t: TruckState) -> GameState:
+	var s := GameState.new()
+	s.trucks.append(t)
+	return s
 
 
 ## 지시서 계산식을 손으로 옮긴 값 (trip.gd를 거치지 않음). v4 숫자: 단가 2500, 적재량 20, 정차 0.5초. v6-bal: 기름값 20%
@@ -33,8 +42,9 @@ func _expected(star: int) -> Dictionary:
 		power += gain[s]
 	var lap := 10.0 + 12000.0 / power + 20 * 0.5
 	var pay := 2500 - 500 - 125
-	var v3_hourly := 5 * 75 * 3600.0 / (10.0 + 12000.0 / power + 5 * 2.0)   # v3 숫자 단가 100: 100 − 20 − 5
-	return { "power": power, "lap": lap, "pay": pay, "lap_income": 20 * pay, "hourly": 20 * pay * 3600.0 / lap, "v3_hourly": v3_hourly }
+	# v3 숫자 단가 100: 100 − 20 − 5 + 팁 평균 2% × 100
+	var v3_hourly := 5 * (75 + 2.0) * 3600.0 / (10.0 + 12000.0 / power + 5 * 2.0)
+	return { "power": power, "lap": lap, "pay": pay, "lap_income": 20 * pay, "hourly": 20 * (pay + TIP_AVG) * 3600.0 / lap, "v3_hourly": v3_hourly }
 
 
 ## 퀘스트는 다 끝낸 상태로 (v5): 여기서는 배송 돈만 본다. 퀘스트 보상은 test_quest.gd
@@ -54,33 +64,33 @@ func _rng(seed_value: int) -> RandomNumberGenerator:
 ## v4 C1 ⑫ (v3 C1 ①): +0/+10/+18/+30의 출력·한 바퀴 초·시간당 수입이 식과 같음, v3의 100배 (C2 시뮬 --table과 맞춰 볼 값)
 func test_lap_numbers_match_formula() -> void:
 	var t0 := _game(0).truck(0)
-	check_eq(Trip.parcel_pay(b, t0), 1875, "배송 1건 돈 = 2500 − 500 − 125")
-	check_eq(typeof(Trip.parcel_pay(b, t0)), TYPE_INT, "배송 1건 돈이 정수가 아님")
+	check_eq(Trip.parcel_pay(b, _st(t0), 0), 1875, "배송 1건 돈 = 2500 − 500 − 125")
+	check_eq(typeof(Trip.parcel_pay(b, _st(t0), 0)), TYPE_INT, "배송 1건 돈이 정수가 아님")
 	for star in STARS:
 		var e := _expected(star)
 		var t := _game(star).truck(0)
 		check_eq(Trip.power(b, star), e["power"], "+%d 출력" % star)
 		check_eq(Trip.speed(b, t), float(e["power"]), "+%d 속도" % star)
 		check_eq(Trip.cargo(b, t), 20, "+%d 적재량" % star)
-		check_near(Trip.lap_seconds(b, t), e["lap"], 1e-9, "+%d 한 바퀴 초" % star)
-		check_near(Trip.avg_lap_seconds(b, t), e["lap"], 1e-9, "+%d 평균 한 바퀴 초 (오버부스트 없음)" % star)
-		check_eq(Trip.lap_income(b, t), e["lap_income"], "+%d 한 바퀴 수입" % star)
-		check_near(Trip.hourly_income(b, t), e["hourly"], 1e-6, "+%d 시간당 수입" % star)
-		check_near(Trip.hourly_income(b, t), e["v3_hourly"] * 100.0, 1e-6, "+%d 시간당 수입 = v3의 100배" % star)
+		check_near(Trip.lap_seconds(b, _st(t), 0), e["lap"], 1e-9, "+%d 한 바퀴 초" % star)
+		check_near(Trip.avg_lap_seconds(b, _st(t), 0), e["lap"], 1e-9, "+%d 평균 한 바퀴 초 (오버부스트 없음)" % star)
+		check_eq(Trip.lap_income(b, _st(t), 0), e["lap_income"], "+%d 한 바퀴 수입" % star)
+		check_near(Trip.hourly_income(b, _st(t), 0), e["hourly"], 1e-6, "+%d 시간당 수입" % star)
+		check_near(Trip.hourly_income(b, _st(t), 0), e["v3_hourly"] * 100.0, 1e-6, "+%d 시간당 수입 = v3의 100배" % star)
 		note("+%d: 출력 %d, 한 바퀴 %.4f초, 한 바퀴 수입 %d원, 시간당 %.4f원"
-				% [star, Trip.power(b, star), Trip.lap_seconds(b, t), Trip.lap_income(b, t), Trip.hourly_income(b, t)])
+				% [star, Trip.power(b, star), Trip.lap_seconds(b, _st(t), 0), Trip.lap_income(b, _st(t), 0), Trip.hourly_income(b, _st(t), 0)])
 	# 지시서 "한 바퀴 140초도 그대로"
-	check_near(Trip.lap_seconds(b, t0), 140.0, 1e-9, "+0 한 바퀴 140초")
+	check_near(Trip.lap_seconds(b, _st(t0), 0), 140.0, 1e-9, "+0 한 바퀴 140초")
 	check_eq(Trip.power(b, 30), 775, "+30 출력 = 100 + 675")
 
 
 ## 단계만 바꿔 본 시간당 수입 ("성공하면 시간당")
 func test_hourly_income_at() -> void:
 	var t := _game(10).truck(0)
-	check_near(Trip.hourly_income_at(b, t, 11), Trip.hourly_income(b, _game(11).truck(0)), 1e-9, "+10 트럭의 +11 시간당")
+	check_near(Trip.hourly_income_at(b, _st(t), 0, 11), Trip.hourly_income(b, _game(11), 0), 1e-9, "+10 트럭의 +11 시간당")
 	check_eq(t.star, 10, "hourly_income_at이 트럭 단계를 바꿈")
 	for star in range(1, b.max_star + 1):
-		check(Trip.hourly_income_at(b, t, star) > Trip.hourly_income_at(b, t, star - 1), "+%d 시간당이 +%d보다 안 큼" % [star, star - 1])
+		check(Trip.hourly_income_at(b, _st(t), 0, star) > Trip.hourly_income_at(b, _st(t), 0, star - 1), "+%d 시간당이 +%d보다 안 큼" % [star, star - 1])
 
 
 ## 지시서 C1 ②: advance로 3600초 돌린 돈이 시간당 수입과 한 바퀴 수입 1번치 안쪽
@@ -89,16 +99,16 @@ func test_hour_of_advance_matches_hourly() -> void:
 		var s := _game(star)
 		var t := s.truck(0)
 		var events := Trip.advance(s, b, 0, 3600.0, _rng(1))
-		var hourly := Trip.hourly_income(b, t)
+		var hourly := Trip.hourly_income(b, _st(t), 0)
 		var gap := absf(s.money - hourly)
-		check(gap <= Trip.lap_income(b, t), "+%d: 1시간 돈 %d, 시간당 %.1f, 차이 %.1f > 한 바퀴 %d"
-				% [star, s.money, hourly, gap, Trip.lap_income(b, t)])
+		check(gap <= Trip.lap_income(b, _st(t), 0), "+%d: 1시간 돈 %d, 시간당 %.1f, 차이 %.1f > 한 바퀴 %d"
+				% [star, s.money, hourly, gap, Trip.lap_income(b, _st(t), 0)])
 		var paid := 0
 		for ev in events:
-			if ev["type"] == "parcel":
+			if ev["type"] == "parcel" or ev["type"] == "tip":
 				paid += ev["pay"]
-		check_eq(paid, s.money, "+%d: 이벤트 돈 합 = 늘어난 돈" % star)
-		note("+%d: advance 1시간 %d원 / 시간당 %.1f원 (차이 %.1f, 허용 %d)" % [star, s.money, hourly, gap, Trip.lap_income(b, t)])
+		check_eq(paid, s.money, "+%d: 이벤트 돈 합(배송 + 팁) = 늘어난 돈" % star)
+		note("+%d: advance 1시간 %d원 / 시간당 %.1f원 (차이 %.1f, 허용 %d)" % [star, s.money, hourly, gap, Trip.lap_income(b, _st(t), 0)])
 
 
 ## 지시서 C1 ③: 0.1초씩 나눠 돌려도 한 번에 돌린 것과 돈·배송 수가 같음
@@ -155,7 +165,7 @@ func test_spare_drop_rate() -> void:
 	var events := []
 	var rng := _rng(4242)
 	for lap in 5000:   # 한 바퀴씩 진행 = 20건씩 → 10만 건
-		events.append_array(Trip.advance(s, b5, 0, Trip.lap_seconds(b5, t), rng))
+		events.append_array(Trip.advance(s, b5, 0, Trip.lap_seconds(b5, _st(t), 0), rng))
 	var parcels := _count(events, "parcel")
 	var spares := _count(events, "spare")
 	check_eq(parcels, 100000, "배송 수")
@@ -226,7 +236,7 @@ func test_offline() -> void:
 	s2.trucks.append(TruckState.new())
 	s2.truck(1).star = 10
 	var r2 := Trip.apply_offline(s2, bv3, 3 * hour)
-	var want := floori(Trip.hourly_income(bv3, s2.truck(0)) * 3.0 * 0.5) + floori(Trip.hourly_income(bv3, s2.truck(1)) * 3.0 * 0.5)
+	var want := floori(Trip.hourly_income(bv3, s2, 0) * 3.0 * 0.5) + floori(Trip.hourly_income(bv3, s2, 1) * 3.0 * 0.5)
 	check_eq(r2["money"], want, "트럭 2대 돈 = 트럭마다 더함")
 
 
@@ -277,9 +287,9 @@ func test_setting_speed() -> void:
 	_put(t, "ecu", 1, ["speed", "speed"])                           # + 스트리트 5% × 2
 	check_near(Trip.speed(b, t), 150.0 * (1.0 + 0.08 + 0.05 + 0.05), 1e-9, "속도 = 150 × 1.18 (두 부품 합)")
 	check_near(Trip.cargo(b, t), 22.4, 1e-9, "적재량 스포츠 12% → 평균 22.4건")
-	check_near(Trip.avg_lap_seconds(b, t), 10.0 + 12000.0 / (150.0 * 1.18) + 22.4 * 0.5, 1e-9, "평균 한 바퀴 초 (정차 22.4집)")
-	check_near(Trip.lap_seconds(b, t), 10.0 + 12000.0 / (150.0 * 1.18) + Trip.lap_cargo(b, t) * 0.5, 1e-9, "지금 바퀴 초 (실은 건수만큼 정차)")
-	check_near(Trip.hourly_income_at(b, t, 11), 22.4 * 1875 * 3600.0 / (10.0 + 12000.0 / (160.0 * 1.18) + 22.4 * 0.5),
+	check_near(Trip.avg_lap_seconds(b, _st(t), 0), 10.0 + 12000.0 / (150.0 * 1.18) + 22.4 * 0.5, 1e-9, "평균 한 바퀴 초 (정차 22.4집)")
+	check_near(Trip.lap_seconds(b, _st(t), 0), 10.0 + 12000.0 / (150.0 * 1.18) + Trip.lap_cargo(b, t) * 0.5, 1e-9, "지금 바퀴 초 (실은 건수만큼 정차)")
+	check_near(Trip.hourly_income_at(b, _st(t), 0, 11), 22.4 * (1875 + TIP_AVG) * 3600.0 / (10.0 + 12000.0 / (160.0 * 1.18) + 22.4 * 0.5),
 			1e-6, "성공하면 시간당도 세팅 반영")
 
 
@@ -288,7 +298,7 @@ func test_setting_cargo() -> void:
 	var t := _game(0).truck(0)
 	_put(t, "cargo_box", 0, ["cargo"])
 	check_eq(Trip.cargo(b, t), 21.0, "적재량 5% 한 줄 → 21")
-	check_eq(Trip.lap_income(b, t), 21 * 1875, "한 바퀴 수입 = 21건")
+	check_eq(Trip.lap_income(b, _st(t), 0), 21 * 1875, "한 바퀴 수입 = 21건")
 	_put(t, "cargo_box", 1, ["cargo", "junk_radio"])
 	check_near(Trip.cargo(b, t), 21.6, 1e-12, "8% 한 줄 → 21.6 (소수점 그대로)")
 	check_eq(typeof(Trip.cargo(b, t)), TYPE_FLOAT, "평균 적재량은 소수")
@@ -296,7 +306,7 @@ func test_setting_cargo() -> void:
 	check_eq(Trip.cargo(b, t), 28.0, "20% 두 줄 → 28 (27.999… 가 아님)")
 	_put(t, "cargo_box", 4, ["cargo", "cargo", "cargo"])
 	check_eq(Trip.cargo(b, t), 38.0, "30% 세 줄 → 38")
-	check_near(Trip.lap_seconds(b, t), 10.0 + 120.0 + 38 * 0.5, 1e-9, "정차가 38집")
+	check_near(Trip.lap_seconds(b, _st(t), 0), 10.0 + 120.0 + 38 * 0.5, 1e-9, "정차가 38집")
 
 
 ## v6-bal B1 ④: 적재량 21.6이면 바퀴마다 21 아니면 22, 많이 굴리면 평균 21.6 ± 0.1. 정차·배송 수·돈도 그 바퀴 건수만큼
@@ -314,10 +324,11 @@ func test_cargo_fraction_rolls() -> void:
 		var n := t.lap_cargo
 		counts[n] = counts.get(n, 0) + 1
 		sum += n
-		var lap := Trip.lap_seconds(b, t)
+		var lap := Trip.lap_seconds(b, _st(t), 0)
 		var money0 := s.money
 		var ev := Trip.advance(s, b, 0, lap, rng)
-		if (n != 21 and n != 22) or absf(lap - (130.0 + n * 0.5)) > 1e-9 or _count(ev, "parcel") != n or s.money - money0 != n * 1875:
+		if (n != 21 and n != 22) or absf(lap - (130.0 + n * 0.5)) > 1e-9 or _count(ev, "parcel") != n \
+				or s.money - money0 != n * 1875 + _sum(ev, "tip"):
 			bad += 1
 	check_eq(counts.keys().size(), 2, "나온 건수 종류 %s" % [counts.keys()])
 	check_eq(bad, 0, "21·22가 아니거나, 바퀴 초·배송 수·돈이 실은 건수와 다른 바퀴")
@@ -340,7 +351,7 @@ func test_cargo_whole_is_exact() -> void:
 		for k in 500:
 			if t.lap_cargo != c[2]:
 				wrong += 1
-			Trip.advance(s, b, 0, Trip.lap_seconds(b, t), rng)
+			Trip.advance(s, b, 0, Trip.lap_seconds(b, _st(t), 0), rng)
 		check_eq(wrong, 0, "적재량 %d: 다른 건수가 나온 바퀴 (500바퀴 중)" % c[2])
 
 
@@ -350,15 +361,15 @@ func test_average_uses_fraction() -> void:
 	var t := s.truck(0)
 	_put(t, "cargo_box", 1, ["cargo", "junk_radio"])   # 21.6
 	var avg_lap := 10.0 + 80.0 + 21.6 * 0.5
-	check_near(Trip.avg_lap_seconds(b, t), avg_lap, 1e-9, "평균 한 바퀴 = 싣기 + 도로 + 21.6집 정차")
-	check_near(Trip.hourly_income(b, t), 21.6 * 1875 * 3600.0 / avg_lap, 1e-6, "시간당 = 21.6 × 1875 × 3600 ÷ 평균 한 바퀴")
+	check_near(Trip.avg_lap_seconds(b, _st(t), 0), avg_lap, 1e-9, "평균 한 바퀴 = 싣기 + 도로 + 21.6집 정차")
+	check_near(Trip.hourly_income(b, _st(t), 0), 21.6 * (1875 + TIP_AVG) * 3600.0 / avg_lap, 1e-6, "시간당 = 21.6 × (1875 + 팁 평균 50) × 3600 ÷ 평균 한 바퀴")
 	var r := Trip.apply_offline(s, b, 3 * 3600.0)
-	check_eq(r["money"], floori(21.6 * 1875 * 3600.0 / avg_lap * 3.0 * 0.5), "꺼둔 3시간 돈 = 소수점 평균")
+	check_eq(r["money"], floori(21.6 * (1875 + TIP_AVG) * 3600.0 / avg_lap * 3.0 * 0.5), "꺼둔 3시간 돈 = 소수점 평균")
 	check_eq(r["parcels"], floori(21.6 * 3600.0 / avg_lap * 3.0 * 0.5), "꺼둔 3시간 배송 = 소수점 평균")
 	var s2 := _game(10)
 	_put(s2.truck(0), "cargo_box", 1, ["cargo", "junk_radio"])
 	Trip.advance(s2, b, 0, 50 * 3600.0, _rng(8))
-	var hourly := Trip.hourly_income(b, s2.truck(0))
+	var hourly := Trip.hourly_income(b, s2, 0)
 	var gap := absf(s2.money / 50.0 - hourly) / hourly
 	check(gap <= 0.01, "advance 50시간의 시간당 %.1f / 평균 %.1f (차이 %.2f%%)" % [s2.money / 50.0, hourly, gap * 100.0])
 	note("적재량 21.6 +10: 시간당 %.1f원, advance 50시간의 시간당 %.1f원 (차이 %.2f%%)" % [hourly, s2.money / 50.0, gap * 100.0])
@@ -367,14 +378,14 @@ func test_average_uses_fraction() -> void:
 ## v4 C1 ⑨ (v6-bal 수치): 기름값 절감 → 배송 1건 돈 (기름값 = 2500 × 20% = 500)
 func test_setting_fuel_cut() -> void:
 	var t := _game(0).truck(0)
-	check_eq(Trip.parcel_pay(b, t), 2500 - 500 - 125, "절감 없음: 기름값 500")
+	check_eq(Trip.parcel_pay(b, _st(t), 0), 2500 - 500 - 125, "절감 없음: 기름값 500")
 	_put(t, "cargo_box", 0, ["fuel_cut"])                     # 순정 10%
-	check_eq(Trip.parcel_pay(b, t), 2500 - 450 - 125, "기름값 10% 절감: 500 → 450")
+	check_eq(Trip.parcel_pay(b, _st(t), 0), 2500 - 450 - 125, "기름값 10% 절감: 500 → 450")
 	_put(t, "cargo_box", 1, ["fuel_cut", "fuel_cut"])         # 스트리트 20% × 2 = 40%
-	check_eq(Trip.parcel_pay(b, t), 2500 - 300 - 125, "기름값 40% 절감: 500 → 300")
+	check_eq(Trip.parcel_pay(b, _st(t), 0), 2500 - 300 - 125, "기름값 40% 절감: 500 → 300")
 	_put(t, "cargo_box", 3, ["fuel_cut"])                     # 레이싱 45%
 	_put(t, "ecu", 0, ["fuel_cut"])                           # + 순정 10% = 55%
-	check_eq(Trip.parcel_pay(b, t), 2500 - 225 - 125, "55% (상한 안쪽): 500 × 0.45 = 225")
+	check_eq(Trip.parcel_pay(b, _st(t), 0), 2500 - 225 - 125, "55% (상한 안쪽): 500 × 0.45 = 225")
 
 
 ## v6-bal B1 ⑦: 기름값 절감 프로토타입 1줄(60%) = 상한, 2줄(120%)이어도 60%
@@ -383,14 +394,14 @@ func test_fuel_cut_prototype_is_cap() -> void:
 	_put(t, "cargo_box", 4, ["fuel_cut", "junk_ride", "junk_gloss"])   # 프로토타입 60% 한 줄
 	check_near(Setting.total(b, t, "fuel_cut"), 0.6, 1e-12, "1줄 = 60%")
 	check_near(Setting.total(b, t, "fuel_cut"), b.cost_cut_cap, 1e-12, "1줄 = 상한 cost_cut_cap")
-	var one := Trip.parcel_pay(b, t)
+	var one := Trip.parcel_pay(b, _st(t), 0)
 	check_eq(one, 2500 - 200 - 125, "1줄: 500 × 0.4 = 200")
 	_put(t, "cargo_box", 4, ["fuel_cut", "fuel_cut", "junk_gloss"])
 	check_near(Setting.total(b, t, "fuel_cut"), 1.2, 1e-12, "2줄 합 (상한 전) 120%")
-	check_eq(Trip.parcel_pay(b, t), one, "2줄이어도 60% (1줄과 같은 돈)")
+	check_eq(Trip.parcel_pay(b, _st(t), 0), one, "2줄이어도 60% (1줄과 같은 돈)")
 	_put(t, "ecu", 4, ["fuel_cut", "fuel_cut", "fuel_cut"])
-	check_eq(Trip.parcel_pay(b, t), one, "5줄(300%)이어도 60%")
-	note("기름값 절감 프로토타입: 1줄 %d원, 2줄 이상 %d원 (절감 없음 %d원)" % [one, Trip.parcel_pay(b, t), 2500 - 500 - 125])
+	check_eq(Trip.parcel_pay(b, _st(t), 0), one, "5줄(300%)이어도 60%")
+	note("기름값 절감 프로토타입: 1줄 %d원, 2줄 이상 %d원 (절감 없음 %d원)" % [one, Trip.parcel_pay(b, _st(t), 0), 2500 - 500 - 125])
 
 
 ## v4 C1 ⑨: 엔진 보호 3줄(프로토타입 10% × 3 = 30%) → 퍼짐 × 0.7, 줄어든 만큼 실패 (+20 퍼짐 4%, v6-bal)
@@ -434,15 +445,15 @@ func test_setting_overboost_lap() -> void:
 		var drive := 12000.0 / Trip.power(b, star)
 		var plain_lap := 10.0 + drive + 20 * 0.5
 		var boost_lap := 10.0 + drive / 2.0 + 20 * 0.5
-		check_near(Trip.lap_seconds(b, t), plain_lap, 1e-9, "+%d 안 걸린 바퀴" % star)
+		check_near(Trip.lap_seconds(b, _st(t), 0), plain_lap, 1e-9, "+%d 안 걸린 바퀴" % star)
 		t.boost_lap = true
-		check_near(Trip.lap_seconds(b, t), boost_lap, 1e-9, "+%d 걸린 바퀴" % star)
-		check_near(plain_lap - Trip.lap_seconds(b, t), drive / 2.0, 1e-9, "+%d 줄어든 초 = 달리는 초의 절반 (싣기 10초·정차 10초는 그대로)" % star)
+		check_near(Trip.lap_seconds(b, _st(t), 0), boost_lap, 1e-9, "+%d 걸린 바퀴" % star)
+		check_near(plain_lap - Trip.lap_seconds(b, _st(t), 0), drive / 2.0, 1e-9, "+%d 줄어든 초 = 달리는 초의 절반 (싣기 10초·정차 10초는 그대로)" % star)
 		var avg := plain_lap * 0.28 + boost_lap * 0.72
-		check_near(Trip.avg_lap_seconds(b, t), avg, 1e-9, "+%d 평균 한 바퀴 (걸린 바퀴인지와 상관없음)" % star)
-		check_near(Trip.hourly_income(b, t), 20 * 1875 * 3600.0 / avg, 1e-6, "+%d 시간당 = 평균 한 바퀴로" % star)
+		check_near(Trip.avg_lap_seconds(b, _st(t), 0), avg, 1e-9, "+%d 평균 한 바퀴 (걸린 바퀴인지와 상관없음)" % star)
+		check_near(Trip.hourly_income(b, _st(t), 0), 20 * (1875 + TIP_AVG) * 3600.0 / avg, 1e-6, "+%d 시간당 = 평균 한 바퀴로" % star)
 		note("+%d 오버부스트 72%%: 안 걸린 바퀴 %.4f초, 걸린 바퀴 %.4f초 (달리기 %.4f → %.4f초), 평균 %.4f초"
-				% [star, plain_lap, Trip.lap_seconds(b, t), drive, drive / 2.0, avg])
+				% [star, plain_lap, Trip.lap_seconds(b, _st(t), 0), drive, drive / 2.0, avg])
 	# advance도 같은 시각: +0 걸린 바퀴(달리기 120 → 60초)는 집 i = 10 + 60i ÷ 21 + 0.5i, 80초에 새 바퀴
 	var s0 := _game(0)
 	var t0 := s0.truck(0)
@@ -461,8 +472,8 @@ func test_setting_overboost_lap() -> void:
 	var s := _game(0)
 	_put(s.truck(0), "ecu", 4, ["overboost", "overboost", "overboost"])
 	var r := Trip.apply_offline(s, b, 3 * 3600.0)
-	check_eq(r["money"], floori(Trip.hourly_income(b, s.truck(0)) * 3.0 * 0.5), "꺼둔 동안 돈 = 평균 시간당")
-	check_eq(r["parcels"], floori(20 * 3600.0 / Trip.avg_lap_seconds(b, s.truck(0)) * 3.0 * 0.5), "꺼둔 동안 배송 = 평균 한 바퀴")
+	check_eq(r["money"], floori(Trip.hourly_income(b, s, 0) * 3.0 * 0.5), "꺼둔 동안 돈 = 평균 시간당")
+	check_eq(r["parcels"], floori(20 * 3600.0 / Trip.avg_lap_seconds(b, s, 0) * 3.0 * 0.5), "꺼둔 동안 배송 = 평균 한 바퀴")
 
 
 ## v4 C1 ⑩ (v6-bal): 오버부스트 72%로 advance 50시간의 시간당 돈이 hourly_income(평균)과 2% 안쪽, 걸린 바퀴 비율 ≈ 72%
@@ -473,7 +484,7 @@ func test_overboost_advance_hour() -> void:
 		var t := s.truck(0)
 		_put(t, "ecu", 4, ["overboost", "overboost", "overboost"])
 		var events := Trip.advance(s, b, 0, 50 * 3600.0, _rng(11))
-		var hourly := Trip.hourly_income(b, t)
+		var hourly := Trip.hourly_income(b, _st(t), 0)
 		var gap := absf(s.money / 50.0 - hourly) / hourly
 		check(gap <= 0.02, "+%d: 50시간의 시간당 %.1f, 평균 시간당 %.1f, 차이 %.2f%%" % [star, s.money / 50.0, hourly, gap * 100.0])
 		note("+%d 오버부스트 72%%: advance 50시간의 시간당 %.1f원 / 평균 시간당 %.1f원 (차이 %.2f%%, 걸린 바퀴 %d번)"
@@ -484,7 +495,7 @@ func test_overboost_advance_hour() -> void:
 	var rng := _rng(12)
 	var boosts := 0
 	for k in 20000:
-		boosts += _count(Trip.advance(s2, b, 0, Trip.lap_seconds(b, s2.truck(0)), rng), "boost")
+		boosts += _count(Trip.advance(s2, b, 0, Trip.lap_seconds(b, s2, 0), rng), "boost")
 	check_near(boosts / 20000.0, 0.72, 0.01, "걸린 바퀴 비율 (20000바퀴 중 %d)" % boosts)
 	# 걸린 바퀴는 boost_lap이 켜지고, 이벤트는 새 바퀴 출발 때(그 진행의 마지막)
 	var s3 := _game(0)
@@ -492,7 +503,7 @@ func test_overboost_advance_hour() -> void:
 	var rng3 := _rng(13)
 	var found := false
 	for k in 200:
-		var ev := Trip.advance(s3, b, 0, Trip.lap_seconds(b, s3.truck(0)), rng3)
+		var ev := Trip.advance(s3, b, 0, Trip.lap_seconds(b, s3, 0), rng3)
 		if _count(ev, "boost") > 0:
 			found = true
 			check(s3.truck(0).boost_lap, "boost 이벤트인데 boost_lap이 꺼짐")
@@ -501,6 +512,14 @@ func test_overboost_advance_hour() -> void:
 	check(found, "200바퀴 동안 오버부스트가 한 번도 안 걸림")
 	# 오버부스트가 없으면 걸리지 않음
 	check_eq(_count(Trip.advance(_game(0), b, 0, 3600.0, _rng(1)), "boost"), 0, "오버부스트 없는데 걸림")
+
+
+func _sum(events: Array, type: String) -> int:
+	var n := 0
+	for ev in events:
+		if ev["type"] == type:
+			n += ev["pay"]
+	return n
 
 
 func _count(events: Array, type: String) -> int:

@@ -22,3 +22,5 @@
 | 2026-11-13 | 레벨 곡선 (스냅샷 7번) | `driver.exponent` | PROTOTYPE_V6_BAL | Q14-1. 1.2 → 1.33 |
 | 2026-11-13 | 시트에 없음 (사용자 답 Q14-3) | `quests` star_15·level_20·setting_racing·star_18의 `money` | PROTOTYPE_V6_BAL | 100만·100만·100만·150만 |
 | 2026-11-13 | 시트에 없음 (시뮬로 정함, Q14-2 (다) 기준) | `depot.warehouse_prices` Lv2·Lv3, `depot.night_prices` | PROTOTYPE_V6_BAL | 창고 200만·300만 (Lv4 4000만 그대로), 야간팀 150만·220만·250만. tune_sim 가볍게: 본전(켜 둔 시간) 3.5~4.8시간, 2~4일째에 다 삼 |
+| 2026-11-13 | 기사 능력치 출시 5개 (스냅샷 6번) | `abilities.unload/kind/nego/knowhow/mech` 의 `per_point`, `max_points` | PROTOTYPE_V5B | 1%×30, 0.5%×30, 1%×20, 2.5%×20, 5%×20 |
+| 2026-11-13 | 시트에 없음 (임시 시작값, 조율자 → QUESTIONS Q18) | `trip.tip_base_chance`, `trip.tip_rate` | PROTOTYPE_V5B | 2%, 팁 = 단가 × 1.0 |

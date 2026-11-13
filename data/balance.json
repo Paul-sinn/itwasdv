@@ -1,5 +1,5 @@
 {
-  "version": "0.9",
+  "version": "0.10",
   "trip": {
     "unit_price": 2500,
     "base_cargo": 20,
@@ -7,7 +7,9 @@
     "load_seconds": 10,
     "stop_seconds": 0.5,
     "fuel_rate": 0.2,
-    "maint_rate": 0.05
+    "maint_rate": 0.05,
+    "tip_base_chance": 0.02,
+    "tip_rate": 1.0
   },
   "engine": {
     "max_star": 30,
@@ -33,6 +35,13 @@
     "xp_per_parcel": 10,
     "star_milestones": [10, 15, 18, 20, 22, 25, 28, 30],
     "star_milestone_xp": 500
+  },
+  "abilities": {
+    "unload": { "per_point": 0.01, "max_points": 30 },
+    "kind": { "per_point": 0.005, "max_points": 30 },
+    "nego": { "per_point": 0.01, "max_points": 20 },
+    "knowhow": { "per_point": 0.025, "max_points": 20 },
+    "mech": { "per_point": 0.05, "max_points": 20 }
   },
   "depot": {
     "warehouse_hours": [4, 6, 8, 12],

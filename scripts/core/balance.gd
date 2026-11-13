@@ -1,6 +1,6 @@
 ## 게임 숫자(data/balance.json)를 읽고 검사한다.
-## 묶음은 "trip"(한 바퀴), "engine"(강화·스페어), "offline"(꺼둔 동안), "setting"(세팅 돌리기),
-## "driver"(기사 레벨), "depot"(창고·야간팀), "quests"(다음 할 일 목록).
+## 묶음은 "trip"(한 바퀴·팁), "engine"(강화·스페어), "offline"(꺼둔 동안), "setting"(세팅 돌리기),
+## "driver"(기사 레벨), "abilities"(기사 능력치), "depot"(창고·야간팀), "quests"(다음 할 일 목록).
 ##
 ## 쓰는 법:
 ##   var b := Balance.load_file()
@@ -16,6 +16,8 @@ const SUM_EPSILON := 1e-9
 const SETTING_GRADES := 5
 const OPTION_KINDS := ["common", "own", "junk"]
 const QUEST_KINDS := ["parcels", "star", "setting_rolls", "setting_grade", "part_rolled", "spares_bought", "warehouse", "night", "level"]
+## 기사 능력치 id (v5b). trip.gd가 이 id로 효과를 읽어서 json에 다 있어야 하고, 모르는 id는 막는다 (효과 없이 포인트만 먹지 않게)
+const ABILITY_IDS := ["unload", "kind", "nego", "knowhow", "mech"]
 
 ## 읽기/검사에서 나온 문제들. 비어 있으면 정상.
 var errors: PackedStringArray = PackedStringArray()
@@ -28,6 +30,8 @@ var load_seconds: float         ## 물류센터에서 싣는 시간 (초)
 var stop_seconds: float         ## 집 앞 정차 시간 (초)
 var fuel_rate: float            ## 기름값 = 단가의 몇 % (0.1 = 10%)
 var maint_rate: float           ## 정비비 = 단가의 몇 %
+var tip_base_chance: float      ## 배송 1건마다 팁이 나올 기본 확률 (친절 포인트가 더해짐)
+var tip_rate: float             ## 팁 = (협상이 적용된) 단가 × tip_rate. 기름값·정비비 안 뗌
 
 # --- engine ---
 var max_star: int               ## 최대 강화 단계
@@ -53,6 +57,10 @@ var driver_bonus_points_every_10: int   ## 오른 레벨이 10의 배수면 더 
 var driver_xp_per_parcel: int           ## 켜 둔 동안 배송 1건 경험치
 var driver_star_milestones: PackedInt64Array   ## 처음 닿으면 보너스 경험치를 주는 강화 단계들 (오름차순)
 var driver_star_milestone_xp: int
+
+# --- abilities (기사 능력치 v5b) ---
+var ability_ids: Array[String] = []   ## json 순서
+var abilities: Dictionary = {}        ## id → { "per_point": float, "max_points": int }
 
 # --- depot (창고 확장·야간 배송팀). [레벨-1] ---
 var warehouse_hours: PackedFloat64Array   ## 꺼둔 동안 쌓이는 최대 시간
@@ -127,6 +135,8 @@ static func from_dict(d: Dictionary) -> RefCounted:
 	b.stop_seconds = float(trip["stop_seconds"])
 	b.fuel_rate = float(trip["fuel_rate"])
 	b.maint_rate = float(trip["maint_rate"])
+	b.tip_base_chance = float(trip["tip_base_chance"])
+	b.tip_rate = float(trip["tip_rate"])
 	b.max_star = int(engine["max_star"])
 	b.base_power = int(engine["base_power"])
 	b.power_gain = PackedInt64Array(engine["power_gain"])
@@ -147,6 +157,10 @@ static func from_dict(d: Dictionary) -> RefCounted:
 	b.driver_xp_per_parcel = int(driver["xp_per_parcel"])
 	b.driver_star_milestones = PackedInt64Array(driver["star_milestones"])
 	b.driver_star_milestone_xp = int(driver["star_milestone_xp"])
+	for id in d["abilities"]:
+		var ab: Dictionary = d["abilities"][id]
+		b.ability_ids.append(id)
+		b.abilities[id] = { "per_point": float(ab["per_point"]), "max_points": int(ab["max_points"]) }
 	var depot: Dictionary = d["depot"]
 	b.warehouse_hours = PackedFloat64Array(depot["warehouse_hours"])
 	b.warehouse_prices = PackedInt64Array(depot["warehouse_prices"])
@@ -187,7 +201,9 @@ static func validate(d: Dictionary) -> PackedStringArray:
 	var setting = d.get("setting")
 	var driver = d.get("driver")
 	var depot = d.get("depot")
-	for pair in [["trip", trip], ["engine", engine], ["offline", offline], ["setting", setting], ["driver", driver], ["depot", depot]]:
+	var abilities = d.get("abilities")
+	for pair in [["trip", trip], ["engine", engine], ["offline", offline], ["setting", setting], ["driver", driver], ["depot", depot],
+			["abilities", abilities]]:
 		if typeof(pair[1]) != TYPE_DICTIONARY:
 			errs.append("\"%s\" 묶음이 없음" % pair[0])
 	if typeof(d.get("quests")) != TYPE_ARRAY or d["quests"].is_empty():
@@ -213,6 +229,9 @@ static func validate(d: Dictionary) -> PackedStringArray:
 		var pay := int(u) - roundi(u * float(trip["fuel_rate"])) - roundi(u * float(trip["maint_rate"]))
 		if pay < 0:
 			errs.append("trip: 배송 1건 돈 = %d (기름값·정비비가 단가보다 큼. 0 이상이어야 함)" % pay)
+	var tip_ok := _check_number(trip, "trip", "tip_base_chance", errs, "0~1 사이여야 함", rate)
+	_check_number(trip, "trip", "tip_rate", errs, "0 이상이어야 함", func(v): return v >= 0.0)
+	_validate_abilities(abilities, float(trip["tip_base_chance"]) if tip_ok else 0.0, errs)
 
 	# --- offline ---
 	_check_number(offline, "offline", "ignore_under_seconds", errs, "0 이상이어야 함", func(v): return v >= 0.0)
@@ -267,6 +286,29 @@ static func _validate_driver(driver: Dictionary, max_star: int, errs: PackedStri
 			if float(list[i]) <= float(list[i - 1]):
 				errs.append("driver.star_milestones[%d] = %s (앞 값 %s보다 커야 함)" % [i, list[i], list[i - 1]])
 	return int(driver["max_level"]) if level_ok else 0
+
+
+## "abilities" 묶음 검사 (기사 능력치 v5b): ABILITY_IDS가 다 있고 그 밖은 없음, per_point ≥ 0, max_points 0 이상 정수.
+## 최대로 찍어도 말이 되게: 상하차 per_point × max ≤ 1 (정차 시간이 0 아래로 안 감), 팁 기본 확률 + 친절 최대 ≤ 1
+static func _validate_abilities(abilities: Dictionary, tip_base: float, errs: PackedStringArray) -> void:
+	for id in abilities:
+		if not ABILITY_IDS.has(id):
+			errs.append("abilities 에 모르는 능력치: %s (%s 중 하나여야 함)" % [id, "/".join(ABILITY_IDS)])
+	for id in ABILITY_IDS:
+		var where := "abilities.%s" % id
+		var ab = abilities.get(id)
+		if typeof(ab) != TYPE_DICTIONARY:
+			errs.append("%s 이 없거나 { } 묶음이 아님" % where)
+			continue
+		var per_ok := _check_number(ab, where, "per_point", errs, "0 이상이어야 함", func(v): return v >= 0.0)
+		var max_ok := _check_number(ab, where, "max_points", errs, "0 이상의 정수여야 함", func(v): return v >= 0.0 and v == floorf(v))
+		if not (per_ok and max_ok):
+			continue
+		var top := float(ab["per_point"]) * float(ab["max_points"])
+		if id == "unload" and top > 1.0 + SUM_EPSILON:
+			errs.append("%s: per_point × max_points = %s (1 이하여야 함. 정차 시간이 0 아래로 감)" % [where, top])
+		if id == "kind" and tip_base + top > 1.0 + SUM_EPSILON:
+			errs.append("%s: trip.tip_base_chance + per_point × max_points = %s (팁 확률이라 1 이하여야 함)" % [where, tip_base + top])
 
 
 ## "depot" 묶음 검사 (창고 확장·야간 배송팀 v5). 레벨 수 = 시간·비율 목록 길이, 가격은 그보다 1개 적음
