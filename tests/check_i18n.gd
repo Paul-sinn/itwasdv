@@ -21,6 +21,7 @@ const LOG_CALLS := ["push_warning(", "push_error(", "print("]   ## 화면이 아
 const Balance = preload("res://scripts/core/balance.gd")
 const Save = preload("res://scripts/core/save.gd")
 const Setting = preload("res://scripts/core/setting.gd")
+const Ability = preload("res://scripts/core/ability.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
@@ -60,6 +61,10 @@ func _run() -> void:
 	for q: Dictionary in b.quests:
 		code_keys["QUEST_" + String(q["id"]).to_upper()] = true
 		code_keys["QUEST_" + String(q["id"]).to_upper() + "_DESC"] = true
+	# 능력치 이름·설명·효과 키도 balance.json의 id로 만들어 씀 (driver_tab.gd)
+	for id: String in Ability.ids(b):
+		for suffix in ["", "_DESC", "_EFFECT"]:
+			code_keys["ABILITY_" + id.to_upper() + suffix] = true
 	_check_keys(code_keys)
 	_check_money()
 	await _check_screen_ko()

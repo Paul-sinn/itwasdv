@@ -1,8 +1,10 @@
-## 차고 [기사·물류센터] 칸 (물류센터 화면은 v6이라 v5는 여기서 산다).
-##   위: 기사 레벨, 경험치 막대(driver_xp / xp_need), 받은 포인트 (만렙이면 회사 평판)
-##   가운데: 다음 할 일 (끝낸 수 n/22, 이름·설명·진행·보상)
-##   아래: 창고 확장·야간 배송팀 (지금 값 → 다음 값, 가격, [올리기], 모자란 금액)
-## 숫자는 scripts/core 의 Driver·Quest·Depot 값을 그대로 보여 준다. 버튼은 신호만 → main.gd → Depot.upgrade
+## 물류센터 화면 (v5 차고 [기사·물류센터] 칸이 v6a에서 건물 화면이 됨).
+##   위: 기사 레벨, 경험치 막대(driver_xp / xp_need) (만렙이면 회사 평판)
+##   그 아래 두 칸 고르기 (v5b. 한 화면에 다 넣으면 1280x720에서 창 밖으로 나감):
+##     [능력치]: 남은 포인트 + [초기화](두 번 눌러야), 능력치 5줄 (이름 n/최대 · 지금 효과 / 한 줄 설명, [+]), 예시 빌드 4줄
+##     [창고·할 일]: 다음 할 일 (끝낸 수 n/22, 이름·설명·진행·보상), 창고 확장·야간 배송팀 (지금 값 → 다음 값, 가격, [올리기], 모자란 금액)
+## 숫자는 scripts/core 의 Driver·Quest·Depot·Ability 값을 그대로 보여 준다 (효과를 여기서 계산하지 않음).
+## 버튼은 신호만 → main.gd → Depot.upgrade / Ability.add / Ability.reset
 ## 다음 할 일 이름·설명은 번역 파일 QUEST_<ID>, QUEST_<ID>_DESC (Fmt.quest_name / quest_desc)
 extends VBoxContainer
 
@@ -12,12 +14,17 @@ const Driver = preload("res://scripts/core/driver.gd")
 const Economy = preload("res://scripts/core/economy.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Quest = preload("res://scripts/core/quest.gd")
+const Ability = preload("res://scripts/core/ability.gd")
 const Trip = preload("res://scripts/core/trip.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const Town = preload("res://scripts/ui/town.gd")
 
 signal upgrade_pressed(kind: String)
+signal ability_pressed(id: String)   ## 능력치 [+]
+signal reset_pressed                 ## [초기화]를 두 번째 누름 (첫 번째는 여기서 글만 바꿈)
+
+enum Page { ABILITY, DEPOT }
 
 const TRUCK := 0   ## "모자란 금액 · 약 N분 뒤"를 셀 때 쓰는 시간당 수입 (트럭 1대)
 const KINDS := ["warehouse", "night"]
@@ -26,8 +33,20 @@ const KIND_KEYS := {
 	"warehouse": { "title": "DEPOT_WAREHOUSE", "value": "DEPOT_WAREHOUSE_VALUE" },
 	"night": { "title": "DEPOT_NIGHT", "value": "DEPOT_NIGHT_VALUE" },
 }
+## 예시 빌드 (글만): 번역 키, 주 능력치, 같이 찍는 능력치 (지시서 v5b "화면")
+const BUILDS := [
+	["ABILITY_BUILD_MONEY", "nego", "kind"],
+	["ABILITY_BUILD_SPEED", "unload", "nego"],
+	["ABILITY_BUILD_EASY", "knowhow", "nego"],
+	["ABILITY_BUILD_ENHANCE", "mech", "nego"],
+]
 
 var buy_buttons := {}   ## kind → [올리기] 버튼
+var page := Page.ABILITY ## 지금 보이는 칸 (처음엔 능력치. 바꾸면 기억)
+var ability_page_button: Button
+var depot_page_button: Button
+var add_buttons := {}    ## 능력치 id → [+] (처음 refresh 때 balance 순서로 만듦)
+var reset_button: Button
 
 var _level: Label
 var _xp_bar: ProgressBar
@@ -42,6 +61,12 @@ var _values := {}        ## kind → "꺼둔 동안 쌓이는 시간 4시간 →
 var _waits := {}         ## kind → "1,234원 모자람 · 약 3분 뒤 가능"
 var _bar_bg: StyleBoxFlat
 var _bar_fill: StyleBoxFlat
+var _ability_box: VBoxContainer
+var _depot_box: VBoxContainer
+var _ability_lines := {} ## 능력치 id → "협상  7/20 · 단가 +7%"
+var _ability_descs := {} ## 능력치 id → 한 줄 설명
+var _builds: Label       ## 예시 빌드 4줄
+var _reset_armed_ms := -1   ## [초기화]를 한 번 누른 시각 (진짜 시간 ms). -1 = 안 누름
 var _scale := 1.0
 var _font_sizes := {}    ## 글자 → 배수 곱하기 전 크기
 
@@ -61,22 +86,45 @@ func _ready() -> void:
 	_xp_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_xp_bar)
 	_xp = _label(self, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
-	_points = _label(self, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
 
-	_quest_head = _label(self, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
-	_quest_name = _label(self, Feel.PANEL_TEXT_SIZE, Feel.COLOR_STAR)
-	_quest_desc = _label(self, Feel.PANEL_SMALL_SIZE, Feel.COLOR_TEXT)
-	_quest_progress = _label(self, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
+	# 두 칸 고르기: [능력치] [창고·할 일]
+	var pages := HBoxContainer.new()
+	add_child(pages)
+	var group := ButtonGroup.new()
+	ability_page_button = _toggle(pages, tr("DRIVER_PAGE_ABILITY"), group)
+	depot_page_button = _toggle(pages, tr("DRIVER_PAGE_DEPOT"), group)
+	ability_page_button.pressed.connect(func(): show_page(Page.ABILITY))
+	depot_page_button.pressed.connect(func(): show_page(Page.DEPOT))
+
+	# [능력치]: 남은 포인트 + [초기화], 능력치 줄 (refresh에서 만듦), 예시 빌드
+	_ability_box = VBoxContainer.new()
+	add_child(_ability_box)
+	var head := HBoxContainer.new()
+	_ability_box.add_child(head)
+	_points = _label(head, Feel.PANEL_TEXT_SIZE, Feel.COLOR_STAR)
+	_points.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	reset_button = _button(head, tr("ABILITY_RESET"), Feel.PANEL_SMALL_SIZE)
+	reset_button.pressed.connect(_on_reset_pressed)
+	_builds = _label(_ability_box, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
+
+	# [창고·할 일]
+	_depot_box = VBoxContainer.new()
+	add_child(_depot_box)
+	_quest_head = _label(_depot_box, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
+	_quest_name = _label(_depot_box, Feel.PANEL_TEXT_SIZE, Feel.COLOR_STAR)
+	_quest_desc = _label(_depot_box, Feel.PANEL_SMALL_SIZE, Feel.COLOR_TEXT)
+	_quest_progress = _label(_depot_box, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
 
 	for kind: String in KINDS:
-		_titles[kind] = _label(self, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
+		_titles[kind] = _label(_depot_box, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
 		_titles[kind].size_flags_horizontal = Control.SIZE_SHRINK_BEGIN   # 산 순간 커질 기준점
 		_titles[kind].autowrap_mode = TextServer.AUTOWRAP_OFF
-		_values[kind] = _label(self, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
-		var btn := _button(self, "")
+		_values[kind] = _label(_depot_box, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
+		var btn := _button(_depot_box, "")
 		btn.pressed.connect(func(): upgrade_pressed.emit(kind))
 		buy_buttons[kind] = btn
-		_waits[kind] = _label(self, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
+		_waits[kind] = _label(_depot_box, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
+	show_page(page)
 	set_ui_scale(_scale)
 
 
@@ -85,7 +133,8 @@ func set_ui_scale(s: float) -> void:
 	_scale = s
 	if _xp_bar == null:
 		return
-	add_theme_constant_override("separation", int(roundf(Feel.PANEL_GAP_SMALL * s)))
+	for box: BoxContainer in [self, _ability_box, _depot_box]:
+		box.add_theme_constant_override("separation", int(roundf(Feel.PANEL_GAP_SMALL * s)))
 	_xp_bar.custom_minimum_size.y = Feel.XP_BAR_HEIGHT * s
 	for c: Control in _font_sizes:
 		c.add_theme_font_size_override("font_size", _px(_font_sizes[c]))
@@ -96,6 +145,36 @@ func show_bought(kind: String) -> void:
 	Town.pop(_titles[kind], Feel.POP_PIVOT_LEFT)
 
 
+## 찍은 직후: 그 능력치 줄이 커졌다 돌아옴
+func show_added(id: String) -> void:
+	if _ability_lines.has(id):
+		Town.pop(_ability_lines[id], Feel.POP_PIVOT_LEFT)
+
+
+## [능력치] / [창고·할 일]
+func show_page(p: Page) -> void:
+	page = p
+	_ability_box.visible = p == Page.ABILITY
+	_depot_box.visible = p == Page.DEPOT
+	ability_page_button.set_pressed_no_signal(p == Page.ABILITY)
+	depot_page_button.set_pressed_no_signal(p == Page.DEPOT)
+
+
+## [초기화]: 첫 번째는 "한 번 더 누르면 초기화"로 바꾸기만, ABILITY_RESET_ARM_SECONDS 안에 또 누르면 reset_pressed
+func _on_reset_pressed() -> void:
+	if _reset_armed_ms >= 0:
+		_reset_armed_ms = -1
+		reset_pressed.emit()
+	else:
+		_reset_armed_ms = Time.get_ticks_msec()
+	reset_button.text = tr("ABILITY_RESET_CONFIRM" if _reset_armed_ms >= 0 else "ABILITY_RESET")
+
+
+## [초기화]를 한 번 누른 채 기다리는 중인가 (확인용)
+func is_reset_armed() -> bool:
+	return _reset_armed_ms >= 0
+
+
 ## 상태에 맞게 글자와 버튼을 고친다 (보이는 동안 매 프레임)
 func refresh(b: Balance, s: GameState) -> void:
 	var at_max := s.driver_level >= Driver.max_level(b)
@@ -104,7 +183,7 @@ func refresh(b: Balance, s: GameState) -> void:
 	_xp_bar.max_value = maxi(need, 1)
 	_xp_bar.value = _xp_bar.max_value if at_max else s.driver_xp
 	_xp.text = tr("DRIVER_REPUTATION") % s.reputation if at_max else tr("DRIVER_XP") % [s.driver_xp, need]
-	_points.text = tr("DRIVER_POINTS") % s.ability_points
+	_refresh_abilities(b, s)
 
 	_quest_head.text = tr("DRIVER_QUEST_HEAD") % [s.quest_index, Quest.count(b)]
 	var q := Quest.current(b, s)
@@ -138,8 +217,52 @@ func refresh(b: Balance, s: GameState) -> void:
 		var short := price > 0 and s.money < price
 		_waits[kind].visible = short
 		if short:
-			var hourly := Trip.hourly_income(b, s.truck(TRUCK))
+			var hourly := Trip.hourly_income(b, s, TRUCK)
 			_waits[kind].text = tr("DEPOT_SHORT") % [Fmt.money(price - s.money), Fmt.wait_text(Economy.seconds_to_afford(price, s.money, hourly))]
+
+
+## [능력치] 칸: 남은 포인트, 능력치 줄마다 "이름  n/최대 · 지금 효과"와 [+] (못 찍으면 꺼짐), [초기화]
+func _refresh_abilities(b: Balance, s: GameState) -> void:
+	if add_buttons.is_empty():
+		_build_abilities(b)
+	var left := Ability.points_left(s)
+	_points.text = tr("DRIVER_POINTS") % left
+	for id: String in add_buttons:
+		var key := "ABILITY_" + id.to_upper()
+		_ability_lines[id].text = "%s  %d/%d · %s" % [tr(key), Ability.points(s, id), Ability.max_points(b, id),
+				tr(key + "_EFFECT") % Fmt.percent(Ability.value(b, s, id))]
+		add_buttons[id].disabled = not Ability.can_add(b, s, id)
+	# 찍은 게 없으면 [초기화] 꺼짐. 한 번 누르고 시간이 지나면 원래 글로
+	var spent := left < s.ability_points
+	if not spent or (_reset_armed_ms >= 0 and Time.get_ticks_msec() - _reset_armed_ms > Feel.ABILITY_RESET_ARM_SECONDS * 1000.0):
+		_reset_armed_ms = -1
+	reset_button.disabled = not spent
+	reset_button.text = tr("ABILITY_RESET_CONFIRM" if _reset_armed_ms >= 0 else "ABILITY_RESET")
+
+
+## 능력치 줄 만들기 (balance 순서): [이름 n/최대 · 효과 / 설명] [+]. 예시 빌드 글도 여기서 (이름을 번역 파일에서)
+func _build_abilities(b: Balance) -> void:
+	for id: String in Ability.ids(b):
+		var row := HBoxContainer.new()
+		_ability_box.add_child(row)
+		_ability_box.move_child(row, _builds.get_index())   # 예시 빌드 위에
+		var words := VBoxContainer.new()
+		words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		words.add_theme_constant_override("separation", 0)
+		row.add_child(words)
+		_ability_lines[id] = _label(words, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
+		_ability_lines[id].size_flags_horizontal = Control.SIZE_SHRINK_BEGIN   # 찍은 순간 커질 기준점
+		_ability_lines[id].autowrap_mode = TextServer.AUTOWRAP_OFF
+		_ability_descs[id] = _label(words, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
+		_ability_descs[id].text = tr("ABILITY_%s_DESC" % id.to_upper())
+		var add := _button(row, "+", Feel.ABILITY_ADD_SIZE)
+		add.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		add.pressed.connect(func(): ability_pressed.emit(id))
+		add_buttons[id] = add
+	var lines := PackedStringArray()
+	for build: Array in BUILDS:
+		lines.append(tr(build[0]) % [tr("ABILITY_" + String(build[1]).to_upper()), tr("ABILITY_" + String(build[2]).to_upper())])
+	_builds.text = "\n".join(lines)
 
 
 ## 그 레벨의 값: 창고 "4시간", 야간팀 "50%"
@@ -161,6 +284,17 @@ func _label(parent: Node, font_size: int, color: Color) -> Label:
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART   # 긴 줄(영어 등)은 차고 폭 안에서 줄바꿈
 	parent.add_child(l)
 	return l
+
+
+## 한 줄에서 하나만 눌린 채로 있는 버튼 ([능력치] [창고·할 일]. garage_panel.gd 건물 줄과 같은 모양)
+func _toggle(parent: Node, text: String, group: ButtonGroup) -> Button:
+	var b := _button(parent, text, Feel.SETTING_TAB_SIZE)
+	b.toggle_mode = true
+	b.button_group = group
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	b.add_theme_color_override("font_pressed_color", Feel.COLOR_STAR)
+	b.add_theme_color_override("font_hover_pressed_color", Feel.COLOR_STAR)
+	return b
 
 
 func _button(parent: Node, text: String, font_size: int = Feel.PANEL_BUTTON_SIZE) -> Button:

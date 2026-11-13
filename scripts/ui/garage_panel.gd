@@ -274,7 +274,7 @@ func refresh(b: Balance, s: GameState) -> void:
 
 	_title.text = tr("GARAGE_TITLE_MAX" if at_max else "GARAGE_TITLE") % t.star
 	_spares.text = tr("GARAGE_SPARES") % s.spares
-	var now := Trip.hourly_income(b, t)
+	var now := Trip.hourly_income(b, s, TRUCK)
 	if at_max:
 		_income.text = tr("GARAGE_HOURLY") % Fmt.money(int(now))
 		_set_visible([_income], [_chances, _danger, _danger_note, _cost, _wait, _enhance_row, _enhance_button, to_car_button])
@@ -282,7 +282,7 @@ func refresh(b: Balance, s: GameState) -> void:
 		var c := Enhance.chances_for(b, t)
 		var cost := Economy.enhance_cost(b, t.star)
 		var block := Enhance.block_reason(s, b, TRUCK)
-		_income.text = tr("GARAGE_HOURLY_NEXT") % [Fmt.money(int(now)), Fmt.money(int(Trip.hourly_income_at(b, t, t.star + 1)))]
+		_income.text = tr("GARAGE_HOURLY_NEXT") % [Fmt.money(int(now)), Fmt.money(int(Trip.hourly_income_at(b, s, TRUCK, t.star + 1)))]
 		_chances.text = tr("GARAGE_CHANCES") % [
 			Fmt.percent(c["success"]), Fmt.percent(c["fail"]), Fmt.percent(c["destroy"])]
 		danger = c["destroy"] > 0.0

@@ -164,6 +164,7 @@ func _run() -> void:
 	m.state.quest_index = 8   # 창고 확장 (balance.json quests 순서). 돈이 모자라서 "모자람" 줄도 보임
 	m.state.money = 1500000
 	m.panel.show_building("depot")
+	m.panel.driver.show_page(m.panel.driver.Page.DEPOT)   # v5b: 할 일·창고·야간팀은 [창고·할 일] 칸
 	await _wait(0.3)
 	await _shot("full_driver_1600x900")
 	vp.size = FULL_SIZES[0]
@@ -191,6 +192,21 @@ func _run() -> void:
 	m.panel.show_tab(m.panel.Tab.ENGINE)
 	await _wait(0.3)
 	await _shot("full_tuning_no_spare_1600x900")
+
+	# 10) v5b: 물류센터 [능력치] 칸 (협상 7 · 친절 3, 남은 포인트 있음) 1600x900 / 1280x720 + 작은 화면 레벨 옆 점
+	m.state.ability_points = 15
+	m.state.abilities = { "nego": 7, "kind": 3 }
+	m.open_building("depot")
+	m.panel.driver.show_page(m.panel.driver.Page.ABILITY)
+	vp.size = FULL_SIZES[1]
+	await _wait(0.3)
+	await _shot("full_ability_1600x900")
+	vp.size = FULL_SIZES[0]
+	await _wait(0.3)
+	await _shot("full_ability_1280x720")
+	m.screen.enter_small()
+	await _wait(0.3)
+	await _shot("small_point_dot")
 
 	Save.delete_file(TEST_SAVE)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SETTINGS))

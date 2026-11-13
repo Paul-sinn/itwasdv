@@ -101,7 +101,8 @@ func _start() -> void:
 	_boost_ends = 0
 	_was_boost = false
 	var town = _main.town
-	_start_counts = { "shown": town.payouts_shown, "boosts": town.boosts_shown, "parcels": _main.parcels_total, "boost_events": _main.boosts_found }
+	_start_counts = { "shown": town.payouts_shown, "boosts": town.boosts_shown, "parcels": _main.parcels_total, "boost_events": _main.boosts_found,
+			"tips": _main.tips_total, "tip_events": _main.tips_found, "tips_shown": town.tips_shown.size() }
 	_main._toggle_fast_time()   # F2 누른 것과 같음: 60배속 + 측정 시작
 
 
@@ -153,21 +154,26 @@ func _on_frame() -> void:
 	var t = _main.state.truck(0)
 	var town = _main.town
 	var what := "+%d%s" % [t.star, " (화면 %d번 오감)" % _switches if _switches > 0 else ""]
-	var hourly := Trip.hourly_income(b, t)
+	var hourly := Trip.hourly_income(b, _main.state, 0)
 	var seconds: float = _main._measure_seconds
 	var earned: int = _main._measure_earned
 	var expected := hourly * seconds / 3600.0
-	var lap: int = Trip.lap_income(b, t) * CASES[_case].get("laps", 1)
+	var lap: int = Trip.lap_income(b, _main.state, 0) * CASES[_case].get("laps", 1)
 	_report(absf(_main._measure_hourly - hourly) < 1e-9, "%s: 측정에 쓴 시간당 수입 = Trip.hourly_income %.1f" % [what, hourly])
 	_report(absf(earned - expected) <= lap,
 			"%s: ① 게임 %.0f초 동안 번 돈 %d / Trip.hourly_income으로 계산한 값 %.1f → 차이 %.1f (%d 안쪽)" % [
 			what, seconds, earned, expected, absf(earned - expected), lap])
 	var shown: int = town.payouts_shown - _start_counts["shown"]
 	var events: int = _main.parcels_total - _start_counts["parcels"]
-	var pay := Trip.parcel_pay(b, t)
+	var pay := Trip.parcel_pay(b, _main.state, 0)
 	# 측정을 켜기 전 프레임에 배송이 났을 수 있어서, 번 돈은 측정 뒤 것만 나눔
-	_report(shown == events and events > 0 and earned % pay == 0,
-			"%s: ① '+돈' 글자 %d개 = 배송 이벤트 %d번 (측정 뒤 번 돈 ÷ 배송 1건 %d원 = %d건)" % [what, shown, events, pay, earned / pay])
+	# v5b: 번 돈에는 팁이 섞임 (기본 팁 확률) → 팁 돈을 빼고 나눔. "팁!" 글자 수 = 팁 이벤트 수
+	var tips: int = _main.tips_total - _start_counts["tips"]
+	var tip_events: int = _main.tips_found - _start_counts["tip_events"]
+	var tips_shown: int = town.tips_shown.size() - _start_counts["tips_shown"]
+	_report(shown == events and events > 0 and (earned - tips) % pay == 0 and tips_shown == tip_events,
+			"%s: ① '+돈' 글자 %d개 = 배송 이벤트 %d번 ((측정 뒤 번 돈 − 팁 %d원) ÷ 배송 1건 %d원 = %d건), '팁!' 글자 %d개 = 팁 이벤트 %d번" % [
+			what, shown, events, tips, pay, (earned - tips) / pay, tips_shown, tip_events])
 	_report(_max_lag <= 1.0, "%s: 화면 트럭이 계산 쪽 바퀴 진행을 따라감 (가장 많이 뒤처진 거리 %.1f픽셀)" % [what, _max_lag])
 	if CASES[_case].get("overboost", false):
 		var boosts: int = town.boosts_shown - _start_counts["boosts"]

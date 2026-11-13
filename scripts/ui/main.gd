@@ -13,8 +13,11 @@
 ## v5: 계산 쪽 알림(state.take_events: 할 일 끝·레벨업·만렙·강화 첫 달성)을 프레임마다 꺼내 동네에 하나씩,
 ##     차고 [기사·물류센터] → Depot.upgrade, 강화·세팅·스페어·올리기 직후 Quest.check (바로 반응하게)
 ## v6-bal: 처음 켰을 때 작은 화면 말풍선 "건물을 눌러보세요". 건물·작은 버튼을 한 번 누르면(open_building) 다시 안 뜸
+## v5b: 물류센터 능력치 [+] → Ability.add, [초기화] → Ability.reset (직후 저장). 팁 이벤트 → 동네 "팁!",
+##      찍을 포인트가 남으면 구석 줄 점, 꺼둔 동안 노하우 경험치 한 줄
 extends Control
 
+const Ability = preload("res://scripts/core/ability.gd")
 const Balance = preload("res://scripts/core/balance.gd")
 const Depot = preload("res://scripts/core/depot.gd")
 const Driver = preload("res://scripts/core/driver.gd")
@@ -59,11 +62,13 @@ var hint_seen := false
 ## 저장이 없었으면 빈 묶음
 var offline_report := {}
 
-## 켠 뒤로 배송 이벤트로 번 돈 · 배송 수 · 받은 스페어 수 (확인용)
+## 켠 뒤로 배송 이벤트로 번 돈(팁 포함) · 배송 수 · 받은 스페어 수 · 팁 수와 팁 돈 (확인용)
 var earned_total := 0
 var parcels_total := 0
 var spares_found := 0
 var boosts_found := 0
+var tips_found := 0
+var tips_total := 0
 
 # F2 배속 측정: 배속을 켠 순간부터 게임 시간과 번 돈을 잰다
 var _measuring := false
@@ -120,6 +125,8 @@ func _ready() -> void:
 	panel.setting.roll_pressed.connect(_on_roll_pressed)
 	panel.setting.choose_pressed.connect(_on_choose_pressed)
 	panel.driver.upgrade_pressed.connect(_on_upgrade_pressed)
+	panel.driver.ability_pressed.connect(_on_ability_pressed)
+	panel.driver.reset_pressed.connect(_on_ability_reset)
 	town.tuning_pressed.connect(func(): open_building("tuning"))
 	_open_pending_setting()
 
@@ -250,8 +257,16 @@ func _process(delta: float) -> void:
 			"boost":   # 이 바퀴는 오버부스트 (트럭 뒤 불꽃은 boosting으로 바퀴 내내)
 				town.show_boost()
 				boosts_found += 1
+			"tip":   # 바로 앞 배송에서 팁 (돈은 계산 쪽이 이미 더함) → 같은 집 "+금액" 옆에 "팁!"
+				town.show_tip(house, e["pay"])
+				earned_total += e["pay"]
+				tips_found += 1
+				tips_total += e["pay"]
+				if _measuring:
+					_measure_earned += e["pay"]
 	_show_events(state.take_events())
 	town.set_hud(state.money, t.star, state.driver_level)
+	town.set_point_dot(Ability.points_left(state) > 0)
 	town.set_quest(_quest_line())
 	if panel.visible:
 		panel.refresh(balance, state)
@@ -270,7 +285,7 @@ func _process(delta: float) -> void:
 ## 화면 트럭이 한 바퀴 중 어디쯤 있어야 하나 (0 = 물류센터 → 0.5 = 마지막 집 → 1 = 물류센터).
 ## 짐 싣는 동안은 0, 그 뒤 바퀴 끝까지 고르게. 지금 바퀴 길이는 계산 쪽 Trip.lap_seconds (오버부스트 반영)
 func _lap_phase(t) -> float:
-	var drive := Trip.lap_seconds(balance, t) - balance.load_seconds
+	var drive := Trip.lap_seconds(balance, state, TRUCK) - balance.load_seconds
 	return clampf((t.lap_clock - balance.load_seconds) / maxf(drive, 0.001), 0.0, 1.0)
 
 
@@ -308,7 +323,7 @@ func _open_return_popup(notice: String) -> void:
 		popup.open(away_lines[0], away_lines[1])
 
 
-## 돌아왔을 때 요약 두 줄 [큰 글자, 작은 글자]: 번 돈 / 배송·경험치·스페어 + 창고가 꽉 찼는지.
+## 돌아왔을 때 요약 두 줄 [큰 글자, 작은 글자]: 번 돈 / 배송·스페어 (+ 노하우 경험치) + 창고가 꽉 찼는지.
 ## 저장이 없었거나 3분 안에 다시 켰으면(계산 쪽 ignored) 빈 목록. 시계가 거꾸로 갔으면 0원인 이유
 func _offline_lines() -> PackedStringArray:
 	if offline_report.is_empty():
@@ -322,7 +337,10 @@ func _offline_lines() -> PackedStringArray:
 	var cap := Fmt.num(Depot.cap_hours(balance, state))
 	var rate := Fmt.percent(Depot.rate(balance, state))
 	var rule := tr("RETURN_FULL") % [cap, rate] if offline_report["full"] else tr("RETURN_NOTE") % [rate, cap]
-	var note := tr("RETURN_DETAIL") % [offline_report["parcels"], offline_report["xp"], offline_report["spares"]] + "\n" + rule
+	var note := tr("RETURN_DETAIL") % [offline_report["parcels"], offline_report["spares"]]
+	if offline_report["xp"] > 0:   # 노하우가 있을 때만 (꺼둔 동안 경험치)
+		note += "\n" + tr("RETURN_XP") % offline_report["xp"]
+	note += "\n" + rule
 	return PackedStringArray([main_text, note])
 
 
@@ -540,6 +558,21 @@ func _on_upgrade_pressed(kind: String) -> void:
 	panel.refresh(balance, state)
 
 
+## 능력치 [+] → Ability.add (포인트 없거나 최대면 그대로) → 찍은 직후 저장
+func _on_ability_pressed(id: String) -> void:
+	if Ability.add(balance, state, id):
+		panel.driver.show_added(id)
+		_save()
+	panel.refresh(balance, state)
+
+
+## [초기화] 두 번째 누름 → 전부 0 (포인트는 돌려받음) → 저장
+func _on_ability_reset() -> void:
+	Ability.reset(state)
+	_save()
+	panel.refresh(balance, state)
+
+
 ## 고르다 만 부품이 있으면 차고를 [세팅] 칸 그 부품으로 열어 둔다 (껐다 켜도 고르는 화면이 다시 뜸)
 func _open_pending_setting() -> void:
 	var t := state.truck(TRUCK)
@@ -606,7 +639,7 @@ func open_building(id: String) -> void:
 
 ## F1: 돈 + 지금 단계 1시간치
 func _cheat_money() -> void:
-	var amount := int(Trip.hourly_income(balance, state.truck(TRUCK)))
+	var amount := int(Trip.hourly_income(balance, state, TRUCK))
 	state.money += amount
 	_last_cheat = tr("CHEAT_MONEY") % Fmt.money(amount)
 
@@ -618,7 +651,7 @@ func _toggle_fast_time() -> void:
 		_measuring = true
 		_measure_seconds = 0.0
 		_measure_earned = 0
-		_measure_hourly = Trip.hourly_income(balance, state.truck(TRUCK))
+		_measure_hourly = Trip.hourly_income(balance, state, TRUCK)
 	else:
 		Engine.time_scale = 1.0
 		_measuring = false   # 측정 결과는 화면에 그대로 남겨 둔다
