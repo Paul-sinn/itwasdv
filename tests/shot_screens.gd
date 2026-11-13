@@ -8,7 +8,6 @@ extends SceneTree
 const Save = preload("res://scripts/core/save.gd")
 const Enhance = preload("res://scripts/core/enhance.gd")
 const Economy = preload("res://scripts/core/economy.gd")
-const Tune = preload("res://scripts/core/tune.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
 const TEST_SAVE := "user://test_town_shot.json"
@@ -56,44 +55,49 @@ func _run() -> void:
 		vp.size = Feel.SMALL_SIZE if mode == 0 else FULL_SIZES[1])
 	var b = m.balance
 
-	# 1) 작은 화면: 12강, "+금액"이 떠 있을 때
-	m.state.star = 12
-	m.state.money = 123456.0
-	await _until(func(): return m.town.payout_count() > 0, 30.0)
+	var t = m.state.truck(0)
+
+	# 1) 작은 화면: +12, "+금액"이 떠 있을 때
+	t.star = 12
+	m.state.money = 123456
+	await _until(func(): return m.town.payout_count() > 0, 60.0)
 	await _wait(0.25)
 	await _shot("small_480x220")
 	await _shot_rects("small_480x220_visible")
 
-	# 2) 작은 화면: 고장 + 연기
-	Enhance.break_engine(m.state, b)
-	await _wait(1.5)
-	await _shot("small_broken")
-	await _shot_rects("small_broken_visible")
-	m.state.broken = false
+	# 2) 작은 화면: 배송 중 스페어 엔진을 받음 ("스페어 엔진 +1", 오른쪽 끝 집)
+	m.town.show_payout(Feel.TOWN_HOUSES - 1, 85)
+	m.town.show_spare(Feel.TOWN_HOUSES - 1)
+	await _wait(0.3)
+	await _shot("small_spare")
+	await _shot_rects("small_spare_visible")
 
-	# 3) 작은 화면 위 복귀 팝업
-	m.popup.open("자리 비운 7시간 59분 동안 +1,234,567원", "꺼둔 동안은 50%만, 최대 8시간치까지 쌓입니다.")
+	# 3) 작은 화면 위 복귀 팝업 (백업 복구 안내 + 꺼둔 동안 요약)
+	m.offline_report = { "money": 54321, "parcels": 123, "spares": 1, "hours": 3.0, "away_seconds": 3.0 * 3600.0 }
+	m._open_return_popup(m.tr("LOAD_RECOVERED") % "save.json.broken")
 	await _wait(0.1)
 	await _shot("small_popup")
 	m.popup.visible = false
 
-	# 4) 큰 화면: 퍼질 수 있는 강수 + 돈 모자람 (차고가 가장 긴 경우) + 결과 줄
+	# 4) 큰 화면: 퍼질 수 있는 단계 + 스페어 없음 (차고가 가장 긴 경우) + 결과 줄
 	m.screen.enter_full()
-	m.state.star = 18
+	t.star = 18
+	m.state.spares = 0
 	m.state.money = Economy.enhance_cost(b, 18)
-	m.state.success_count = 31
-	m.state.fail_count = 12
-	m.state.destroy_count = 1
+	t.success_count = 31
+	t.fail_count = 12
+	t.destroy_count = 1
 	for size in FULL_SIZES:
 		vp.size = size
-		m.panel.show_result("실패", Feel.COLOR_FAIL)
+		m.panel.show_result(m.tr("RESULT_FAIL"), Feel.COLOR_FAIL)
 		await _wait(0.3)
 		await _shot("full_%dx%d" % [size.x, size.y])
 
-	# 5) 큰 화면 강화 연출 (1600x900): 성공 번쩍 / 퍼짐 (흔들림 + 연기 + 빨간 글자)
+	# 5) 큰 화면 강화 연출 (1600x900): 성공 번쩍 / 퍼짐 (흔들림 + 연기 + 빨간 글자 + 스페어 사용 안내)
 	vp.size = FULL_SIZES[1]
-	m.state.money = 1e9
-	m.state.star = 10
+	m.state.money = 1000000000
+	m.state.spares = 3
+	t.star = 10
 	_seed_for(Enhance.Result.SUCCESS, 10)
 	m._on_enhance_pressed()
 	await _wait(Feel.SUSPENSE_SAFE * 0.5)
@@ -102,7 +106,7 @@ func _run() -> void:
 	await _shot("full_fx_success")
 	await _until(func(): return not m.enhancing, 3.0)
 	await _wait(1.0)
-	m.state.star = 19
+	t.star = 19
 	_seed_for(Enhance.Result.DESTROY, 19)
 	m._on_enhance_pressed()
 	await _wait(Feel.SUSPENSE_DANGER * 0.7)
@@ -110,7 +114,7 @@ func _run() -> void:
 	await _wait(Feel.SUSPENSE_DANGER * 0.3 + 0.12)
 	await _shot("full_fx_destroy")
 	await _wait(1.5)
-	await _shot("full_broken")
+	await _shot("full_after_destroy")
 
 	# 6) 설정 화면 (있으면)
 	if m.has_method("open_settings"):
@@ -121,76 +125,18 @@ func _run() -> void:
 		await _wait(0.2)
 		await _shot("full_settings_1280x720")
 
-	# 7) 튜닝 (v2): 큰 화면 [튜닝] 칸이 가장 길 때 (짐칸 레어 + 타이어 일반 경고 + 돈 모자람)
-	if m.has_method("close_settings"):
-		m.close_settings()
-	vp.size = FULL_SIZES[1]
-	m.state.broken = false
-	m.state.star = 18
-	m.state.money = 500.0
-	var grades := { "turbo": 3, "tire": 0, "cargo": 1, "suspension": 2, "fuel_tank": 1, "navigation": 0, "engine_oil": 2 }
-	for part in grades:
-		m.state.set_grade(b, part, grades[part])
-	m.state.tune_press_count = 57
-	m.state.tune_up_count = 6
-	m.state.jackpot_count = 0
-	m.panel.show_tab(m.panel.Tab.TUNE)
-	m.panel.tune.select("cargo")
-	for size in [FULL_SIZES[1], FULL_SIZES[0], FULL_SIZES[3]]:
-		vp.size = size
-		await _wait(0.3)
-		await _shot("full_tune_%dx%d" % [size.x, size.y])
-	# 튜닝 연출 (1600x900): 뜸 → 등급업 (등급 색 번쩍 + 등급 글자 커짐)
-	vp.size = FULL_SIZES[1]
-	m.state.money = 1e9
-	m.panel.tune.select("navigation")
-	_seed_tune_up(m.state.grade("navigation"))
-	m._on_tune_pressed("navigation")
-	await _wait(Feel.TUNE_SUSPENSE * 0.5)
-	await _shot("full_tune_suspense")
-	await _wait(Feel.TUNE_SUSPENSE * 0.5 + 0.06)
-	await _shot("full_tune_up")
-	await _until(func(): return not m.tuning, 3.0)
-	# [엔진 강화] 칸: 튜닝 반영 값 (엔진오일·서스펜션 깎은 표시)
-	m.panel.show_tab(m.panel.Tab.ENGINE)
-	m.panel.clear_result()
-	m.state.star = 19
-	m.state.money = 0.0
-	await _wait(0.3)
-	await _shot("full_engine_tuned")
-	# 작은 화면: 트럭 짐칸 색 점 + "대박!" 글자
-	m.screen.enter_small()
-	m.state.set_grade(b, "tire", 3)
-	m.state.set_grade(b, "cargo", 3)
-	await _wait(0.2)
-	m.town.show_payout(Feel.TOWN_HOUSES - 1, 12345.0, m.state.jackpot_mult(b))
-	m.town.show_payout(1, 2469.0, m.state.jackpot_mult(b))
-	await _wait(0.3)
-	await _shot("small_jackpot")
-	await _shot_rects("small_jackpot_visible")
-
 	Save.delete_file(TEST_SAVE)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SETTINGS))
 	print("사진 저장: ", out_dir)
 	quit(0)
 
 
-## 이 강수에서 다음 굴리기가 want가 나오게 m.rng 씨앗을 고른다
+## 이 단계에서 다음 굴리기가 want가 나오게 m.rng 씨앗을 고른다 (뜸 동안 배송이 나면 어긋날 수 있음: 사진용이라 괜찮음)
 func _seed_for(want: int, star: int) -> void:
 	var probe := RandomNumberGenerator.new()
 	for s in 100000:
 		probe.seed = s
 		if Enhance.roll(m.balance, star, probe) == want:
-			m.rng.seed = s
-			return
-
-
-## 다음 튜닝 굴리기가 등급업이 나오게 m.rng 씨앗을 고른다
-func _seed_tune_up(grade: int) -> void:
-	var probe := RandomNumberGenerator.new()
-	for s in 100000:
-		probe.seed = s
-		if Tune.decide(m.balance, grade, Enhance.random01(probe)) == Tune.Result.UP:
 			m.rng.seed = s
 			return
 

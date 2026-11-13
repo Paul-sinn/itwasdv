@@ -1,7 +1,7 @@
 ## v3 U1 완료 기준 자동 확인: 번역 파일 · 돈 표기 · 강화 단계 "+N" 표기
 ## ① locale/strings.csv와 번역 파일(locale/*.translation)이 같은가 (ko·en 칸이 비지 않음)
 ## ② 코드가 쓰는 키가 ko·en 모두 번역되나 (키 그대로 나오면 실패). ko·en이 아닌 언어(ja)는 en으로
-## ③ scripts/ui/ (튜닝 두 파일 빼고)에 한글 화면 글자가 코드에 직접 안 남음 (로그 push_warning/push_error는 뺌)
+## ③ scripts/ui/에 한글 화면 글자가 코드에 직접 안 남음 (로그 push_warning/push_error는 뺌)
 ## ④ Fmt.money 예시가 ko·en 표기 규칙대로
 ## ⑤ ★와 "N강" 표기가 코드·번역 파일에 없음
 ## ⑥⑦ 진짜 게임 화면(main.tscn)에 진짜 키·클릭을 넣어서: ko는 "+N" 표기, en은 보이는 글자에 한글·키가 없음
@@ -15,7 +15,6 @@ extends SceneTree
 const MAIN_SCENE := "res://scenes/main.tscn"
 const CSV_PATH := "res://locale/strings.csv"
 const UI_DIR := "res://scripts/ui/"
-const SKIP_FILES := ["tune_tab.gd", "tune_text.gd"]   ## v3 U2에서 지울 튜닝 화면 (번역 안 함)
 const LOG_CALLS := ["push_warning(", "push_error(", "print("]   ## 화면이 아니라 로그
 const Save = preload("res://scripts/core/save.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
@@ -89,7 +88,7 @@ func _check_code() -> Dictionary:
 	var star := PackedStringArray()
 	var files := 0
 	for file in DirAccess.get_files_at(UI_DIR):
-		if not file.ends_with(".gd") or file in SKIP_FILES:
+		if not file.ends_with(".gd"):
 			continue
 		files += 1
 		var lines := FileAccess.get_file_as_string(UI_DIR + file).split("\n")
@@ -104,7 +103,7 @@ func _check_code() -> Dictionary:
 					star.append("%s:%d \"%s\"" % [file, i + 1, s])
 	for x in hangul:
 		print("    " + x)
-	_report(files > 5 and hangul.is_empty(), "scripts/ui/ 파일 %d개(튜닝 두 파일 빼고)에 한글 화면 글자가 코드에 직접 없음" % files)
+	_report(files > 5 and hangul.is_empty(), "scripts/ui/ 파일 %d개에 한글 화면 글자가 코드에 직접 없음" % files)
 	for key: String in _csv:
 		for locale in ["ko", "en"]:
 			var text: String = _csv[key][locale]
@@ -171,7 +170,7 @@ func _check_screen_ko() -> void:
 	m.state.money = 1000000000000
 	var success_text := ""
 	for i in 20:
-		var before: int = m.state.star
+		var before: int = m.state.truck(0).star
 		await _frames(1)
 		_click(p._enhance_button.get_global_rect().get_center())
 		await _frames(1)
@@ -180,10 +179,10 @@ func _check_screen_ko() -> void:
 			await process_frame
 			waited += 1
 		await _frames(1)   # 동네 구석 글자는 다음 프레임에 바뀜
-		if m.state.star == before + 1:
+		if m.state.truck(0).star == before + 1:
 			success_text = p._result.text
-			_report(success_text == "성공!  +%d → +%d" % [before, before + 1] and p._title.text == "엔진 +%d" % m.state.star
-					and m.town._star_label.text == "+%d" % m.state.star,
+			_report(success_text == "성공!  +%d → +%d" % [before, before + 1] and p._title.text == "엔진 +%d" % m.state.truck(0).star
+					and m.town._star_label.text == "+%d" % m.state.truck(0).star,
 					"ko 강화 성공 결과 '%s', 차고 제목 '%s', 동네 '%s'" % [success_text, p._title.text, m.town._star_label.text])
 			break
 	_report(success_text != "", "ko 강화 버튼을 눌러 성공이 나옴")
@@ -191,7 +190,7 @@ func _check_screen_ko() -> void:
 			"ko 보이는 글자에 ★·'N강' 없음: %s" % [_visible_texts(m)])
 
 	var b = m.balance
-	while m.state.star < b.max_star:
+	while m.state.truck(0).star < b.max_star:
 		_key(KEY_F4)
 		await _frames(1)
 	await _frames(1)
@@ -199,7 +198,7 @@ func _check_screen_ko() -> void:
 	await _close(m)
 
 
-## ⑦ en 진짜 화면: 보이는 글자에 한글·키가 없음, 돈은 ₩ + K/M
+## ⑦ en 진짜 화면 (U2 ⑤): 차고가 뜨고 보이는 글자에 한글·키가 없음, 돈은 ₩ + K/M
 func _check_screen_en() -> void:
 	TranslationServer.set_locale("en")
 	var m := await _launch()
@@ -217,8 +216,18 @@ func _check_screen_en() -> void:
 	await _frames(2)
 	_report(m.settings.visible, "en [Settings] 클릭 → 설정 창이 뜸")
 	var texts := _visible_texts(m)
+	_click(m.settings.close_button.get_global_rect().get_center())
+	# 차고가 가장 길 때 (+18, 스페어 없음, 돈 모자람) + 퍼짐 결과 + 복귀 창 (백업 복구 안내 + 꺼둔 동안 요약)
+	m.state.truck(0).star = 18
+	m.state.money = 0
+	p.show_result(tr("RESULT_DESTROY"), Feel.COLOR_DANGER, Feel.DESTROY_TEXT_SIZE, tr("RESULT_DESTROY_NOTE") % [15, 0])
+	m.offline_report = { "money": 54321, "parcels": 123, "spares": 1, "hours": 3.0, "away_seconds": 3.0 * 3600.0 }
+	m._open_return_popup(tr("LOAD_RECOVERED") % "save.json.broken")
+	await _frames(2)
+	texts.append_array(_visible_texts(m))
 	var bad := texts.filter(func(t): return _hangul.search(t) != null or _csv.has(t))
-	_report(bad.is_empty() and texts.size() > 10, "en 보이는 글자 %d개에 한글·키 없음 %s" % [texts.size(), bad])
+	_report(bad.is_empty() and texts.size() > 20 and p._wait.text == tr("GARAGE_NEED_SPARE") and m.popup.visible,
+			"(U2 ⑤) en 언어로도 차고·설정·복귀 창이 뜨고, 보이는 글자 %d개에 한글·키 없음 %s" % [texts.size(), bad])
 	print("    en 보이는 글자: %s" % [texts])
 	await _close(m)
 
