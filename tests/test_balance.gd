@@ -197,9 +197,10 @@ func test_v5_numbers_match_spec() -> void:
 		["star_8", "star", 8, "", 400, 300000], ["setting_sport", "setting_grade", 2, "", 400, 400000],
 		["night_2", "night", 2, "", 400, 400000], ["star_10", "star", 10, "", 500, 600000],
 		["level_10", "level", 10, "", 500, 600000], ["warehouse_3", "warehouse", 3, "", 500, 800000],
-		["star_12", "star", 12, "", 600, 1000000], ["first_spare", "spares_bought", 1, "", 600, 1000000],
+		["star_12", "star", 12, "", 600, 1000000],
 		["star_15", "star", 15, "", 800, 2000000], ["level_20", "level", 20, "", 800, 2000000],
-		["setting_racing", "setting_grade", 3, "", 1000, 3000000], ["star_18", "star", 18, "", 1000, 5000000],
+		["setting_racing", "setting_grade", 3, "", 1000, 3000000], ["first_spare", "spares_bought", 1, "", 600, 1000000],
+		["star_18", "star", 18, "", 1000, 5000000],
 	]
 	var got := []
 	for q in b.quests:

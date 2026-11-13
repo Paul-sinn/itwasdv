@@ -13,7 +13,7 @@ var b: Balance = Balance.load_file()
 
 const IDS := ["first_parcel", "parcels_20", "first_enhance", "first_setting", "star_3", "setting_street", "star_5",
 		"ecu_first", "warehouse_2", "level_5", "star_8", "setting_sport", "night_2", "star_10", "level_10", "warehouse_3",
-		"star_12", "first_spare", "star_15", "level_20", "setting_racing", "star_18"]
+		"star_12", "star_15", "level_20", "setting_racing", "first_spare", "star_18"]
 
 
 func _quest_ids(events: Array) -> Array:
@@ -81,7 +81,7 @@ func test_conditions_by_kind() -> void:
 		[8, func(s): s.warehouse_level = 2, [1, 2], [2, 2]],
 		[9, func(s): s.driver_level = 5, [1, 5], [5, 5]],
 		[12, func(s): s.night_level = 2, [1, 2], [2, 2]],
-		[17, func(s): s.spares_bought = 1, [0, 1], [1, 1]],
+		[20, func(s): s.spares_bought = 1, [0, 1], [1, 1]],
 	]
 	for c in cases:
 		var s := GameState.new_game()

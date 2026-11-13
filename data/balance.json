@@ -111,10 +111,10 @@
     { "id": "level_10", "kind": "level", "target": 10, "xp": 500, "money": 600000 },
     { "id": "warehouse_3", "kind": "warehouse", "target": 3, "xp": 500, "money": 800000 },
     { "id": "star_12", "kind": "star", "target": 12, "xp": 600, "money": 1000000 },
-    { "id": "first_spare", "kind": "spares_bought", "target": 1, "xp": 600, "money": 1000000 },
     { "id": "star_15", "kind": "star", "target": 15, "xp": 800, "money": 2000000 },
     { "id": "level_20", "kind": "level", "target": 20, "xp": 800, "money": 2000000 },
     { "id": "setting_racing", "kind": "setting_grade", "target": 3, "xp": 1000, "money": 3000000 },
+    { "id": "first_spare", "kind": "spares_bought", "target": 1, "xp": 600, "money": 1000000 },
     { "id": "star_18", "kind": "star", "target": 18, "xp": 1000, "money": 5000000 }
   ]
 }

@@ -36,7 +36,7 @@ v4 숫자 비교: 같은 유저를 꺼둔 동안 V4_OFFLINE(8시간 × 50%) 고�
     (게임은 바퀴 안에서 싣는 시간·집마다 시각이 다르고 오버부스트는 바퀴마다 굴림. 1시간 합계 차이는 2% 안쪽 = C1 테스트)
   - 강화 규칙 ("버는 족족 강화"):
       돈이 생기면 CHECK_HOURS(30분) 안에 화면을 보고, 누를 수 있는 동안 계속 강화를 누른다.
-      살펴볼 때 순서: 퀘스트 확인 → 세팅 → 창고·야간팀 → 강화 (끝낸 퀘스트가 생기면 한 번 더)
+      살펴볼 때 순서: 퀘스트 확인 → 퀘스트가 시키는 사기 → 세팅 → 창고·야간팀 → 강화 (끝낸 퀘스트가 생기면 한 번 더)
       퍼질 수 있는 단계(+18~)인데 스페어가 0개면 그때 스페어를 1개 산다 (미리 쌓아 두지 않음). +30이면 그만.
   - 세팅 규칙 (하나):
       번 돈(켜 둔 동안 + 꺼둔 동안)의 SETTING_SHARE(20%)는 세팅 몫으로 따로 모으고, 나머지로 강화·스페어를 산다.
@@ -50,8 +50,11 @@ v4 숫자 비교: 같은 유저를 꺼둔 동안 V4_OFFLINE(8시간 × 50%) 고�
       DEPOT_DAYS(1)배 이하이고 강화 몫 돈이 가격 이상이면 산다. 창고 → 야간팀 순서로, 살 수 있는 동안 계속.
       창고는 대리점 전 최고 레벨(warehouse_max_level_solo)까지만. 기다릴 시간 계산에도 넣는다(+30이어도 사러 옴)
   - 퀘스트: 게임은 매 프레임 Quest.check(한 번에 하나)라 사실상 바로 끝남 → 시뮬은 살펴볼 때·배송 뒤에 찬 것을 전부 끝낸다.
-      보상 돈은 번 돈처럼 세팅 몫·강화 몫으로 나눈다. 퀘스트를 일부러 하지는 않는다
-      (예: 스페어를 살 일이 없으면 first_spare에서 멈춘다. 세팅 없음 유저는 first_setting에서 멈춘다)
+      보상 돈은 번 돈처럼 세팅 몫·강화 몫으로 나눈다.
+      퀘스트가 시키는 사기 (사람은 다음 할 일을 보고 산다): 지금 차례 퀘스트가 사는 퀘스트(spares_bought = 스페어,
+      warehouse / night = 창고·야간팀 다음 레벨)이고 강화 몫 돈이 가격 이상이면 강화보다 먼저 그것을 산다.
+      기다릴 시간 계산에도 넣는다. 그 밖의 퀘스트(강화 단계·세팅 등급 등)는 일부러 하지 않는다
+      (세팅 없음 유저는 first_setting에서 멈춘다)
   - 기사 레벨: 켜 둔 배송마다 xp_per_parcel, 강화 성공으로 star_milestones 이상에 처음 닿으면 보너스, 퀘스트 보상 경험치.
       만렙 시각은 그 구간 안에서 배송 시각으로 나눠 잡는다 (켜 둔 시간도 같이)
   - 퍼진 뒤 회복 비용: 퍼진 순간부터 원래 단계로 다시 올라갈 때까지 강화·스페어에 쓴 돈을
@@ -325,6 +328,33 @@ class Player:
                 return kind, price
         return None
 
+    def _quest_buy(self):
+        """지금 차례 퀘스트가 사는 퀘스트면 (kind, 가격). 스페어 = ("spare", 가격). 아니면 None"""
+        if self.v4 or self.quest_index >= len(self.b.quests):
+            return None
+        q = self.b.quests[self.quest_index]
+        if self._quest_value(q) >= q["target"]:
+            return None
+        if q["kind"] == "spares_bought":
+            return "spare", self.b.spare_price
+        if q["kind"] in self.depot:
+            price = self.b.depot_price(q["kind"], self.depot[q["kind"]])
+            return None if price is None else (q["kind"], price)
+        return None
+
+    def _buy_for_quest(self):
+        nxt = self._quest_buy()
+        if nxt is None or self.money < nxt[1]:
+            return
+        kind, price = nxt
+        if kind == "spare":
+            self._spend(price, "spare")
+            self.spares += 1
+            self.spares_bought += 1
+        else:
+            self._spend(price, "depot")
+            self.depot[kind] += 1
+
     def _buy_depot(self):
         while True:
             nxt = self._depot_next()
@@ -490,6 +520,7 @@ class Player:
         """살펴보기 1번: 퀘스트 → 세팅 → 창고·야간팀 → 강화. 그사이 끝난 퀘스트가 있으면 (보상 돈으로) 한 번 더"""
         while True:
             self._quests()
+            self._buy_for_quest()
             self._settings()
             self._buy_depot()
             self._enhance(day)
@@ -555,9 +586,9 @@ class Player:
         part = self._roll_part() if self.setting else None
         if part is not None:
             wait = min(wait, self._hours_until(b.roll_cost[self.parts[part]["grade"]] - self.set_money, pay * self.share, rate))
-        nxt = self._depot_next()
-        if nxt is not None:
-            wait = min(wait, self._hours_until(nxt[1] - self.money, pay * (1.0 - self.share), rate))
+        for nxt in (self._depot_next(), self._quest_buy()):
+            if nxt is not None:
+                wait = min(wait, self._hours_until(nxt[1] - self.money, pay * (1.0 - self.share), rate))
         return wait
 
     def run(self):
