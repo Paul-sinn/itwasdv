@@ -153,7 +153,7 @@ python -I -X utf8 "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwas
 
 ## 현재 작업
 **2026-11-13 오후 v6-bal (사용자 답 반영) 끝:** 가지 `prototype-v6-bal`. 화면 없는 확인 9개 전부 통과, QA 통과 42 / 실패 0. **다음은 v5b 기사 능력치** (`docs/PROTOTYPE_V5B.md`) → v6b → v7.
-- **폴더 주의:** 사용자가 `itwasdv` 폴더(`prototype-v6`)에서 플레이 테스트 중이라, 새 작업은 `itwasdv-merge` 폴더에서 합친다. 아래 "명령"의 경로 `...\itwasdv`를 `...\itwasdv-merge`로 바꾸면 새 버전이 돈다 (저장 파일은 같은 것을 읽음. 형식 6으로 올라가면 옛 버전에서는 안 읽힘)
+- **폴더 주의:** 사용자가 `itwasdv` 폴더(`prototype-v6`)에서 플레이 테스트 중이라, 새 작업은 `itwasdv-merge` 폴더에서 합친다. 아래 "명령"의 경로 `...\itwasdv`를 `...\itwasdv-merge`로 바꾸면 새 버전이 돈다 (`override.cfg` 때문에 저장 폴더가 따로라 `itwasdv`의 진짜 저장은 안 건드림: `app_userdataitwasdv-merge`)
 - 숫자 시트 = `docs/SHEET_SNAPSHOT.md` (Claude Docs 커넥터 대신. 바뀌면 사용자가 새 스냅샷을 줌)
 - v6-bal에서 넣은 것: 시트 강화 확률표(실패는 늘 단계 유지), 기름값 20%, 돌리기 비용(스포츠 160만·레이싱 600만), 옵션 수치·이동 속도 가중치 10, 오버부스트 = 걸린 바퀴 내내 운전 속도 2배, 소수점 적재량은 바퀴마다 확률로, 레벨 곡선 1.33, 퀘스트 보상, 창고·야간팀 가격, 처음 켰을 때 말풍선. 저장 형식 6
 - 시뮬 30일: 가볍게 +18, 열심히 +20 (목표 맞음)
