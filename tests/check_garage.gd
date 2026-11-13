@@ -123,23 +123,27 @@ func _run() -> void:
 		_check(small_win.encloses(r) and r.position.y - float(l.get_meta(&"rise")) >= -0.5, "작은 화면 '%s' 글자가 창 밖으로 나감: %s" % [l.text, r])
 		_check(_covered(rects, r.get_center()), "'%s' 글자가 보이는 곳 밖" % l.text)
 
-	# 2) 작은 화면의 보이는 곳(물류센터) 클릭 → 큰 화면
-	var depot: Rect2 = m.town.view_rect(Feel.TOWN_DEPOT_RECT)
-	_click(depot.get_center())
+	# 2) 작은 화면의 튜닝숍 건물 클릭 → 큰 화면 튜닝숍 (v6a: 건물만 반응)
+	_click(m.town.building_rects()["tuning"].get_center())
 	await _frames(3)
-	_check(m.screen.mode == ScreenMode.Mode.FULL, "작은 화면을 클릭했는데 큰 화면이 아님")
-	_check(p.visible and m.small_button.visible and m.settings_button.visible, "큰 화면인데 차고/[작게]/[설정]이 안 보임")
+	_check(m.screen.mode == ScreenMode.Mode.FULL, "작은 화면 튜닝숍을 클릭했는데 큰 화면이 아님")
+	_check(p.visible and p.building == "tuning" and m.small_button.visible and m.settings_button.visible, "큰 화면인데 튜닝숍/[작게]/[설정]이 안 보임")
 	m.state.money = 0
 	await _frames(1)
 	_check(p._enhance_button.visible and p._enhance_button.disabled, "0원인데 강화 버튼이 눌림 상태")
 	_check(p._wait.visible and p._wait.text.begins_with("강화 비용 부족 · 약 "), "돈 모자랄 때 '강화 비용 부족 · 약 N분 뒤 가능'이 없음: '%s'" % p._wait.text)
-	_check(p._spare_button.visible and p._spare_button.disabled, "0원인데 스페어 구매 버튼이 눌림 상태")
+	# 스페어 사기 버튼은 카센터 화면에 (v6a)
+	_click(p.building_buttons["car_center"].get_global_rect().get_center())
+	await _frames(2)
+	_check(p._spare_button.is_visible_in_tree() and p._spare_button.disabled, "0원인데 카센터 스페어 사기 버튼이 눌림 상태")
+	_click(p.building_buttons["tuning"].get_global_rect().get_center())
+	await _frames(2)
 	_check(m.visible_rects().size() == 1 and m.visible_rects()[0] == Rect2(Vector2.ZERO, Vector2(full_size)),
 			"큰 화면의 보이는 곳이 창 전체가 아님")
-	# 큰 화면에서 동네를 클릭해도 아무 일 없음 (작은 화면으로 안 감)
-	_click(m.town.view_rect(Feel.TOWN_DEPOT_RECT).get_center())
+	# 큰 화면에서 동네 길을 클릭해도 아무 일 없음 (작은 화면으로 안 감, 건물 화면도 그대로)
+	_click(m.town.to_view(m.town.route.point_at(m.town.route.total() * 0.5)) + m.town.global_position)
 	await _frames(2)
-	_check(m.screen.mode == ScreenMode.Mode.FULL, "큰 화면에서 동네를 클릭했더니 화면이 바뀜")
+	_check(m.screen.mode == ScreenMode.Mode.FULL and p.building == "tuning", "큰 화면에서 길을 클릭했더니 화면이 바뀜")
 	_check_layout("큰 화면 처음")
 
 	# 3) F4로 +0 → +30. 단계마다 비용 = Economy.enhance_cost, 퍼질 수 있으면 스페어 없을 때 이유 글
@@ -182,15 +186,20 @@ func _run() -> void:
 	_report(blocked and p._spares.text == "스페어 엔진 0개",
 			"② +18 스페어 0개: 강화 버튼 꺼짐 + 이유 글 '%s', 눌러도 강화 안 됨, 개수 표시 '%s'" % [p._wait.text, p._spares.text])
 
-	# 5) 스페어 구매 버튼을 진짜로 클릭 → 스페어 1개, 강화 버튼 켜짐
-	_check(not p._spare_button.disabled, "+18: 스페어값이 있는데 구매 버튼이 꺼짐")
+	# 5) 카센터에서 스페어 사기 버튼을 진짜로 클릭 → 스페어 1개, 튜닝숍 강화 버튼 켜짐
+	_click(p.building_buttons["car_center"].get_global_rect().get_center())
+	await _frames(2)
+	_check(not p._spare_button.disabled, "+18: 스페어값이 있는데 카센터 사기 버튼이 꺼짐")
 	_click(p._spare_button.get_global_rect().get_center())
+	await _frames(2)
+	var car_result: String = p._car_result.text
+	_click(p.building_buttons["tuning"].get_global_rect().get_center())
 	await _frames(2)
 	var cost18 := Economy.enhance_cost(b, 18)
 	_report(m.state.spares == 1 and m.state.money >= cost18 and m.state.money < cost18 + Economy.spare_price(b) and p._spares.text == "스페어 엔진 1개"
-			and not p._enhance_button.disabled and not p._wait.visible and p._result.text.contains("스페어"),
-			"② 스페어 구매 클릭 → 스페어 %d개 ('%s'), 돈 −%s, 강화 버튼 켜짐, 결과 '%s'" % [
-			m.state.spares, p._spares.text, Fmt.money(Economy.spare_price(b)), p._result.text])
+			and not p._enhance_button.disabled and not p._wait.visible and car_result.contains("스페어"),
+			"② 카센터 스페어 사기 클릭 → 스페어 %d개 ('%s'), 돈 −%s, 튜닝숍 강화 버튼 켜짐, 결과 '%s'" % [
+			m.state.spares, p._spares.text, Fmt.money(Economy.spare_price(b)), car_result])
 	_check(Save.read_file(TEST_SAVE, b)["state"].spares == 1, "스페어를 산 뒤 바로 저장이 안 됨")
 
 	# 6) 퍼짐: 다음 굴리기가 퍼짐이 나오게 씨앗을 골라 진짜로 클릭 → 스페어 −1, +15, 통계 +1, 트럭 계속 달림

@@ -1,11 +1,11 @@
-## 게임 시작점. 숫자(balance)와 상태(game_state)를 들고, 동네와 차고에 보여주고,
+## 게임 시작점. 숫자(balance)와 상태(game_state)를 들고, 동네와 건물 화면에 보여주고,
 ## 매 프레임 Trip.advance로 트럭 0을 진행시켜 배송 이벤트("+돈", 스페어 엔진)를 동네에 띄우고,
 ## 버튼·치트 키를 scripts/core 함수로 연결한다.
 ## 확률·가격·돈 계산은 하지 않는다 → scripts/core/
 ##
 ## v1 화면 두 개 (창 다루기는 screen_mode.gd):
-##   작은 화면: 동네만. 보이는 곳 아무 데나 클릭 → 전체 화면. 차고는 안 열림
-##   큰 화면: 왼쪽에 같은 동네를 크게 + 오른쪽에 차고 + [설정] [작게] 버튼
+##   작은 화면: 동네만. 건물(또는 구석 작은 버튼)을 누르면 큰 화면 그 건물 화면으로 (v6a. 그 밖은 눌러도 그대로)
+##   큰 화면: 왼쪽에 같은 동네를 크게 + 오른쪽에 건물 화면(garage_panel.gd) + [설정] [작게] 버튼
 ##     큰 화면은 전체 화면 또는 창 모드(사용자가 [설정]에서 고름). 창 모드는 창 크기가 수시로 바뀜
 ##     → 창 크기가 바뀔 때마다 _layout() (최소 1280x720에서도 안 깨지게)
 ## v3: 돈은 정수. 화면 트럭은 연출이고, 자리만 계산 쪽 바퀴 진행(TruckState)에서 정한다 (_lap_phase)
@@ -113,6 +113,7 @@ func _ready() -> void:
 	panel.setting.roll_pressed.connect(_on_roll_pressed)
 	panel.setting.choose_pressed.connect(_on_choose_pressed)
 	panel.driver.upgrade_pressed.connect(_on_upgrade_pressed)
+	town.tuning_pressed.connect(func(): open_building("tuning"))
 	_open_pending_setting()
 
 	small_button = Button.new()
@@ -376,6 +377,8 @@ func _save() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
 		_save()
+	elif what == NOTIFICATION_WM_MOUSE_EXIT and town != null:
+		town.set_hover("")   # 마우스가 창(작은 화면은 보이는 곳) 밖으로 나가면 빛남·이름표 끔
 
 
 ## 지금 보이는 것들의 사각형 (창 좌표). 투명 창에서는 이것만 그려지고 클릭을 받는다.
@@ -474,7 +477,7 @@ func _shake(setter: Callable, px: float, seconds: float) -> void:
 ## 스페어 엔진 구매 (언제든, 돈이 있으면)
 func _on_spare_pressed() -> void:
 	if state.buy_spare(balance):
-		panel.show_result(tr("RESULT_SPARE_BOUGHT") % state.spares, Feel.COLOR_SUCCESS)
+		panel.show_spare_bought(tr("RESULT_SPARE_BOUGHT") % state.spares)
 		Quest.check(state, balance)
 		_save()
 	panel.refresh(balance, state)
@@ -548,6 +551,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if mouse != null and mouse.pressed and mouse.button_index == MOUSE_BUTTON_LEFT:
 		_on_click(mouse.position)
 		return
+	var motion := event as InputEventMouseMotion
+	if motion != null:
+		town.set_hover(town.building_at(motion.position - town.global_position))
+		return
 	# 작은 화면 오른쪽 클릭 → 메뉴 (전체 화면 / 작게 / 끝내기). 누를 때 말고 뗄 때 띄운다
 	# (누르자마자 띄우면 떼는 순간 마우스 밑 메뉴 항목이 눌릴 수 있음)
 	if mouse != null and not mouse.pressed and mouse.button_index == MOUSE_BUTTON_RIGHT and not is_full():
@@ -571,11 +578,18 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 ## 버튼·팝업 위 클릭은 그쪽이 먼저 가져가서 여기로 오지 않는다.
-## 작은 화면: 아무 데나 클릭 → 전체 화면 (투명 창에서는 보이는 곳만 클릭이 들어옴)
-func _on_click(_pos: Vector2) -> void:
-	if not is_full():
-		screen.enter_full()
+## 건물을 누르면 그 건물 화면 (작은 화면·큰 화면 둘 다). 길·트럭·집·글자는 눌러도 아무 일 없음 (기획서 15.3)
+func _on_click(pos: Vector2) -> void:
+	var id := town.building_at(pos - town.global_position)
+	if id != "":
+		open_building(id)
 		get_viewport().set_input_as_handled()
+
+
+## 큰 화면으로 바꾸고 그 건물 화면을 보여 준다 ("tuning" / "depot" / "car_center")
+func open_building(id: String) -> void:
+	panel.show_building(id)
+	screen.enter_full()
 
 
 ## F1: 돈 + 지금 단계 1시간치

@@ -177,10 +177,10 @@ func _check_screen_ko() -> void:
 		_key(KEY_F4)
 	await _frames(1)
 	_report(m.town._star_label.text == "+3", "ko F4 세 번 → 동네 구석 '%s' (기대 '+3')" % m.town._star_label.text)
-	_click(m.town.view_rect(Feel.TOWN_DEPOT_RECT).get_center())
+	_click(m.town.building_rects()["tuning"].get_center())
 	await _frames(3)
 	_report(m.is_full() and p.visible and p._title.text == "엔진 +3",
-			"ko 작은 화면 클릭 → 큰 화면 차고 제목 '%s' (기대 '엔진 +3')" % p._title.text)
+			"ko 작은 화면 튜닝숍 클릭 → 큰 화면 튜닝숍 제목 '%s' (기대 '엔진 +3')" % p._title.text)
 
 	# 강화 버튼을 진짜로 눌러 성공이 나올 때까지 (낮은 단계라 거의 첫 번에 성공)
 	m.suspense_scale = 0.01
@@ -225,7 +225,7 @@ func _check_screen_en() -> void:
 	m.state.money = 12345
 	await _frames(1)
 	_report(m.town._money_label.text == "₩12.3K", "en 돈 표기 '%s' (기대 '₩12.3K')" % m.town._money_label.text)
-	_click(m.town.view_rect(Feel.TOWN_DEPOT_RECT).get_center())
+	_click(m.town.building_rects()["tuning"].get_center())
 	await _frames(3)
 	_report(m.is_full() and p.visible and p._title.text == "Engine +0" and p._enhance_button.text == "Upgrade",
 			"en 큰 화면 차고 제목 '%s', 버튼 '%s'" % [p._title.text, p._enhance_button.text])

@@ -1,6 +1,8 @@
 ## v1 동네: 꼬불꼬불한 길 하나, 길가에 집 TOWN_HOUSES채, 길 끝(시작점)에 물류센터, 트럭,
 ## 구석 강화 단계("+N")·돈·기사 레벨("Lv.N") + 그 아래 "다음 할 일" 한 줄, 집 앞 "+금액"·"스페어 엔진 +1", 트럭 위 "오버부스트!",
 ## 오른쪽 위 알림(할 일 끝·레벨업 등. 여러 개면 하나씩 차례로).
+## v6a: 건물 세 개(물류센터·튜닝숍·카센터, 임시 사각형 + 간판). 마우스를 올리면 빛남 + 이름표.
+##      구석 줄 끝 작은 버튼 [강화] → tuning_pressed. 건물 클릭은 main.gd가 building_at()으로 가른다
 ## 동네 설계 좌표(feel.gd TOWN_SIZE = 작은 화면 크기)로 만들고, 전체 화면에서는 같은 동네를 통째로 확대한다.
 ## 길·집·트럭은 확대해서 그리고(선명함), 글자는 확대 배수에 맞춘 글자 크기로 따로 놓는다.
 ## 그리기만 한다. 돈·배송은 main.gd → scripts/core/trip.gd (배송 이벤트가 오면 show_payout)
@@ -10,6 +12,12 @@ const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const Truck = preload("res://scripts/ui/truck.gd")
 const Route = preload("res://scripts/ui/route.gd")
+
+## 건물 id (큰 화면 위쪽 줄 순서)와 이름 번역 키
+const BUILDINGS := ["tuning", "depot", "car_center"]
+const BUILDING_NAMES := { "tuning": "BUILDING_TUNING", "depot": "TOWN_DEPOT", "car_center": "BUILDING_CAR_CENTER" }
+
+signal tuning_pressed   ## 구석 작은 버튼 [강화]
 
 var truck: Truck
 var route: Route
@@ -21,6 +29,8 @@ var payouts_shown := 0       ## 지금까지 띄운 "+금액" 수 (확인용)
 var spares_shown := 0        ## 지금까지 띄운 "스페어 엔진 +1" 수 (확인용)
 var boosts_shown := 0        ## 지금까지 띄운 "오버부스트!" 수 (확인용)
 var notices_shown: Array[String] = []   ## 지금까지 띄운 알림 글자, 띄운 순서대로 (확인용)
+var hovered := ""            ## 마우스가 올라가 있는 건물 id ("" = 없음)
+var tuning_button: Button    ## 구석 줄 끝 작은 버튼 [강화]
 
 var _houses: Array[Vector2] = []     ## 집 자리 (길 가운데 선 위, 설계 좌표)
 var _hud: HBoxContainer
@@ -30,7 +40,8 @@ var _level_label: Label
 var _quest_label: Label   ## "다음 할 일: 배송 20건 3/20"
 var _notice: Label        ## 지금 떠 있는 알림 (하나만)
 var _notice_queue: Array[String] = []   ## 차례를 기다리는 알림
-var _depot_label: Label
+var _signs := {}          ## 건물 id → 간판 글자
+var _name_tag: Label      ## 마우스 올린 건물 위 이름표
 var _payouts: Array[Label] = []   ## 떠오르는 중인 "+금액"·"스페어 엔진 +1"들
 
 
@@ -56,6 +67,14 @@ func _ready() -> void:
 	_hud.add_child(_star_label)
 	_hud.add_child(_money_label)
 	_hud.add_child(_level_label)
+	tuning_button = Button.new()
+	tuning_button.text = tr("TOWN_TUNING_BUTTON")
+	tuning_button.focus_mode = Control.FOCUS_NONE
+	tuning_button.add_theme_color_override("font_color", Feel.COLOR_TEXT)
+	tuning_button.add_theme_color_override("font_hover_color", Feel.COLOR_TEXT)
+	tuning_button.add_theme_color_override("font_pressed_color", Feel.COLOR_TEXT)
+	tuning_button.pressed.connect(func(): tuning_pressed.emit())
+	_hud.add_child(tuning_button)
 	_quest_label = make_label(Feel.QUEST_FONT_SIZE, Feel.COLOR_QUEST)
 	add_child(_quest_label)
 	_notice = make_label(Feel.NOTICE_FONT_SIZE, Feel.COLOR_NOTICE)
@@ -63,9 +82,14 @@ func _ready() -> void:
 	_notice.visible = false
 	add_child(_notice)
 
-	_depot_label = make_label(Feel.LABEL_FONT_SIZE, Feel.COLOR_TEXT)
-	_depot_label.text = tr("TOWN_DEPOT")
-	add_child(_depot_label)
+	for id: String in BUILDINGS:
+		var board := make_label(Feel.LABEL_FONT_SIZE, Feel.COLOR_TEXT)
+		board.text = tr(BUILDING_NAMES[id])
+		add_child(board)
+		_signs[id] = board
+	_name_tag = make_label(Feel.NAME_TAG_FONT_SIZE, Feel.COLOR_NAME_TAG)
+	_name_tag.visible = false
+	add_child(_name_tag)
 	layout(Vector2.ZERO, 1.0, 1.0)
 
 
@@ -77,8 +101,9 @@ func layout(top_left: Vector2, z: float, text_k: float) -> void:
 	truck.set_view(origin, zoom)
 
 	_hud.add_theme_constant_override("separation", int(roundf(10.0 * text_scale)))
-	for l in [_star_label, _money_label]:
+	for l in [_star_label, _money_label, _level_label]:
 		_set_font(l, Feel.HUD_FONT_SIZE)
+	_style_button()
 	_hud.reset_size()
 	_hud.position = to_view(Feel.TOWN_HUD_POS)
 	_set_font(_quest_label, Feel.QUEST_FONT_SIZE)
@@ -87,10 +112,16 @@ func layout(top_left: Vector2, z: float, text_k: float) -> void:
 	_set_font(_notice, Feel.NOTICE_FONT_SIZE)
 	_place_notice()
 
-	_set_font(_depot_label, Feel.LABEL_FONT_SIZE)
-	_depot_label.reset_size()
-	var depot := view_rect(Feel.TOWN_DEPOT_RECT)
-	_depot_label.position = Vector2(depot.get_center().x - _depot_label.size.x / 2.0, depot.position.y + 4.0 * zoom)
+	# 간판: 건물 위쪽 가운데
+	var rects := building_rects()
+	for id: String in _signs:
+		var board: Label = _signs[id]
+		_set_font(board, Feel.LABEL_FONT_SIZE)
+		board.reset_size()
+		var r: Rect2 = rects[id]
+		board.position = Vector2(r.get_center().x - board.size.x / 2.0, r.position.y + Feel.SIGN_TOP * zoom)
+	_set_font(_name_tag, Feel.NAME_TAG_FONT_SIZE)
+	_place_name_tag()
 
 	# 떠오르던 "+금액"은 자리가 안 맞게 되니 지운다
 	for p in _payouts:
@@ -112,6 +143,62 @@ func view_rect(r: Rect2) -> Rect2:
 ## 동네 전체가 차지하는 사각형 (이 노드 좌표)
 func area() -> Rect2:
 	return view_rect(Rect2(Vector2.ZERO, Feel.TOWN_SIZE))
+
+
+## 건물 id → 건물 사각형 (이 노드 좌표. 작은 화면에서는 창 좌표와 같음). 클릭·마우스 올림·보이는 곳이 같이 씀
+func building_rects() -> Dictionary:
+	return {
+		"tuning": view_rect(Feel.TOWN_TUNING_RECT),
+		"depot": view_rect(Feel.TOWN_DEPOT_RECT),
+		"car_center": view_rect(Feel.TOWN_CAR_CENTER_RECT),
+	}
+
+
+## p(이 노드 좌표)에 있는 건물 id. 없으면 ""
+func building_at(p: Vector2) -> String:
+	var rects := building_rects()
+	for id: String in rects:
+		if rects[id].has_point(p):
+			return id
+	return ""
+
+
+## 마우스를 올린 건물: 빛남 + 이름표 ("" = 끔)
+func set_hover(id: String) -> void:
+	if id == hovered:
+		return
+	hovered = id
+	_name_tag.visible = id != ""
+	if id != "":
+		_name_tag.text = tr(BUILDING_NAMES[id])
+		_place_name_tag()
+	queue_redraw()
+
+
+## 이름표: 건물 바로 위 가운데. 동네 밖으로는 안 나감
+func _place_name_tag() -> void:
+	if hovered == "":
+		return
+	_name_tag.reset_size()
+	var r: Rect2 = building_rects()[hovered]
+	var box := area()
+	var x := clampf(r.get_center().x - _name_tag.size.x / 2.0, box.position.x, box.end.x - _name_tag.size.x)
+	var y := maxf(box.position.y, r.position.y - _name_tag.size.y - Feel.NAME_TAG_GAP * zoom)
+	_name_tag.position = Vector2(x, y)
+
+
+## 작은 버튼: 글자 크기·여백을 동네 글자 배수에 맞춤 (평소 / 올림 두 색)
+func _style_button() -> void:
+	tuning_button.add_theme_font_size_override("font_size", maxi(1, int(roundf(Feel.TOWN_BUTTON_FONT_SIZE * text_scale))))
+	for state in ["normal", "hover", "pressed"]:
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Feel.COLOR_TUNING.lightened(Feel.BUILDING_GLOW_LIGHTEN) if state != "normal" else Feel.COLOR_TUNING
+		sb.set_corner_radius_all(int(roundf(Feel.TOWN_BUTTON_RADIUS * text_scale)))
+		sb.content_margin_left = Feel.TOWN_BUTTON_PAD.x * text_scale
+		sb.content_margin_right = Feel.TOWN_BUTTON_PAD.x * text_scale
+		sb.content_margin_top = Feel.TOWN_BUTTON_PAD.y * text_scale
+		sb.content_margin_bottom = Feel.TOWN_BUTTON_PAD.y * text_scale
+		tuning_button.add_theme_stylebox_override(state, sb)
 
 
 func set_hud(money: int, star: int, level: int) -> void:
@@ -233,8 +320,23 @@ func visible_rects(truck_pad: float) -> Array:
 	var half := Feel.TOWN_ROAD_WIDTH / 2.0 + 1.0
 	for piece in route.pieces:
 		out.append(view_rect(piece.grow(half)))
-	out.append(view_rect(Feel.TOWN_DEPOT_RECT).grow(1.0))
-	out.append(Rect2(_depot_label.position, _depot_label.size).grow(o))
+	# 건물: 빛남 두께만큼 넉넉하게 + 간판. 맞붙은 건물(튜닝숍·카센터)은 한 사각형으로 (사각형 수를 늘리지 않게)
+	var blds: Array[Rect2] = []
+	var rects := building_rects()
+	for id: String in BUILDINGS:
+		var r: Rect2 = rects[id].grow(Feel.BUILDING_GLOW_PX * zoom + 1.0)
+		r = r.merge(Rect2(_signs[id].position, _signs[id].size).grow(o))
+		var joined := false
+		for i in blds.size():
+			if blds[i].intersects(r):
+				blds[i] = blds[i].merge(r)
+				joined = true
+				break
+		if not joined:
+			blds.append(r)
+	out.append_array(blds)
+	if _name_tag.visible:
+		out.append(Rect2(_name_tag.position, _name_tag.size).grow(o))
 	for spot in _houses:
 		out.append(view_rect(_house_rect(spot)).grow(1.0))
 	# "+N" 숫자가 커졌다 돌아올 때 잘리지 않게 넉넉하게
@@ -268,10 +370,17 @@ func _draw() -> void:
 	if show_ground:
 		draw_rect(Rect2(Vector2.ZERO, Feel.TOWN_SIZE), Feel.COLOR_TOWN_GROUND)
 
-	# 물류센터 (길 시작점 뒤)
-	var d := Feel.TOWN_DEPOT_RECT
-	draw_rect(d, Feel.COLOR_DEPOT)
-	draw_rect(Rect2(d.end.x - d.size.x * 0.45, d.end.y - d.size.y * 0.45, d.size.x * 0.35, d.size.y * 0.45), Feel.COLOR_ROAD_EDGE)
+	# 건물 (물류센터는 길 시작점 뒤): 사각형 + 문. 마우스를 올리면 밝게 + 둘레 빛
+	var colors := { "tuning": Feel.COLOR_TUNING, "depot": Feel.COLOR_DEPOT, "car_center": Feel.COLOR_CAR_CENTER }
+	var spots := { "tuning": Feel.TOWN_TUNING_RECT, "depot": Feel.TOWN_DEPOT_RECT, "car_center": Feel.TOWN_CAR_CENTER_RECT }
+	for id: String in BUILDINGS:
+		var d: Rect2 = spots[id]
+		var lit := id == hovered
+		if lit:
+			draw_rect(d.grow(Feel.BUILDING_GLOW_PX), Feel.COLOR_BUILDING_GLOW)
+		draw_rect(d, colors[id].lightened(Feel.BUILDING_GLOW_LIGHTEN) if lit else colors[id])
+		var door := Feel.BUILDING_DOOR_SIZE
+		draw_rect(Rect2(d.end.x - d.size.x * Feel.BUILDING_DOOR_RIGHT, d.end.y - d.size.y * door.y, d.size.x * door.x, d.size.y * door.y), Feel.COLOR_ROAD_EDGE)
 
 	# 집 (벽 + 지붕 + 문). 길보다 먼저 그려서 길 뒤에 선 것처럼
 	var hs := Feel.TOWN_HOUSE_SIZE

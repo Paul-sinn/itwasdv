@@ -321,7 +321,7 @@ func _launch() -> Node:
 	m.screen.mode_changed.connect(func(mode):
 		root.size = Feel.SMALL_SIZE if mode == ScreenMode.Mode.SMALL else Vector2i(1600, 900))
 	await _frames(3)
-	_click(m.town.view_rect(Feel.TOWN_DEPOT_RECT).get_center())
+	_click(m.town.building_rects()["tuning"].get_center())
 	await _frames(3)
 	_check(m.is_full() and m.panel.visible, "큰 화면으로 안 감")
 	return m

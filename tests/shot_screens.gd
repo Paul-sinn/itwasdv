@@ -163,7 +163,7 @@ func _run() -> void:
 	m.state.ability_points = 6
 	m.state.quest_index = 8   # 창고 확장 (balance.json quests 순서). 돈이 모자라서 "모자람" 줄도 보임
 	m.state.money = 1500000
-	m.panel.show_tab(m.panel.Tab.DRIVER)
+	m.panel.show_building("depot")
 	await _wait(0.3)
 	await _shot("full_driver_1600x900")
 	vp.size = FULL_SIZES[0]
@@ -174,6 +174,23 @@ func _run() -> void:
 	await _wait(0.5)
 	await _shot("small_notice")
 	await _shot_rects("small_notice_visible")
+
+	# 9) v6a: 작은 화면 건물에 마우스 올림 (빛남 + 이름표), 큰 화면 카센터 / 튜닝숍(+18 스페어 없음 → [카센터로])
+	m.town.set_hover("tuning")
+	await _wait(0.2)
+	await _shot("small_hover_tuning")
+	await _shot_rects("small_hover_tuning_visible")
+	m.town.set_hover("")
+	m.open_building("car_center")
+	vp.size = FULL_SIZES[1]
+	await _wait(0.3)
+	await _shot("full_car_center_1600x900")
+	t.star = 18
+	m.state.spares = 0
+	m.state.money = 1000000000
+	m.panel.show_tab(m.panel.Tab.ENGINE)
+	await _wait(0.3)
+	await _shot("full_tuning_no_spare_1600x900")
 
 	Save.delete_file(TEST_SAVE)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SETTINGS))

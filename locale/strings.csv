@@ -25,7 +25,7 @@ GARAGE_TITLE,엔진 +%d,Engine +%d
 GARAGE_TITLE_MAX,엔진 +%d (최대),Engine +%d (max)
 GARAGE_ENHANCE,강화,Upgrade
 GARAGE_ENHANCING,강화 중…,Upgrading…
-GARAGE_BUY_SPARE,스페어 엔진 구매 (%s원),Buy spare engine (₩%s)
+GARAGE_BUY_SPARE,스페어 엔진 사기 (%s원),Buy a spare engine (₩%s)
 GARAGE_HOURLY,시간당 %s원,₩%s per hour
 GARAGE_HOURLY_NEXT,시간당 %s원 → 성공하면 %s원,₩%s per hour → ₩%s on success
 GARAGE_CHANCES,성공 %s · 실패(유지) %s · 퍼짐 %s,Success %s · Fail (no change) %s · Blow-up %s
@@ -109,7 +109,6 @@ RETURN_FULL,창고가 꽉 참: %s시간치까지만 쌓였어요 (꺼둔 동안�
 TOWN_LEVEL,Lv.%d,Lv.%d
 TOWN_QUEST,다음 할 일: %s %d/%d,Next: %s %d/%d
 QUEST_NONE,다음 할 일 없음,No next task
-GARAGE_TAB_DRIVER,기사·물류센터,Driver & Depot
 DRIVER_LEVEL,기사 Lv.%d,Driver Lv.%d
 DRIVER_LEVEL_MAX,기사 Lv.%d (만렙),Driver Lv.%d (max)
 DRIVER_XP,경험치 %d / %d,XP %d / %d
@@ -136,9 +135,9 @@ QUEST_FIRST_PARCEL_DESC,트럭이 택배를 1건 배송하면 끝나요,Done whe
 QUEST_PARCELS_20,배송 20건,20 deliveries
 QUEST_PARCELS_20_DESC,택배를 모두 20건 배송하기,Deliver 20 parcels in total
 QUEST_FIRST_ENHANCE,첫 엔진 강화,First engine upgrade
-QUEST_FIRST_ENHANCE_DESC,차고 [엔진 강화]에서 엔진을 +1로 올리기,Upgrade the engine to +1 in the garage's Engine tab
+QUEST_FIRST_ENHANCE_DESC,튜닝숍 [엔진 강화]에서 엔진을 +1로 올리기,Upgrade the engine to +1 in the Tuning Shop's Engine tab
 QUEST_FIRST_SETTING,첫 세팅 돌리기,First setup roll
-QUEST_FIRST_SETTING_DESC,차고 [세팅 돌리기]에서 한 번 돌리기,Roll a setup once in the garage's Setups tab
+QUEST_FIRST_SETTING_DESC,튜닝숍 [세팅 돌리기]에서 한 번 돌리기,Roll a setup once in the Tuning Shop's Setups tab
 QUEST_STAR_3,엔진 +3,Engine +3
 QUEST_STAR_3_DESC,엔진을 +3까지 강화하기,Upgrade the engine to +3
 QUEST_SETTING_STREET,스트리트 세팅,Street setup
@@ -146,9 +145,9 @@ QUEST_SETTING_STREET_DESC,부품 하나를 스트리트 등급으로 (새 것 �
 QUEST_STAR_5,엔진 +5,Engine +5
 QUEST_STAR_5_DESC,엔진을 +5까지 강화하기,Upgrade the engine to +5
 QUEST_ECU_FIRST,첫 ECU 세팅,First ECU setup
-QUEST_ECU_FIRST_DESC,[세팅 돌리기]에서 ECU를 한 번 돌리기,Roll the ECU once in the Setups tab
+QUEST_ECU_FIRST_DESC,튜닝숍 [세팅 돌리기]에서 ECU를 한 번 돌리기,Roll the ECU once in the Tuning Shop's Setups tab
 QUEST_WAREHOUSE_2,창고 확장,Bigger warehouse
-QUEST_WAREHOUSE_2_DESC,[기사·물류센터]에서 창고 확장을 Lv.2로 (꺼둔 동안 더 오래 쌓임),Upgrade the warehouse to Lv.2 in Driver & Depot (stores longer while off)
+QUEST_WAREHOUSE_2_DESC,물류센터에서 창고 확장을 Lv.2로 (꺼둔 동안 더 오래 쌓임),Upgrade the warehouse to Lv.2 at the Depot (stores longer while off)
 QUEST_LEVEL_5,기사 Lv.5,Driver Lv.5
 QUEST_LEVEL_5_DESC,배송과 할 일로 경험치를 모아 기사 레벨 5 되기,Reach driver level 5 with XP from deliveries and tasks
 QUEST_STAR_8,엔진 +8,Engine +8
@@ -156,7 +155,7 @@ QUEST_STAR_8_DESC,엔진을 +8까지 강화하기,Upgrade the engine to +8
 QUEST_SETTING_SPORT,스포츠 세팅,Sport setup
 QUEST_SETTING_SPORT_DESC,부품 하나를 스포츠 등급으로,Get any part to Sport grade
 QUEST_NIGHT_2,야간 배송팀,Night crew
-QUEST_NIGHT_2_DESC,[기사·물류센터]에서 야간 배송팀을 Lv.2로 (꺼둔 동안 더 많이 범),Upgrade the night crew to Lv.2 in Driver & Depot (earn more while off)
+QUEST_NIGHT_2_DESC,물류센터에서 야간 배송팀을 Lv.2로 (꺼둔 동안 더 많이 범),Upgrade the night crew to Lv.2 at the Depot (earn more while off)
 QUEST_STAR_10,엔진 +10,Engine +10
 QUEST_STAR_10_DESC,엔진을 +10까지 강화하기,Upgrade the engine to +10
 QUEST_LEVEL_10,기사 Lv.10,Driver Lv.10
@@ -166,7 +165,7 @@ QUEST_WAREHOUSE_3_DESC,창고 확장을 Lv.3으로,Upgrade the warehouse to Lv.3
 QUEST_STAR_12,엔진 +12,Engine +12
 QUEST_STAR_12_DESC,엔진을 +12까지 강화하기,Upgrade the engine to +12
 QUEST_FIRST_SPARE,스페어 엔진 사기,Buy a spare engine
-QUEST_FIRST_SPARE_DESC,[엔진 강화]에서 스페어 엔진을 1개 사기 (퍼질 수 있는 단계에서 필요),Buy 1 spare engine in the Engine tab (needed where the engine can blow up)
+QUEST_FIRST_SPARE_DESC,카센터에서 스페어 엔진을 1개 사기 (퍼질 수 있는 단계에서 필요),Buy 1 spare engine at the Car Center (needed where the engine can blow up)
 QUEST_STAR_15,엔진 +15,Engine +15
 QUEST_STAR_15_DESC,엔진을 +15까지 강화하기,Upgrade the engine to +15
 QUEST_LEVEL_20,기사 Lv.20,Driver Lv.20
@@ -175,3 +174,15 @@ QUEST_SETTING_RACING,레이싱 세팅,Racing setup
 QUEST_SETTING_RACING_DESC,부품 하나를 레이싱 등급으로,Get any part to Racing grade
 QUEST_STAR_18,엔진 +18,Engine +18
 QUEST_STAR_18_DESC,엔진을 +18까지 강화하기,Upgrade the engine to +18
+BUILDING_TUNING,튜닝숍,Tuning Shop
+BUILDING_CAR_CENTER,카센터,Car Center
+TOWN_TUNING_BUTTON,강화,Upgrade
+GARAGE_TO_CAR,카센터로,To Car Center
+CAR_NOTE,+%d부터 강화하려면 1개가 있어야 해요. 퍼지면 자동으로 써요,From +%d you need one to upgrade. It's used automatically if the engine blows up
+CAR_SHORT,%s원 모자람 · %s,₩%s short · %s
+NPC_TUNING,튜닝숍 사장,Tuning Shop owner
+NPC_TUNING_HELLO,어서 와요. 오늘은 엔진을 올려 볼까요?,Welcome! Shall we tune that engine today?
+NPC_DEPOT,물류센터 팀장,Depot manager
+NPC_DEPOT_HELLO,오늘도 안전 운전! 다음 할 일은 여기서 봐요.,Drive safe! Check your next task here.
+NPC_CAR_CENTER,카센터 사장,Car Center owner
+NPC_CAR_CENTER_HELLO,스페어 엔진 하나쯤은 챙겨 두는 게 좋아요.,It's smart to keep a spare engine around.

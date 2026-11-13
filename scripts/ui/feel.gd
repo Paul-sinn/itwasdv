@@ -197,3 +197,30 @@ const COLOR_NOTICE := Color(1.0, 0.85, 0.30)
 const XP_BAR_HEIGHT := 10.0
 const COLOR_XP_BAR := Color(0.35, 0.62, 1.0)
 const COLOR_XP_BAR_BG := Color(0.22, 0.24, 0.28)
+
+# --- v6a: 띠의 건물 (튜닝숍·물류센터·카센터) + 작은 버튼, 큰 화면 건물 화면 ---
+## 건물 자리 (동네 설계 좌표). 물류센터는 TOWN_DEPOT_RECT. 튜닝숍·카센터는 가운데 길(y 134) 위에 나란히
+## (맞붙어 있어서 보이는 곳 사각형 하나로 합쳐짐 → 작은 화면 사각형 수를 안 늘림)
+const TOWN_TUNING_RECT := Rect2(60, 84, 64, 44)
+const TOWN_CAR_CENTER_RECT := Rect2(126, 84, 64, 44)
+const COLOR_TUNING := Color(0.62, 0.30, 0.55)
+const COLOR_CAR_CENTER := Color(0.28, 0.56, 0.42)
+const BUILDING_DOOR_SIZE := Vector2(0.35, 0.45)   ## 문 크기 (건물 폭·높이의 몇 배)
+const BUILDING_DOOR_RIGHT := 0.45                 ## 문 왼쪽 끝 = 건물 오른쪽 끝에서 폭의 몇 배 안쪽
+const SIGN_TOP := 4.0                ## 간판 글자 위쪽 여백 (설계 좌표)
+## 마우스를 올린 건물: 둘레 빛 + 밝게 + 위에 이름표
+const BUILDING_GLOW_PX := 2.0        ## 둘레 빛 두께 (설계 좌표)
+const COLOR_BUILDING_GLOW := Color(1.0, 0.92, 0.55)
+const BUILDING_GLOW_LIGHTEN := 0.25  ## 건물 색을 이만큼 밝게 (작은 버튼에 마우스를 올렸을 때도)
+const NAME_TAG_FONT_SIZE := 12
+const NAME_TAG_GAP := 2.0            ## 이름표와 건물 사이 (설계 좌표)
+const COLOR_NAME_TAG := Color(1.0, 0.95, 0.75)
+## 작은 버튼 [강화] (구석 "+N"·돈·Lv 줄 끝 → 튜닝숍)
+const TOWN_BUTTON_FONT_SIZE := 11
+const TOWN_BUTTON_PAD := Vector2(5, 1)   ## 버튼 안 여백 (좌우, 위아래)
+const TOWN_BUTTON_RADIUS := 3
+## 큰 화면 건물 화면 NPC (임시 사각형 얼굴. 크기는 v0 패널 기준)
+const NPC_FACE_SIZE := 34.0
+const NPC_FACE_COLORS := {
+	"tuning": Color(0.85, 0.62, 0.45), "depot": Color(0.55, 0.70, 0.90), "car_center": Color(0.75, 0.80, 0.55),
+}

@@ -2,7 +2,7 @@
 ## 진짜 게임 화면(main.tscn)에 진짜 클릭을 넣어서 확인한다. 상태를 미리 만들어 두는 것(할 일 차례, 레벨 등)은 준비로만 하고,
 ## 확인하는 동작은 진짜 클릭이나 진짜 프레임(main이 Trip.advance → Quest.check → take_events)으로 한다.
 ## ① 작은 화면 "Lv.N" + 다음 할 일 한 줄 (이름 + 진행 "3/20")
-## ② 차고 [기사·물류센터]: 레벨, 경험치 막대(driver_xp / xp_need), 포인트, 지금 할 일(이름·설명·진행·보상), 끝낸 수 n/22
+## ② 물류센터 화면 (v6a 전 [기사·물류센터] 칸): 레벨, 경험치 막대(driver_xp / xp_need), 포인트, 지금 할 일(이름·설명·진행·보상), 끝낸 수 n/22
 ## ③ 할 일 끝 → 알림(이름 + 보상), 돈 + 보상, 다음 할 일로   ④ 레벨업 알림("Lv.N" + 포인트), 만렙 알림
 ## ⑤ 창고·야간팀: 지금 값 → 다음 값, 가격, 사면 돈 −가격·레벨 +1, 돈 모자라면 버튼 꺼짐 + 모자란 금액, 창고 Lv3 "대리점부터"
 ## ⑥ 올리기·강화·세팅 직후 Quest.check (main의 프레임을 멈춰도 바로 다음 할 일로)
@@ -62,26 +62,25 @@ func _run() -> void:
 	_report(not m.is_full() and line_ok and bad_lines.is_empty(),
 			"① 작은 화면 '%s' + '%s', 할 일 22개 줄이 동네 안·집과 안 겹침·보이는 곳 안 %s" % [town._level_label.text, first_line, bad_lines])
 
-	# ② 큰 화면 차고 [기사·물류센터] 칸
-	_click(town.view_rect(Feel.TOWN_DEPOT_RECT).get_center())
+	# ② 작은 화면 물류센터 건물 클릭 → 큰 화면 물류센터 화면
+	_click(town.building_rects()["depot"].get_center())
 	await _frames(3)
 	var p = m.panel
 	var d = p.driver
 	m.state.driver_level = 3
 	m.state.driver_xp = 120
 	m.state.ability_points = 2
-	_click(p.driver_tab_button.get_global_rect().get_center())
 	await _frames(3)
 	var need3 := Driver.xp_need(b, 3)
 	var q := Quest.current(b, m.state)
-	_report(p.current_tab() == p.Tab.DRIVER and d.visible and not p.setting.visible and not p._engine_box.visible
+	_report(m.is_full() and p.building == "depot" and d.visible and not p.setting.visible and not p._engine_box.visible
 			and d._level.text == "기사 Lv.3" and d._xp_bar.value == 120 and d._xp_bar.max_value == need3
 			and d._xp.text == "경험치 120 / %d" % need3 and d._points.text.contains("포인트 2")
 			and d._quest_head.text == "다음 할 일 · 끝낸 것 1/22" and d._quest_name.text == "배송 20건"
 			and d._quest_desc.text == Fmt.quest_desc("parcels_20") and d._quest_desc.visible
 			and d._quest_progress.text == "진행 3/20 · 보상 +%s원 · 경험치 +%d" % [Fmt.money(q["money"]), q["xp"]],
-			"② [%s] 칸: '%s', 막대 %d/%d, '%s', '%s', '%s' / '%s' / '%s' / '%s'" % [
-			p.driver_tab_button.text, d._level.text, d._xp_bar.value, d._xp_bar.max_value, d._xp.text, d._points.text,
+			"② [%s] 화면: '%s', 막대 %d/%d, '%s', '%s', '%s' / '%s' / '%s' / '%s'" % [
+			p.building_buttons["depot"].text, d._level.text, d._xp_bar.value, d._xp_bar.max_value, d._xp.text, d._points.text,
 			d._quest_head.text, d._quest_name.text, d._quest_desc.text, d._quest_progress.text])
 
 	# ③ 할 일 끝 (창고 확장 Lv.2를 진짜 클릭으로 삼) → 돈 −가격 +보상, 알림, 다음 할 일로   ⑨ 산 직후 저장
@@ -169,7 +168,9 @@ func _run() -> void:
 	_click(n_btn.get_global_rect().get_center())
 	var after_upgrade: int = m.state.quest_index
 	m.set_process(true)
-	# 강화 (+0 → +1, 첫 엔진 강화)
+	# 강화 (+0 → +1, 첫 엔진 강화): 튜닝숍 [엔진 강화]
+	_click(p.building_buttons["tuning"].get_global_rect().get_center())
+	await _frames(2)
 	_click(p.engine_tab_button.get_global_rect().get_center())
 	m.state.quest_index = _qi(b, "first_enhance")
 	m.state.truck(0).star = 0
@@ -198,20 +199,20 @@ func _run() -> void:
 	_click(p.setting.keep_button.get_global_rect().get_center())
 
 	# ⑧ 다 끝나면 "다음 할 일 없음"
-	_click(p.driver_tab_button.get_global_rect().get_center())
+	_click(p.building_buttons["depot"].get_global_rect().get_center())
 	m.state.quest_index = Quest.count(b)
 	await _frames(3)
 	_report(d._quest_name.text == "다음 할 일 없음" and not d._quest_desc.visible and not d._quest_progress.visible
 			and d._quest_head.text == "다음 할 일 · 끝낸 것 22/22" and town._quest_label.text == "다음 할 일 없음",
-			"⑧ 할 일을 다 끝내면 차고 '%s' '%s', 동네 '%s'" % [d._quest_head.text, d._quest_name.text, town._quest_label.text])
+			"⑧ 할 일을 다 끝내면 물류센터 '%s' '%s', 동네 '%s'" % [d._quest_head.text, d._quest_name.text, town._quest_label.text])
 
-	# 차고가 가장 길 때(돈이 없어 두 줄 다 모자람, 긴 설명) 여러 창 크기에서 창 안, 동네와 안 겹침
+	# 물류센터 화면이 가장 길 때(돈이 없어 두 줄 다 모자람, 긴 설명) 여러 창 크기에서 창 안, 동네와 안 겹침
 	m.state.driver_level = 7
 	m.state.warehouse_level = 1
 	m.state.night_level = 1
 	m.state.quest_index = _qi(b, "warehouse_2")
 	m.state.money = 0
-	await _check_fits(m, "ko [기사·물류센터]")
+	await _check_fits(m, "ko 물류센터 화면")
 	await _close(m)
 
 	# ⑦ 돌아왔을 때 요약 (할 일은 다 끝낸 상태로 저장: 켜자마자 할 일 보상이 섞이지 않게)
@@ -332,10 +333,9 @@ func _check_en(b: Balance) -> void:
 		m.state.quest_index = i
 		await _frames(1)
 		texts.append(m.town._quest_label.text)
-	_click(m.town.view_rect(Feel.TOWN_DEPOT_RECT).get_center())
+	_click(m.town.building_rects()["depot"].get_center())
 	await _frames(3)
 	var p = m.panel
-	_click(p.driver_tab_button.get_global_rect().get_center())
 	m.state.money = 0
 	for i in Quest.count(b) + 1:
 		m.state.quest_index = i
@@ -353,15 +353,15 @@ func _check_en(b: Balance) -> void:
 	var names_ok := true
 	for q: Dictionary in b.quests:
 		names_ok = names_ok and texts.has(Fmt.quest_name(q["id"])) and texts.has(Fmt.quest_desc(q["id"]))
-	_report(p.driver.visible and p.driver_tab_button.text == "Driver & Depot" and names_ok and bad.is_empty() and bad_lines.is_empty()
+	_report(p.driver.visible and p.building_buttons["depot"].text == "Depot" and names_ok and bad.is_empty() and bad_lines.is_empty()
 			and m.town._notice.text.contains("Max level"),
-			"⑩ en에서도 [%s] 칸이 뜨고, 할 일 22개 이름·설명과 알림 포함 보이는 글자 %d개에 한글·키 없음 %s, 작은 줄 %s" % [
-			p.driver_tab_button.text, texts.size(), bad, bad_lines])
+			"⑩ en에서도 [%s] 화면이 뜨고, 할 일 22개 이름·설명과 알림 포함 보이는 글자 %d개에 한글·키 없음 %s, 작은 줄 %s" % [
+			p.building_buttons["depot"].text, texts.size(), bad, bad_lines])
 	print("    en 알림: '%s'" % m.town._notice.text.replace("\n", " / "))
 	m.state.driver_level = 7
 	m.state.quest_index = _qi(b, "warehouse_2")
 	m.state.money = 0
-	await _check_fits(m, "en [Driver & Depot]")
+	await _check_fits(m, "en Depot 화면")
 	await _close(m)
 	TranslationServer.set_locale("ko")
 
@@ -470,7 +470,7 @@ func _launch(full: bool) -> Node:
 	Engine.time_scale = 0.0
 	await _frames(3)
 	if full:
-		_click(m.town.view_rect(Feel.TOWN_DEPOT_RECT).get_center())
+		_click(m.town.building_rects()["depot"].get_center())
 		await _frames(3)
 	return m
 
