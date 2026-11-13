@@ -1,7 +1,7 @@
 """
-택배 방치형 - 경제 시뮬레이터 (v5 기사 레벨·퀘스트·창고·야간팀 + v6-bal 규칙 + v5b 기사 능력치·팁까지, 판정용)
+택배 방치형 - 경제 시뮬레이터 (v5 기사 레벨·퀘스트·창고·야간팀 + v6-bal 규칙 + v5b 능력치·팁 + v6b 대형·VIP·급송·주간 목표·명장까지, 판정용)
 
-흉내 내는 것 (v5b 게임에 있는 것만):
+흉내 내는 것 (v6b 게임에 있는 것만):
   트럭 1대, 엔진 강화(성공 / 실패=유지 / 퍼짐 → 스페어 1개 쓰고 +15), 강화 비용 고정표,
   스페어 엔진(고정가 구매 + 배송마다 낮은 확률 드랍, 꺼둔 동안은 평균값),
   한 바퀴 수입(출력 → 속도 → 한 바퀴 초), 기름값·정비비,
@@ -10,7 +10,8 @@
   기사 레벨(켜 둔 동안 배송 경험치 + 강화 첫 달성 보너스 + 퀘스트 보상, 만렙 뒤 평판), 퀘스트 22개(보상 돈·경험치),
   창고 확장·야간 배송팀 사기.
   팁(배송마다 기본 확률 + 친절, 팁 = 협상 단가 × tip_rate), 기사 능력치 5개(상하차·친절·협상·노하우·정비 지식, 트럭 0에만).
-  명장·보험·보조 트럭은 아직 없음 (v6b~).
+  v6b: 대형·VIP 배송(몫·배수 평균), 급송 요청 전화(받는 비율), 주간 배송 목표·보험 쿠폰, 명장 방문일(요일·그 주 보너스 7개)·보험.
+  보조 트럭·장거리·기업 계약은 아직 없음 (v7).
 
 계산식은 docs/PROTOTYPE_V3~V5.md "계산식" + PROTOTYPE_V6_BAL.md "바뀌는 규칙" + PROTOTYPE_V5B.md "정한 것" =
 scripts/core/trip.gd, economy.gd, enhance.gd, setting.gd, driver.gd, ability.gd, depot.gd, quest.gd 와 같다.
@@ -22,6 +23,11 @@ scripts/core/trip.gd, economy.gd, enhance.gd, setting.gd, driver.gd, ability.gd,
   팁: 게임은 배송마다 굴리지만 시뮬은 평균값 (배송 1건 돈 + 팁 확률 × 팁). 게임 Trip.hourly_income도 같은 평균
   능력치 (ab = { id: 포인트 × per_point }): 상하차 → 정차 × (1 − 값), 협상 → 단가 = round(단가 × (1 + 값)),
     친절 → 팁 확률 + 값, 노하우 → 꺼둔 동안 경험치 floor(배송 × xp_per_parcel × 값), 정비 지식 → 드랍 확률 × (1 + 값)
+  대형·VIP (Trip._kind_shares): VIP 몫(+18부터) → 아니면 대형 몫(+15부터). 단가 × 배수 = round(협상 단가 × 배수) 기준으로 돈·팁.
+    게임은 배송마다 굴리지만 시뮬은 평균 (게임 시간당 수입·꺼둔 동안과 같음)
+  명장 보너스 (enhance·economy·setting·trip): 퍼짐 × (1 − destroy_cut), 강화 비용 round(× (1 − 할인)), 성공 × success_mult
+    (성공 + 퍼짐 ≤ 1로 자름), 세팅 등급업 × setting_up_mult (최대 1), 세팅 비용 round(× (1 − 할인)), 드랍 × spare_mult(켜 둔 동안만),
+    성공 때 double_step 확률로 한 단계 더. 보험: 방문 중 추가 요금 = 비용 × insure_fee_mult (쿠폰 안 씀), 아니면 쿠폰 1장. 퍼짐 → 실패
 게임 숫자는 전부 data/balance.json (게임과 같은 파일)의 trip / engine / offline / setting / driver / abilities / depot / quests.
 
 실행:  python -I -X utf8 tools/tune_sim.py                   가볍게(2.5시간)·열심히(8시간) 둘 다, 세팅 있음
@@ -30,6 +36,9 @@ scripts/core/trip.gd, economy.gd, enhance.gd, setting.gd, driver.gd, ability.gd,
        python -I -X utf8 tools/tune_sim.py --no-setting     세팅 안 돌림 (v3와 비교용)
        python -I -X utf8 tools/tune_sim.py --build speed    능력치 빌드 (money 돈벌이(기본) / speed 스피드 / relax 쉬엄쉬엄 /
                                                              enhance 강화 / none 안 찍음). 아래 "능력치 규칙"
+       python -I -X utf8 tools/tune_sim.py --style pool     +18부터 강화를 명장 방문일(보험)·쿠폰(보험)에 몰아서 (기본 normal = 안 몰아서,
+                                                             보험 안 씀). 아래 "명장 규칙"
+       python -I -X utf8 tools/tune_sim.py --rush-accept 0.5   급송 전화를 받는 비율 (기본 0.5)
        python -I -X utf8 tools/tune_sim.py --table          단계별 출력·한 바퀴·시간당 수입·강화 비용 표 (세팅·능력치 없음)
                                                              + 능력치 하나만 최대일 때 시간당 수입 (+10, +18)
        (옵션: --players 1000  --seed 7)
@@ -69,6 +78,13 @@ v4 숫자 비교: 같은 유저를 꺼둔 동안 V4_OFFLINE(8시간 × 50%) 고�
       만렙 시각은 그 구간 안에서 배송 시각으로 나눠 잡는다 (켜 둔 시간도 같이)
   - 능력치 규칙 (v5b, 지시서 "시뮬"): 레벨업으로 포인트를 받으면 바로 찍는다. 빌드마다 순서대로 최대까지
       (BUILDS: 주 능력치 → 협상 → 상하차. 스피드는 주 능력치가 상하차라 남는 9포인트를 친절에). 초기화는 안 함
+  - v6b 달력: 1일째 = 월요일. 한 주 = 월~일 (주간 목표 진행 0, 그 주 명장 보너스 새로 굴림)
+  - 급송 규칙: 켜 둔 동안 평균값으로 센다. 벨 간격 평균 (min + max) ÷ 2분, 받는 비율 RUSH_ACCEPT, 받으면 다음 rush.parcels건
+      단가 × rush.pay_mult (그동안 벨 시계가 안 가서 한 주기 = 평균 간격 + 받은 비율 × 급송 건수 ÷ 시간당 배송). 꺼둔 동안은 없음
+  - 주간 목표: 켜 둔·꺼둔 배송을 다 셈, 처음 닿으면 쿠폰 + 경험치 (몇 주차 무슨 요일에 채웠나 기록)
+  - 명장 규칙: +10 첫 달성에 열림 → 요일은 MASTER_DAY(토요일)로 고름 (처음 고른 것은 이번 주부터). 그날 켜 둔 동안만 그 주 보너스 적용.
+      normal = 보험 안 씀 (쿠폰도 안 씀. 보너스만 그날 받음). pool = POOL_FROM(+18)부터 방문일엔 보험(추가 요금)을 걸고 누르고,
+      그 밖의 날엔 쿠폰이 있으면 쿠폰 보험으로만 누르고 없으면 돈을 모은다 (스페어는 안 삼)
   - 퍼진 뒤 회복 비용: 퍼진 순간부터 원래 단계로 다시 올라갈 때까지 강화·스페어에 쓴 돈을
     "원래 단계에서의 하루 수입(켜 둔 시간 + 꺼둔 동안)"으로 나눈 값. 퍼질 때 쓴 스페어 1개와 세팅 돈은 안 셈
 """
@@ -108,6 +124,15 @@ BUILDS = {
     "none": ("능력치 없음", []),
 }
 DEFAULT_BUILD = "money"
+## v6b 명장 유저 두 가지 (지시서 "시뮬")
+STYLES = {"normal": "안 몰아서 (보험 안 씀)", "pool": "+18부터 방문일·쿠폰에 몰아서 (보험)"}
+DEFAULT_STYLE = "normal"
+POOL_FROM = 18            # pool 유저: 이 단계부터 방문일·쿠폰 보험으로만 강화
+MASTER_DAY = 5            # 가상 유저가 고르는 명장 요일 (0 = 월 … 5 = 토)
+RUSH_ACCEPT = 0.5         # 급송 전화를 받는 비율 (지시서 기본 50%)
+BONUS_NAMES = {"destroy_cut": "퍼짐 감소", "enhance_discount": "강화 비용 할인", "setting_up_mult": "세팅 등급업 상승",
+               "success_mult": "강화 성공 상승", "spare_mult": "스페어 드랍 2배", "setting_discount": "세팅 비용 할인",
+               "double_step": "2단계 상승"}   # 출력용
 
 
 def roundi(x):
@@ -136,6 +161,18 @@ class Bal:
         self.maint_rate = float(trip["maint_rate"])
         self.tip_base = float(trip["tip_base_chance"])
         self.tip_rate = float(trip["tip_rate"])
+        # --- v6b: 대형·VIP, 급송, 주간 목표, 명장 ---
+        sp = d["special"]
+        self.special = {k: (int(sp[k]["unlock_star"]), float(sp[k]["pay_mult"]), float(sp[k]["share"])) for k in ("large", "vip")}
+        ru = d["rush"]
+        self.rush_min, self.rush_max = float(ru["min_minutes"]), float(ru["max_minutes"])
+        self.rush_parcels, self.rush_mult = int(ru["parcels"]), float(ru["pay_mult"])
+        wk = d["weekly"]
+        self.weekly_target, self.weekly_xp, self.weekly_coupons = int(wk["target_parcels"]), int(wk["xp"]), int(wk["coupons"])
+        ms = d["master"]
+        self.master_unlock, self.insure_fee_mult = int(ms["unlock_star"]), float(ms["insure_fee_mult"])
+        self.bonuses = {k: float(v) for k, v in ms["bonuses"].items()}
+        self.bonus_ids = list(self.bonuses.keys())
         # --- abilities (기사 능력치 v5b): id → (per_point, max_points), json 순서 ---
         self.abilities = {k: (float(v["per_point"]), int(v["max_points"])) for k, v in d["abilities"].items()}
         self.max_star = int(eng["max_star"])
@@ -217,9 +254,9 @@ class Bal:
         """Ability.value: { id: 포인트 × per_point }"""
         return {k: p * self.abilities[k][0] for k, p in points.items()}
 
-    def unit(self, ab=None):
-        """Trip._unit: round(단가 × (1 + 협상))"""
-        return roundi(self.unit_price * (1.0 + (ab or {}).get("nego", 0.0)))
+    def unit(self, ab=None, mult=1.0):
+        """Trip._unit × 배수: round(round(단가 × (1 + 협상)) × mult) (대형·VIP·급송 배수. 보통 1)"""
+        return roundi(roundi(self.unit_price * (1.0 + (ab or {}).get("nego", 0.0))) * mult)
 
     def stop_seconds(self, ab=None):
         """Trip._stop: 정차 × (1 − 상하차)"""
@@ -228,25 +265,48 @@ class Bal:
     def tip_chance(self, ab=None):
         return min(1.0, self.tip_base + (ab or {}).get("kind", 0.0))
 
-    def tip_pay(self, ab=None):
-        return roundi(self.unit(ab) * self.tip_rate)
+    def tip_pay(self, ab=None, mult=1.0):
+        return roundi(self.unit(ab, mult) * self.tip_rate)
 
-    def drop_chance(self, ab=None):
-        """Trip.spare_chance: 드랍 × (1 + 정비 지식)"""
-        return self.spare_chance * (1.0 + (ab or {}).get("mech", 0.0))
+    def drop_chance(self, ab=None, bonus=""):
+        """Trip.spare_chance: 드랍 × (1 + 정비 지식) × (명장 "스페어 드랍 2배" 중이면 spare_mult. 켜 둔 동안만 넘김)"""
+        p = self.spare_chance * (1.0 + (ab or {}).get("mech", 0.0))
+        return p * self.bonuses["spare_mult"] if bonus == "spare_mult" else p
 
-    def parcel_pay(self, tot, ab=None):
+    def kind_shares(self, star):
+        """Trip._kind_shares: [(배수, 몫)] 보통·대형·VIP. VIP 몫 먼저, 아니면 대형 (열린 것만)"""
+        lu, lm, ls = self.special["large"]
+        vu, vm, vs = self.special["vip"]
+        vip = vs if star >= vu else 0.0
+        large = ls if star >= lu else 0.0
+        return [(1.0, (1.0 - vip) * (1.0 - large)), (lm, (1.0 - vip) * large), (vm, vip)]
+
+    def parcel_pay(self, tot, ab=None, mult=1.0):
+        """Trip._pay: 단가 × mult인 배송 1건 돈 (보통이면 Trip.parcel_pay)"""
         f, m = tot.get("fuel_cut", 0.0), tot.get("maint_cut", 0.0)
         s = f + m
         if s > self.cost_cut_cap:
             f = f * self.cost_cut_cap / s
             m = m * self.cost_cut_cap / s
-        u = self.unit(ab)
+        u = self.unit(ab, mult)
         return u - roundi(u * self.fuel_rate * (1.0 - f)) - roundi(u * self.maint_rate * (1.0 - m))
 
-    def money_per_parcel(self, tot, ab=None):
-        """배송 1건 평균 돈 = 1건 돈 + 팁 확률 × 팁 (Trip.hourly_income_at의 per_parcel)"""
-        return self.parcel_pay(tot, ab) + self.tip_chance(ab) * self.tip_pay(ab)
+    def money_per_parcel(self, star, tot, ab=None, mult=1.0):
+        """배송 1건 평균 돈 = 종류(보통·대형·VIP) 몫마다 (그 종류 1건 돈 + 팁 확률 × 그 종류 팁)의 합 (Trip.hourly_income_at).
+        mult = 급송 배수 (종류 배수에 곱함)"""
+        tc = self.tip_chance(ab)
+        return sum(share * (self.parcel_pay(tot, ab, km * mult) + tc * self.tip_pay(ab, km * mult))
+                   for km, share in self.kind_shares(star))
+
+    def rush_per_hour(self, star, tot, ab=None, accept=RUSH_ACCEPT):
+        """급송으로 켜 둔 1시간에 더 버는 돈 (평균). 한 주기 = 평균 벨 간격 + 받은 비율 × 급송 건수 ÷ 시간당 배송
+        (급송이 남은 동안 벨 시계가 안 감). 한 주기에 더 버는 돈 = 받은 비율 × 급송 건수 × (급송 1건 − 보통 1건)"""
+        if accept <= 0.0:
+            return 0.0
+        pph = self.parcels_per_hour(star, tot, ab)
+        extra = self.money_per_parcel(star, tot, ab, self.rush_mult) - self.money_per_parcel(star, tot, ab)
+        cycle = (self.rush_min + self.rush_max) / 2.0 / 60.0 + accept * self.rush_parcels / pph
+        return accept * self.rush_parcels * extra / cycle
 
     def lap_seconds(self, star, tot, boosted=False, ab=None):
         """한 바퀴 초 (정차는 평균 적재량 × 상하차 반영). 걸린 바퀴는 달리는 초 ÷ overboost_mult"""
@@ -260,26 +320,52 @@ class Bal:
         return self.lap_seconds(star, tot, False, ab) * (1.0 - p) + self.lap_seconds(star, tot, True, ab) * p
 
     def lap_income(self, tot, ab=None):
-        """한 바퀴 수입 (팁 뺌. 게임 Trip.lap_income과 같음)"""
+        """한 바퀴 수입 (팁 뺌, 보통 배송. 게임 Trip.lap_income과 같음)"""
         return self.cargo(tot) * self.parcel_pay(tot, ab)
 
     def hourly(self, star, tot, ab=None):
-        """시간당 수입 (팁 평균 포함 = 게임 Trip.hourly_income)"""
-        return self.cargo(tot) * self.money_per_parcel(tot, ab) * 3600.0 / self.avg_lap_seconds(star, tot, ab)
+        """시간당 수입 (팁·대형·VIP 평균 포함, 급송 없음 = 게임 Trip.hourly_income)"""
+        return self.cargo(tot) * self.money_per_parcel(star, tot, ab) * 3600.0 / self.avg_lap_seconds(star, tot, ab)
 
     def parcels_per_hour(self, star, tot, ab=None):
         return self.cargo(tot) * 3600.0 / self.avg_lap_seconds(star, tot, ab)
 
     # --- Economy / Enhance ---
     def enhance_cost(self, star):
+        """Economy.base_enhance_cost (보너스 없음)"""
         return roundi(self.cost_base * self.cost_mult ** star)
+
+    def cost_now(self, star, bonus=""):
+        """Economy.enhance_cost: 명장 "강화 비용 할인" 중이면 round(기본 × (1 − 할인))"""
+        c = self.enhance_cost(star)
+        return roundi(c * (1.0 - self.bonuses["enhance_discount"])) if bonus == "enhance_discount" else c
+
+    def insure_fee(self, star, bonus=""):
+        """Enhance.insure_fee (방문 중): 그 회 비용(할인 주에는 할인된 비용) × insure_fee_mult"""
+        return roundi(self.cost_now(star, bonus) * self.insure_fee_mult)
+
+    def success_chance(self, star, d, bonus=""):
+        """Enhance.chances_for 성공: × success_mult (성공 + 퍼짐 d가 1을 넘으면 자름)"""
+        s = self.success[star]
+        return min(s * self.bonuses["success_mult"], 1.0 - d) if bonus == "success_mult" else s
+
+    def roll_cost_now(self, grade, bonus=""):
+        """Setting.roll_cost: 명장 "세팅 비용 할인" 중이면 round(× (1 − 할인))"""
+        c = self.roll_cost[grade]
+        return roundi(c * (1.0 - self.bonuses["setting_discount"])) if bonus == "setting_discount" else c
+
+    def up_chance_now(self, grade, bonus=""):
+        """Setting.up_chance: 명장 "세팅 등급업 확률 상승" 중이면 × setting_up_mult (최대 1)"""
+        p = self.up_chance[grade]
+        return min(1.0, p * self.bonuses["setting_up_mult"]) if bonus == "setting_up_mult" else p
 
     def needs_spare(self, star):
         return 0 <= star < self.max_star and self.destroy[star] > 0.0
 
-    def destroy_chance(self, star, tot):
-        """Enhance.chances_for: 퍼짐 × (1 − min(엔진 보호, 상한))"""
-        return self.destroy[star] * (1.0 - min(tot.get("engine_guard", 0.0), self.guard_cap))
+    def destroy_chance(self, star, tot, bonus=""):
+        """Enhance.chances_for: 퍼짐 × (1 − min(엔진 보호, 상한)) × (명장 "퍼짐 감소" 중이면 1 − destroy_cut)"""
+        d = self.destroy[star] * (1.0 - min(tot.get("engine_guard", 0.0), self.guard_cap))
+        return d * (1.0 - self.bonuses["destroy_cut"]) if bonus == "destroy_cut" else d
 
     # --- 꺼둔 동안 (Trip.apply_offline, 트럭 1대). cap·rate = 창고 시간·야간팀 비율 (Depot.cap_hours / rate) ---
     def offline(self, star, tot, hours_away, cap, rate, ab=None):
@@ -322,9 +408,27 @@ class Bal:
 
 
 class Player:
-    def __init__(self, b, hours, rng, setting, v4=False, build=DEFAULT_BUILD):
-        """v4 = v4 숫자 비교용: 꺼둔 동안 V4_OFFLINE 고정, 창고·야간팀·퀘스트·능력치 없음"""
+    def __init__(self, b, hours, rng, setting, v4=False, build=DEFAULT_BUILD, style=DEFAULT_STYLE, accept=RUSH_ACCEPT):
+        """v4 = v4 숫자 비교용: 꺼둔 동안 V4_OFFLINE 고정, 창고·야간팀·퀘스트·능력치·v6b(급송·주간·명장) 없음"""
         self.b, self.H, self.rng, self.setting, self.v4 = b, hours, rng, setting, v4
+        # v6b: 명장·보험·쿠폰·주간 목표·급송
+        self.style = style
+        self.accept = 0.0 if v4 else accept
+        self.master = False       # 명장 열림
+        self.week_bonus = ""      # 이번 주 보너스
+        self.bonus = ""           # 지금 적용 중 (방문일 켜 둔 동안만) = GameState.active_bonus
+        self.visiting = False
+        self.weekday = 0
+        self.coupons = 0
+        self.coupons_got = 0
+        self.coupons_used = 0
+        self.insured = 0          # 보험 건 강화 수
+        self.saved = 0            # 보험이 퍼짐을 막은 수
+        self.doubles = 0
+        self.weekly = 0
+        self.weekly_done = False
+        self.weekly_log = {}      # 주차(1~) → 채운 요일 (1 = 월 … 7 = 일)
+        self.rush_money = 0.0
         # v5b 능력치: 받은 포인트, 찍은 포인트, 효과 값 (빌드 순서대로 바로 찍음)
         self.build = [] if v4 else BUILDS[build][1]
         self.ability_points = 0
@@ -346,7 +450,7 @@ class Player:
         self.rolls = 0
         self.spares_bought = 0
         self.spares_dropped = 0
-        self.spent = {"engine": 0, "spare": 0, "setting": 0, "depot": 0}
+        self.spent = {"engine": 0, "spare": 0, "setting": 0, "depot": 0, "insure": 0}
         # v5: 창고·야간팀, 기사 레벨, 퀘스트
         self.depot = {"warehouse": 1, "night": 1}
         self.level = 1
@@ -365,7 +469,7 @@ class Player:
 
     def _geom(self):
         """다음 스페어 드랍까지 배송 몇 건 (배송마다 spare_chance 확률 = 기하분포)"""
-        p = self.b.drop_chance(self.ab)
+        p = self.b.drop_chance(self.ab, self.bonus)
         if p <= 0:
             return math.inf
         if p >= 1:
@@ -468,12 +572,38 @@ class Player:
         if self.points.get("mech", 0) != mech0:
             self.next_drop = self._geom()   # 기하분포는 기억이 없어서 다시 뽑아도 같음
 
+    def _weekly_add(self, n):
+        """주간 목표에 배송 n건 (Weekly.add_parcels): 처음 닿으면 쿠폰 + 경험치, 몇 주차 무슨 요일인지 기록"""
+        if self.v4 or n <= 0:
+            return
+        self.weekly += n
+        if not self.weekly_done and self.weekly >= self.b.weekly_target:
+            self.weekly_done = True
+            self.coupons += self.b.weekly_coupons
+            self.coupons_got += self.b.weekly_coupons
+            day = int(self.t_day + 1e-9)            # 0일부터
+            self.weekly_log[day // 7 + 1] = day % 7 + 1
+            self._add_xp(self.b.weekly_xp)
+
+    def _set_bonus(self, bonus):
+        """지금 적용 중인 보너스를 바꾼다. 드랍 확률이 바뀌면 다음 드랍을 새 확률로 (기하분포라 다시 뽑아도 같음)"""
+        if bonus != self.bonus:
+            spare = "spare_mult" in (bonus, self.bonus)
+            self.bonus = bonus
+            if spare:
+                self.next_drop = self._geom()
+
     def _star_reached(self):
         """Driver.on_star_reached: 그 단계 이상의 보너스 단계 중 처음인 것마다"""
         for m in self.b.milestones:
             if self.star >= m and m not in self.milestones_done:
                 self.milestones_done.add(m)
                 self._add_xp(self.b.milestone_xp)
+        if not self.master and not self.v4 and self.star >= self.b.master_unlock:   # Master.check_unlock → 요일 고름 (이번 주부터)
+            self.master = True
+            self.week_bonus = self.rng.choice(self.b.bonus_ids)
+            self.visiting = self.weekday == MASTER_DAY
+            self._set_bonus(self.week_bonus if self.visiting else "")
 
     def _quest_value(self, q):
         k = q["kind"]
@@ -520,7 +650,8 @@ class Player:
                 t = min(hours, max(0.0, (k - frac0) / rate))
                 when = (self.t_day + t / 24.0, self.on_hours + t)
         self._add_xp(n * b.xp_per_parcel, when)
-        self._income(n * self.b.money_per_parcel(self.tot, self.ab))
+        self._income(n * self.b.money_per_parcel(self.star, self.tot, self.ab))
+        self._weekly_add(n)
         while n >= self.next_drop:
             n -= self.next_drop
             self.spares += 1
@@ -535,6 +666,9 @@ class Player:
         n = math.floor(total)
         self.frac = total - n
         self._deliver(n, hours, frac0, rate)
+        rush = hours * self.b.rush_per_hour(self.star, self.tot, self.ab, self.accept)   # 급송 (평균)
+        self.rush_money += rush
+        self._income(rush)
         self.on_hours += hours
         self.t_day += hours / 24.0
         self._quests()   # 배송 수·레벨 퀘스트 (게임은 advance마다)
@@ -566,7 +700,7 @@ class Player:
         b, rng = self.b, self.rng
         p = self.parts[part]
         g = p["grade"]
-        cost = b.roll_cost[g]
+        cost = b.roll_cost_now(g, self.bonus)
         self.set_money -= cost
         self.spent["setting"] += cost
         self.rolls += 1
@@ -576,7 +710,7 @@ class Player:
             p["counters"][g] += 1
             if p["counters"][g] >= b.ceiling[g]:
                 up = True
-            elif rng.random() < b.up_chance[g]:
+            elif rng.random() < b.up_chance_now(g, self.bonus):
                 up = True
             if up:
                 p["counters"][g] = 0
@@ -595,7 +729,7 @@ class Player:
             return
         while True:
             part = self._roll_part()
-            cost = None if part is None else self.b.roll_cost[self.parts[part]["grade"]]
+            cost = None if part is None else self.b.roll_cost_now(self.parts[part]["grade"], self.bonus)
             if part is None or self.set_money < cost:
                 return
             self._roll(part)
@@ -614,31 +748,57 @@ class Player:
             if not self._quests():
                 return
 
+    def _insure_now(self):
+        """pool 유저가 지금 단계에서 보험을 거나: None = 안 누르고 모음, "fee" = 방문일 추가 요금, "coupon" = 쿠폰, "" = 보험 없이"""
+        if self.style != "pool" or self.star < POOL_FROM or not self.master:
+            return ""
+        if self.visiting:
+            return "fee"
+        return "coupon" if self.coupons > 0 else None
+
     def _enhance(self, day):
-        """누를 수 있는 동안 계속 강화. 스페어는 필요할 때 1개만"""
+        """누를 수 있는 동안 계속 강화. 스페어는 필요할 때 1개만 (보험이면 안 삼). pool 유저는 +18부터 방문일·쿠폰에만 (보험)"""
         b = self.b
         while self.star < b.max_star:
-            if b.needs_spare(self.star) and self.spares == 0:
+            insure = self._insure_now()
+            if insure is None:
+                return
+            if not insure and b.needs_spare(self.star) and self.spares == 0:
                 if self.money < b.spare_price:
                     return
                 self._spend(b.spare_price, "spare")
                 self.spares += 1
                 self.spares_bought += 1
                 continue
-            cost = b.enhance_cost(self.star)
-            if self.money < cost:
+            cost = b.cost_now(self.star, self.bonus)
+            fee = b.insure_fee(self.star, self.bonus) if insure == "fee" else 0
+            if self.money < cost + fee:
                 return
             self._spend(cost, "engine")
+            if fee:
+                self._spend(fee, "insure")
+            if insure == "coupon":
+                self.coupons -= 1
+                self.coupons_used += 1
+            if insure:
+                self.insured += 1
             self.presses += 1
             r = self.rng.random()            # Enhance.decide_chances: 성공 → 퍼짐 → 실패 순서
-            s, d = b.success[self.star], b.destroy_chance(self.star, self.tot)
+            d = b.destroy_chance(self.star, self.tot, self.bonus)
+            s = b.success_chance(self.star, d, self.bonus)
             if r < s:
                 self.star += 1
+                if self.bonus == "double_step" and self.star < b.max_star and self.rng.random() < b.bonuses["double_step"]:
+                    self.star += 1
+                    self.doubles += 1
                 self.best = max(self.best, self.star)
                 self._star_reached()
                 self._close_climbs(day)
                 self._settings()             # ECU가 열렸을 수 있음
             elif r < s + d:
+                if insure:
+                    self.saved += 1          # 보험: 퍼짐 → 실패 (단계 유지, 스페어 안 씀)
+                    continue
                 self.destroys += 1
                 self.open_climbs.append([self.star, 0, day])
                 self.spares -= 1
@@ -664,15 +824,20 @@ class Player:
     def next_wait(self):
         """다음에 살펴볼 때까지 (강화·스페어 또는 세팅 돌리기가 될 때까지) 몇 시간"""
         b = self.b
-        pay = b.money_per_parcel(self.tot, self.ab)
+        pay = b.money_per_parcel(self.star, self.tot, self.ab)
         rate = b.parcels_per_hour(self.star, self.tot, self.ab)
         wait = math.inf
-        if self.star < b.max_star:
-            price = b.spare_price if b.needs_spare(self.star) and self.spares == 0 else b.enhance_cost(self.star)
+        insure = self._insure_now()
+        if self.star < b.max_star and insure is not None:   # pool 유저가 모으는 중이면 강화로는 안 깸 (방문일 아침에 깸)
+            if not insure and b.needs_spare(self.star) and self.spares == 0:
+                price = b.spare_price
+            else:
+                price = b.cost_now(self.star, self.bonus) + (b.insure_fee(self.star, self.bonus) if insure == "fee" else 0)
             wait = self._hours_until(price - self.money, pay * (1.0 - self.share), rate)
         part = self._roll_part() if self.setting else None
         if part is not None:
-            wait = min(wait, self._hours_until(b.roll_cost[self.parts[part]["grade"]] - self.set_money, pay * self.share, rate))
+            wait = min(wait, self._hours_until(b.roll_cost_now(self.parts[part]["grade"], self.bonus) - self.set_money,
+                                               pay * self.share, rate))
         for nxt in (self._depot_next(), self._quest_buy()):
             if nxt is not None:
                 wait = min(wait, self._hours_until(nxt[1] - self.money, pay * (1.0 - self.share), rate))
@@ -684,6 +849,14 @@ class Player:
         for day in range(1, SIM_DAYS + 1):
             h = 0.0
             self.t_day = day - 1
+            self.weekday = (day - 1) % 7                 # 1일째 = 월요일
+            if self.weekday == 0:                        # 새 주: 주간 목표 0, 그 주 명장 보너스 (Master.tick)
+                self.weekly = 0
+                self.weekly_done = False
+                if self.master:
+                    self.week_bonus = self.rng.choice(b.bonus_ids)
+            self.visiting = self.master and self.weekday == MASTER_DAY
+            self._set_bonus(self.week_bonus if self.visiting else "")
             while True:
                 self.act(day - 1 + h / 24)
                 nh = h + self.next_wait()
@@ -701,11 +874,16 @@ class Player:
                     "grades": {p: (self.parts[p]["grade"] if self.star >= b.unlock[p] else -1) for p in b.parts},
                     "spent": dict(self.spent), "hourly": b.hourly(self.star, self.tot, self.ab), "tot": dict(self.tot),
                     "points": dict(self.points),
+                    "coupons": self.coupons, "coupons_got": self.coupons_got, "insured": self.insured, "saved": self.saved,
+                    "master": self.master,
                     "level": self.level, "depot": dict(self.depot), "quests": self.quest_index,
                 }
+            self._set_bonus("")                          # 꺼둔 동안은 보너스·급송 없음
+            self.visiting = False
             money, parcels = b.offline(self.star, self.tot, 24 - H, *self.cap_rate(), self.ab)
             self._income(money)
             self.parcels_total += parcels
+            self._weekly_add(parcels)
             self.carry += parcels * b.drop_chance(self.ab)
             self._add_xp(b.offline_xp(parcels, self.ab))   # 노하우 (만렙 시각은 켜 둔 시간이 끝난 때로)
             whole = math.floor(self.carry)
@@ -715,9 +893,9 @@ class Player:
         return self
 
 
-def simulate(b, hours, n, seed, setting, v4=False, build=DEFAULT_BUILD):
+def simulate(b, hours, n, seed, setting, v4=False, build=DEFAULT_BUILD, style=DEFAULT_STYLE, accept=RUSH_ACCEPT):
     master = random.Random(seed)
-    return [Player(b, hours, random.Random(master.random()), setting, v4, build).run() for _ in range(n)]
+    return [Player(b, hours, random.Random(master.random()), setting, v4, build, style, accept).run() for _ in range(n)]
 
 
 def pct(xs, q):
@@ -771,7 +949,13 @@ def table(b):
           + "  가격 " + " / ".join(won(x) for x in b.depot_prices["night"][:b.depot_buyable["night"] - 1]))
     print(f"  세팅 돌리기 1번: " + " / ".join(f"{GRADE_NAMES[g]} {won(c)}" for g, c in enumerate(b.roll_cost)))
     print(f"  팁: 배송마다 {b.tip_base * 100:g}% (+ 친절), 팁 = 단가 × {b.tip_rate:g} (기름값·정비비 안 뗌). "
-          f"시간당 수입에는 평균 {b.tip_chance() * b.tip_pay():g}원/건이 들어감. 한 바퀴 수입 칸은 팁 뺌")
+          f"시간당 수입에는 평균 {b.tip_chance() * b.tip_pay():g}원/건이 들어감. 한 바퀴 수입 칸은 팁·대형·VIP 뺌 (보통 배송)")
+    (lu, lm, ls), (vu, vm, vs) = b.special["large"], b.special["vip"]
+    print(f"  대형 +{lu}부터 ×{lm:g} 몫 {ls * 100:g}%, VIP +{vu}부터 ×{vm:g} 몫 {vs * 100:g}% → 배송 1건 평균 배수 "
+          + ", ".join(f"+{s} ×{sum(m * sh for m, sh in b.kind_shares(s)):.4g}" for s in (14, lu, vu)) + " (시간당 수입 칸에 들어감)")
+    print(f"  급송: 벨 {b.rush_min:g}~{b.rush_max:g}분, 받으면 다음 {b.rush_parcels}건 ×{b.rush_mult:g} (시간당 칸에는 안 들어감). "
+          f"주간 목표 {b.weekly_target:,}건 → 쿠폰 {b.weekly_coupons} + 경험치 {b.weekly_xp:,}. "
+          f"명장 +{b.master_unlock}부터, 보험 = 비용 × {b.insure_fee_mult:g}")
     print()
     print("■ 능력치 하나만 최대일 때 시간당 수입 (세팅 없음, 창고·야간팀 Lv1. 수입이 아닌 노하우·정비 지식은 효과만)")
     print("  능력치 (최대) |   효과   | " + " | ".join(f"+{s} 시간당 (차이)" for s in ABILITY_STARS))
@@ -785,7 +969,7 @@ def table(b):
     print()
 
 
-def report(b, label, hours, players, seed, compare=None, v4=None, build=DEFAULT_BUILD):
+def report(b, label, hours, players, seed, compare=None, v4=None, build=DEFAULT_BUILD, style=DEFAULT_STYLE, accept=RUSH_ACCEPT):
     n = len(players)
     lv1 = b.lv1_offline()
     target = TARGETS.get(hours)
@@ -794,7 +978,7 @@ def report(b, label, hours, players, seed, compare=None, v4=None, build=DEFAULT_
     print(f"■ {label}: 하루 {hours:g}시간 켜 둠, {24 - hours:g}시간 꺼 둠 (창고·야간팀 Lv1 {lv1[0]:g}시간 × {lv1[1] * 100:g}%에서 시작, "
           f"하루 수입의 {DEPOT_DAYS:g}배 이하면 삼), "
           f"{n:,}명, seed {seed}, " + (f"세팅 있음 (번 돈의 {SETTING_SHARE * 100:g}%)" if setting else "세팅 없음")
-          + f", 능력치 빌드 {BUILDS[build][0]}({build})"
+          + f", 능력치 빌드 {BUILDS[build][0]}({build}), 명장 {STYLES[style]}({style}), 급송 받는 비율 {accept * 100:g}%"
           + (f"  — 목표 30일 +{target}" if target else ""))
     print("=" * 100)
     print("    날짜 | 지금 단계 중앙값 [하위 10% ~ 상위 10%] | 최고 도달(참고) | 퍼짐 평균 | 시간당 수입 중앙값 | 쓴 돈 중 세팅 | 스페어 "
@@ -884,6 +1068,24 @@ def report(b, label, hours, players, seed, compare=None, v4=None, build=DEFAULT_
     print(f"\n  ▶ 퀘스트 ({JUDGE_DAY}일째): 끝낸 수 중앙값 {st.median(qs):g}/{len(b.quests)}, 다 끝냄 {sum(1 for x in qs if x >= len(b.quests)) / n * 100:.1f}%"
           + (", 지금 차례 많은 것: " + ", ".join(f"{k} {v / n * 100:.0f}%" for k, v in top_stuck) if top_stuck else ""))
 
+    # --- v6b: 주간 목표·쿠폰·명장·보험·급송 ---
+    print(f"\n  ▶ 주간 배송 목표 {b.weekly_target:,}건 (1일째 = 월요일): 주차별 채운 비율 · 채운 요일 중앙값 (1 = 월 … 7 = 일)")
+    cells = []
+    for w in range(1, SIM_DAYS // 7 + 1):
+        days = [p.weekly_log[w] for p in players if w in p.weekly_log]
+        cells.append(f"{w}주 {len(days) / n * 100:3.0f}%" + (f"·{st.median(days):g}일" if days else ""))
+    for i in range(0, len(cells), 7):
+        print("    " + " | ".join(cells[i:i + 7]))
+    j = [p.snaps[JUDGE_DAY] for p in players]
+    print(f"  ▶ 명장·보험 ({JUDGE_DAY}일째 / {SIM_DAYS}일째 평균): 열림 {sum(1 for x in j if x['master']) / n * 100:.0f}%, "
+          f"받은 쿠폰 {st.mean(x['coupons_got'] for x in j):.1f} / {st.mean(p.coupons_got for p in players):.1f}장, "
+          f"남은 쿠폰 {st.mean(x['coupons'] for x in j):.1f} / {st.mean(p.coupons for p in players):.1f}장, "
+          f"보험 건 강화 {st.mean(x['insured'] for x in j):.1f} / {st.mean(p.insured for p in players):.1f}번, "
+          f"보험이 막은 퍼짐 {st.mean(x['saved'] for x in j):.2f} / {st.mean(p.saved for p in players):.2f}번, "
+          f"2단계 {st.mean(p.doubles for p in players):.2f}번, 쓴 돈 중 보험 추가 요금 "
+          f"{st.median(share_of(p.spent, 'insure') for p in players) * 100:.1f}%")
+    print(f"  ▶ 급송: {SIM_DAYS}일 동안 급송으로 더 번 돈 중앙값 {won(st.median(p.rush_money for p in players))}")
+
     print(f"\n  ▶ {SIM_DAYS}일 동안: 강화 {st.median(p.presses for p in players):,.0f}번 (중앙값), "
           f"스페어 산 것 평균 {st.mean(p.spares_bought for p in players):.2f}개 / 드랍 평균 {st.mean(p.spares_dropped for p in players):.2f}개, "
           f"쓴 돈 중 스페어 {st.median(p.spent['spare'] / max(1, sum(p.spent.values())) for p in players) * 100:.1f}% (중앙값)")
@@ -917,11 +1119,16 @@ def main():
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--table", action="store_true", help="단계별 출력·한 바퀴·시간당 수입·강화 비용 표만")
     ap.add_argument("--no-setting", action="store_true", help="세팅 안 돌림 (v3와 비교용. 비교 줄 없음)")
+    ap.add_argument("--style", choices=list(STYLES), default=DEFAULT_STYLE,
+                    help="명장 유저: " + ", ".join(f"{k}={v}" for k, v in STYLES.items()) + f" (기본 {DEFAULT_STYLE})")
+    ap.add_argument("--rush-accept", type=float, default=RUSH_ACCEPT, help=f"급송 전화를 받는 비율 0~1 (기본 {RUSH_ACCEPT})")
     ap.add_argument("--build", choices=list(BUILDS), default=DEFAULT_BUILD,
                     help="능력치 빌드: " + ", ".join(f"{k}={v[0]}" for k, v in BUILDS.items()) + f" (기본 {DEFAULT_BUILD})")
     a = ap.parse_args()
     if a.hours is not None and not 0 < a.hours <= 24:
         ap.error("--hours 는 0보다 크고 24 이하")
+    if not 0.0 <= a.rush_accept <= 1.0:
+        ap.error("--rush-accept 는 0~1")
     b = Bal(BALANCE_PATH)
     if a.table:
         table(b)
@@ -929,12 +1136,13 @@ def main():
     names = {h: name for name, h in PLAYER_TYPES}
     types = PLAYER_TYPES if a.hours is None else [(names.get(a.hours, "직접 정한 시간"), a.hours)]
     for label, hours in types:
+        kw = {"build": a.build, "style": a.style, "accept": a.rush_accept}
         if a.no_setting:
-            report(b, label, hours, simulate(b, hours, a.players, a.seed, False, build=a.build), a.seed, build=a.build)
+            report(b, label, hours, simulate(b, hours, a.players, a.seed, False, **kw), a.seed, **kw)
         else:
-            report(b, label, hours, simulate(b, hours, a.players, a.seed, True, build=a.build), a.seed,
-                   compare=simulate(b, hours, a.players, a.seed, False, build=a.build),
-                   v4=simulate(b, hours, a.players, a.seed, True, v4=True), build=a.build)
+            report(b, label, hours, simulate(b, hours, a.players, a.seed, True, **kw), a.seed,
+                   compare=simulate(b, hours, a.players, a.seed, False, **kw),
+                   v4=simulate(b, hours, a.players, a.seed, True, v4=True), **kw)
 
 
 if __name__ == "__main__":
