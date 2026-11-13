@@ -1,5 +1,6 @@
 ## 게임 숫자(data/balance.json)를 읽고 검사한다.
-## 묶음은 "trip"(한 바퀴), "engine"(강화·스페어), "offline"(꺼둔 동안), "setting"(세팅 돌리기) 네 개.
+## 묶음은 "trip"(한 바퀴), "engine"(강화·스페어), "offline"(꺼둔 동안), "setting"(세팅 돌리기),
+## "driver"(기사 레벨), "depot"(창고·야간팀), "quests"(다음 할 일 목록).
 ##
 ## 쓰는 법:
 ##   var b := Balance.load_file()
@@ -14,6 +15,7 @@ const SUM_EPSILON := 1e-9
 ## 세팅 등급 수 (순정·스트리트·스포츠·레이싱·프로토타입). 이름은 번역 파일에 5개라 고정. 줄 수·확률 목록 길이를 이걸로 검사
 const SETTING_GRADES := 5
 const OPTION_KINDS := ["common", "own", "junk"]
+const QUEST_KINDS := ["parcels", "star", "setting_rolls", "setting_grade", "part_rolled", "spares_bought", "warehouse", "night", "level"]
 
 ## 읽기/검사에서 나온 문제들. 비어 있으면 정상.
 var errors: PackedStringArray = PackedStringArray()
@@ -39,9 +41,28 @@ var cost_mult: float            ## 강화 비용: 단계마다 곱하는 수
 var spare_price: int            ## 스페어 엔진 가격 (고정 금액, 원)
 var spare_drop_chance: float    ## 배송 1건마다 스페어 엔진 +1 확률
 
-# --- offline (꺼둔 동안) ---
-var offline_cap_hours: float    ## 최대 몇 시간치까지 쌓이나
-var offline_rate: float         ## 켜둔 때의 몇 % (0.5 = 절반)
+# --- offline (꺼둔 동안). 쌓이는 시간·비율은 depot (창고·야간팀 레벨) ---
+var offline_ignore_under_seconds: float   ## 이보다 짧게 꺼 뒀으면 꺼둔 동안 계산을 안 함
+
+# --- driver (기사 레벨) ---
+var driver_max_level: int
+var driver_base_xp: float               ## 다음 레벨까지 = round(base_xp × 레벨 ^ exponent)
+var driver_exponent: float
+var driver_points_per_level: int        ## 레벨업마다 포인트
+var driver_bonus_points_every_10: int   ## 오른 레벨이 10의 배수면 더 주는 포인트
+var driver_xp_per_parcel: int           ## 켜 둔 동안 배송 1건 경험치
+var driver_star_milestones: PackedInt64Array   ## 처음 닿으면 보너스 경험치를 주는 강화 단계들 (오름차순)
+var driver_star_milestone_xp: int
+
+# --- depot (창고 확장·야간 배송팀). [레벨-1] ---
+var warehouse_hours: PackedFloat64Array   ## 꺼둔 동안 쌓이는 최대 시간
+var warehouse_prices: PackedInt64Array    ## [지금 레벨-1] = 다음 레벨 가격 (길이 = 레벨 수 − 1)
+var warehouse_max_level_solo: int         ## 대리점 전에 살 수 있는 최고 창고 레벨
+var night_rates: PackedFloat64Array       ## 꺼둔 동안 버는 비율 (켜 둔 때의 몇 배)
+var night_prices: PackedInt64Array
+
+# --- quests (다음 할 일. 순서대로 하나씩) ---
+var quests: Array = []   ## { "id": String, "kind": String, "target": int, "part": String("" = 없음), "xp": int, "money": int }
 
 # --- setting (세팅 돌리기). [등급]은 0 순정 ~ 4 프로토타입 ---
 var lines_by_grade: PackedInt64Array    ## [등급] = 줄 수
@@ -117,8 +138,25 @@ static func from_dict(d: Dictionary) -> RefCounted:
 	b.cost_mult = float(engine["cost_mult"])
 	b.spare_price = int(engine["spare_price"])
 	b.spare_drop_chance = float(engine["spare_drop_chance"])
-	b.offline_cap_hours = float(offline["cap_hours"])
-	b.offline_rate = float(offline["rate"])
+	b.offline_ignore_under_seconds = float(offline["ignore_under_seconds"])
+	var driver: Dictionary = d["driver"]
+	b.driver_max_level = int(driver["max_level"])
+	b.driver_base_xp = float(driver["base_xp"])
+	b.driver_exponent = float(driver["exponent"])
+	b.driver_points_per_level = int(driver["points_per_level"])
+	b.driver_bonus_points_every_10 = int(driver["bonus_points_every_10"])
+	b.driver_xp_per_parcel = int(driver["xp_per_parcel"])
+	b.driver_star_milestones = PackedInt64Array(driver["star_milestones"])
+	b.driver_star_milestone_xp = int(driver["star_milestone_xp"])
+	var depot: Dictionary = d["depot"]
+	b.warehouse_hours = PackedFloat64Array(depot["warehouse_hours"])
+	b.warehouse_prices = PackedInt64Array(depot["warehouse_prices"])
+	b.warehouse_max_level_solo = int(depot["warehouse_max_level_solo"])
+	b.night_rates = PackedFloat64Array(depot["night_rates"])
+	b.night_prices = PackedInt64Array(depot["night_prices"])
+	for q in d["quests"]:
+		b.quests.append({ "id": q["id"], "kind": q["kind"], "target": int(q["target"]), "part": q.get("part", ""),
+				"xp": int(q["xp"]), "money": int(q["money"]) })
 	var setting: Dictionary = d["setting"]
 	b.lines_by_grade = PackedInt64Array(setting["lines_by_grade"])
 	b.up_chance = PackedFloat64Array(setting["up_chance"])
@@ -149,9 +187,13 @@ static func validate(d: Dictionary) -> PackedStringArray:
 	var engine = d.get("engine")
 	var offline = d.get("offline")
 	var setting = d.get("setting")
-	for pair in [["trip", trip], ["engine", engine], ["offline", offline], ["setting", setting]]:
+	var driver = d.get("driver")
+	var depot = d.get("depot")
+	for pair in [["trip", trip], ["engine", engine], ["offline", offline], ["setting", setting], ["driver", driver], ["depot", depot]]:
 		if typeof(pair[1]) != TYPE_DICTIONARY:
 			errs.append("\"%s\" 묶음이 없음" % pair[0])
+	if typeof(d.get("quests")) != TYPE_ARRAY or d["quests"].is_empty():
+		errs.append("\"quests\" 목록이 없거나 비어 있음")
 	if not errs.is_empty():
 		return errs
 
@@ -175,8 +217,8 @@ static func validate(d: Dictionary) -> PackedStringArray:
 			errs.append("trip: 배송 1건 돈 = %d (기름값·정비비가 단가보다 큼. 0 이상이어야 함)" % pay)
 
 	# --- offline ---
-	_check_number(offline, "offline", "cap_hours", errs, "0 이상이어야 함", func(v): return v >= 0.0)
-	_check_number(offline, "offline", "rate", errs, "0~1 사이여야 함", rate)
+	_check_number(offline, "offline", "ignore_under_seconds", errs, "0 이상이어야 함", func(v): return v >= 0.0)
+	_validate_depot(depot, errs)
 
 	# --- engine ---
 	_check_number(engine, "engine", "base_power", errs, "1 이상의 정수여야 함", whole_pos)
@@ -205,7 +247,87 @@ static func validate(d: Dictionary) -> PackedStringArray:
 				errs.append("engine.success[%d] + engine.destroy[%d] = %s (1 이하여야 함)" % [s, s, sum])
 
 	_validate_setting(setting, max_star, errs)
+	var max_level := _validate_driver(driver, max_star, errs)
+	_validate_quests(d["quests"], max_star, max_level, setting, depot, errs)
 	return errs
+
+
+## "driver" 묶음 검사 (기사 레벨 v5). 만렙을 돌려준다 (틀렸으면 0)
+static func _validate_driver(driver: Dictionary, max_star: int, errs: PackedStringArray) -> int:
+	var whole := func(v): return v >= 0.0 and v == floorf(v)
+	var level_ok := _check_number(driver, "driver", "max_level", errs, "2 이상의 정수여야 함", func(v): return v >= 2.0 and v == floorf(v))
+	_check_number(driver, "driver", "base_xp", errs, "0보다 커야 함", func(v): return v > 0.0)
+	_check_number(driver, "driver", "exponent", errs, "0 이상이어야 함", func(v): return v >= 0.0)
+	for key in ["points_per_level", "bonus_points_every_10", "xp_per_parcel", "star_milestone_xp"]:
+		_check_number(driver, "driver", key, errs, "0 이상의 정수여야 함", whole)
+	var list = driver.get("star_milestones")
+	if typeof(list) != TYPE_ARRAY:
+		errs.append("driver.star_milestones 가 [ ] 목록이 아님")
+	elif _check_list(driver, "driver", "star_milestones", list.size(), "", errs, "1~%d 정수여야 함" % max_star,
+			func(v): return v >= 1.0 and v <= max_star and v == floorf(v)):
+		for i in range(1, list.size()):
+			if float(list[i]) <= float(list[i - 1]):
+				errs.append("driver.star_milestones[%d] = %s (앞 값 %s보다 커야 함)" % [i, list[i], list[i - 1]])
+	return int(driver["max_level"]) if level_ok else 0
+
+
+## "depot" 묶음 검사 (창고 확장·야간 배송팀 v5). 레벨 수 = 시간·비율 목록 길이, 가격은 그보다 1개 적음
+static func _validate_depot(depot: Dictionary, errs: PackedStringArray) -> void:
+	var whole := func(v): return v >= 0.0 and v == floorf(v)
+	for pair in [["warehouse_hours", "warehouse_prices", "0보다 커야 함", func(v): return v > 0.0],
+			["night_rates", "night_prices", "0~1 사이여야 함", func(v): return v >= 0.0 and v <= 1.0]]:
+		var list = depot.get(pair[0])
+		if typeof(list) != TYPE_ARRAY or list.is_empty():
+			errs.append("depot.%s 가 없거나 빈 목록" % pair[0])
+			continue
+		if _check_list(depot, "depot", pair[0], list.size(), "", errs, pair[2], pair[3]):
+			_check_not_decreasing(list, "depot." + pair[0], errs)
+		_check_list(depot, "depot", pair[1], list.size() - 1, "depot.%s 길이 − 1 = %d개여야 함" % [pair[0], list.size() - 1],
+				errs, "0 이상의 정수여야 함", whole)
+	var hours = depot.get("warehouse_hours")
+	var top: int = hours.size() if typeof(hours) == TYPE_ARRAY else 0
+	_check_number(depot, "depot", "warehouse_max_level_solo", errs, "1~%d 정수여야 함" % top,
+			func(v): return v >= 1.0 and v <= top and v == floorf(v))
+
+
+## "quests" 목록 검사 (다음 할 일 v5). 끝낼 수 없는 퀘스트가 있으면 그 뒤가 영영 막히므로 target이 닿을 수 있는 값인지도 본다
+static func _validate_quests(list: Array, max_star: int, max_level: int, setting: Dictionary, depot: Dictionary,
+		errs: PackedStringArray) -> void:
+	var whole := func(v): return v >= 0.0 and v == floorf(v)
+	var parts = setting.get("parts")
+	var nights = depot.get("night_rates")
+	var solo = depot.get("warehouse_max_level_solo")
+	var reach := {   # kind → target 최댓값 (-1 = 상한 없음)
+		"parcels": -1, "setting_rolls": -1, "spares_bought": -1, "part_rolled": 1, "star": max_star,
+		"setting_grade": SETTING_GRADES - 1, "level": max_level,
+		"warehouse": int(solo) if _is_number(solo) else 0,
+		"night": nights.size() if typeof(nights) == TYPE_ARRAY else 0,
+	}
+	var seen := {}
+	for i in list.size():
+		var q = list[i]
+		var where := "quests[%d]" % i
+		if typeof(q) != TYPE_DICTIONARY:
+			errs.append("%s 가 { } 묶음이 아님" % where)
+			continue
+		var id = q.get("id")
+		if typeof(id) != TYPE_STRING or id == "":
+			errs.append("%s.id 가 빈 글자이거나 글자가 아님" % where)
+		elif seen.has(id):
+			errs.append("%s.id = %s (앞에 같은 id가 있음)" % [where, id])
+		else:
+			seen[id] = true
+		var kind = q.get("kind")
+		if not QUEST_KINDS.has(kind):
+			errs.append("%s.kind = %s (%s 중 하나여야 함)" % [where, kind, "/".join(QUEST_KINDS)])
+			continue
+		var top: int = reach[kind]
+		_check_number(q, where, "target", errs, "1 이상%s의 정수여야 함" % ("" if top < 0 else " %d 이하" % top),
+				func(v): return v >= 1.0 and (top < 0 or v <= top) and v == floorf(v))
+		_check_number(q, where, "xp", errs, "0 이상의 정수여야 함", whole)
+		_check_number(q, where, "money", errs, "0 이상의 정수여야 함", whole)
+		if kind == "part_rolled" and not (typeof(parts) == TYPE_DICTIONARY and parts.has(q.get("part"))):
+			errs.append("%s.part = %s (setting.parts 에 있는 부품이어야 함)" % [where, q.get("part")])
 
 
 ## "setting" 묶음 검사 (세팅 돌리기 v4)

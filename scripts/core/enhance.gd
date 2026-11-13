@@ -6,6 +6,7 @@
 extends RefCounted
 
 const Balance = preload("res://scripts/core/balance.gd")
+const Driver = preload("res://scripts/core/driver.gd")
 const Economy = preload("res://scripts/core/economy.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const TruckState = preload("res://scripts/core/truck_state.gd")
@@ -81,7 +82,7 @@ static func block_reason(state: GameState, b: Balance, i: int) -> Block:
 	return Block.NONE
 
 
-## 트럭 i 강화 버튼 1번: 비용을 내고, 굴리고, 결과를 상태에 반영하고, 통계를 센다.
+## 트럭 i 강화 버튼 1번: 비용을 내고, 굴리고, 결과를 상태에 반영하고, 통계를 센다. 성공하면 강화 첫 달성 보너스(driver.gd).
 ## 퍼지면 스페어 1개를 자동으로 써서 broken_drop_to로. 트럭은 안 멈춘다.
 ## 강화할 수 없는 상태면 아무것도 안 하고 BLOCKED.
 static func try_enhance(state: GameState, b: Balance, i: int, rng: RandomNumberGenerator) -> Result:
@@ -94,6 +95,7 @@ static func try_enhance(state: GameState, b: Balance, i: int, rng: RandomNumberG
 		Result.SUCCESS:
 			t.star += 1
 			t.success_count += 1
+			Driver.on_star_reached(state, b, t.star)
 		Result.FAIL:
 			t.fail_count += 1
 		Result.DESTROY:

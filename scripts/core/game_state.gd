@@ -1,6 +1,6 @@
-## 게임 상태: 돈, 스페어 엔진, 트럭들.
+## 게임 상태: 돈, 스페어 엔진, 트럭들, 기사 레벨·창고·야간팀·퀘스트 진행, 화면에 띄울 알림.
 ## 화면 없이 돌아가는 계산 코드. (scripts/core 규칙)
-## 한 바퀴·배송·꺼둔 동안은 trip.gd, 강화 굴리기는 enhance.gd에 있다.
+## 한 바퀴·배송·꺼둔 동안은 trip.gd, 강화 굴리기는 enhance.gd, 레벨은 driver.gd, 창고·야간팀은 depot.gd, 퀘스트는 quest.gd에 있다.
 extends RefCounted
 
 const Balance = preload("res://scripts/core/balance.gd")
@@ -12,6 +12,26 @@ var money: int = 0
 var spares: int = 0                  ## 들고 있는 스페어 엔진
 var spare_drop_carry: float = 0.0    ## 꺼둔 동안 스페어 평균값의 소수 나머지 (0 이상 1 미만)
 var trucks: Array = []               ## TruckState들. 새 게임은 1대
+
+# --- 기사 레벨 (driver.gd) ---
+var driver_level: int = 1
+var driver_xp: int = 0            ## 지금 레벨에서 쌓은 경험치
+var ability_points: int = 0       ## 받은 포인트 (v5에서는 쌓이기만)
+var reputation: int = 0           ## 만렙 뒤 경험치
+
+# --- 물류센터 (depot.gd) ---
+var warehouse_level: int = 1
+var night_level: int = 1
+
+# --- 퀘스트 (quest.gd)와 그 조건에 쓰는 기록 ---
+var quest_index: int = 0          ## 지금 차례인 퀘스트 번호 (목록 길이면 다 끝남)
+var parcels_total: int = 0        ## 지금까지 배송한 건수 (켜 둔 동안 + 꺼둔 동안)
+var setting_rolls: int = 0        ## 세팅 돌린 횟수
+var spares_bought: int = 0        ## 스페어를 산 개수
+var parts_rolled: Dictionary = {} ## 부품 id → true (돌린 적 있는 부품)
+var milestones_done: Array = []   ## 보너스를 이미 받은 강화 단계들
+
+var _events: Array = []           ## 화면에 띄울 알림 (저장 안 함). add_event로 쌓고 take_events로 꺼냄
 
 
 ## 트럭 1대(번호 0)짜리 새 상태
@@ -36,4 +56,19 @@ func buy_spare(b: Balance) -> bool:
 		return false
 	money -= Economy.spare_price(b)
 	spares += 1
+	spares_bought += 1
 	return true
+
+
+## 알림 하나를 쌓는다 (driver.gd, quest.gd가 부름)
+func add_event(event: Dictionary) -> void:
+	_events.append(event)
+
+
+## 쌓아 둔 알림을 순서대로 꺼내고 비운다. 화면이 프레임마다 부른다
+##   { "type": "level_up", "level": int, "points": int } / { "type": "max_level" }
+##   { "type": "quest_done", "id": String, "xp": int, "money": int } / { "type": "milestone", "star": int, "xp": int }
+func take_events() -> Array:
+	var out := _events
+	_events = []
+	return out

@@ -1,4 +1,4 @@
-## save.gd: 저장 형식 4 쓰고 읽기(세팅), 형식 3 읽기, 깨진 파일, 백업 3개, 옛 형식 남기기
+## save.gd: 저장 형식 5 쓰고 읽기(세팅, 레벨·창고·퀘스트), 형식 3·4 읽기, 깨진 파일, 백업 3개, 옛 형식 남기기
 extends "res://tests/test_base.gd"
 
 const Balance = preload("res://scripts/core/balance.gd")
@@ -68,7 +68,28 @@ func _sample_state() -> GameState:
 	t2.star = 5
 	t2.lap_clock = 0.1
 	s.trucks.append(t2)
+	# 형식 5
+	s.driver_level = 12
+	s.driver_xp = 345
+	s.ability_points = 13
+	s.reputation = 0
+	s.warehouse_level = 3
+	s.night_level = 2
+	s.quest_index = 17
+	s.parcels_total = 98765
+	s.setting_rolls = 44
+	s.spares_bought = 2
+	s.parts_rolled = { "cargo_box": true, "ecu": true }
+	s.milestones_done = [10, 15, 18, 20]
 	return s
+
+
+## 형식 5에 더한 칸들의 값 (비교용)
+func _progress(s: GameState) -> Array:
+	var out := []
+	for key in Save.PROGRESS_INTS + ["parts_rolled", "milestones_done"]:
+		out.append(s.get(key))
+	return out
 
 
 func test_write_then_read_same() -> void:
@@ -94,17 +115,20 @@ func test_write_then_read_same() -> void:
 	check_eq(t.part("cargo_box")["pending"], { "grade": 3, "lines": ["cargo", "cargo", "fuel_cut"] }, "고르는 중인 새 상태")
 	check_eq(t.part("ecu")["pending"], null, "ECU pending 없음")
 	check_eq(got.truck(1).settings, {}, "트럭 1 세팅 없음")
+	check_eq(_progress(got), _progress(s), "형식 5 칸 (레벨·창고·퀘스트 진행)")
 	check_eq([r["recovered"], r["old_kept"]], [false, ""], "보통 읽기: 복구·옛 형식 아님")
 	check(not FileAccess.file_exists(PATH + ".tmp"), "임시 파일이 남음")
 	_clean()
 
 
-func test_format_4_dict() -> void:
+func test_format_5_dict() -> void:
 	var d := Save.to_dict(_sample_state(), 1794000000)
-	check_eq(d["version"], 4, "저장 형식")
+	check_eq(d["version"], 5, "저장 형식")
 	var keys := d.keys()
 	keys.sort()
-	check_eq(keys, ["money", "saved_at_utc", "spare_drop_carry", "spares", "trucks", "version"], "저장 칸")
+	check_eq(keys, ["ability_points", "driver_level", "driver_xp", "milestones_done", "money", "night_level", "parcels_total",
+			"parts_rolled", "quest_index", "reputation", "saved_at_utc", "setting_rolls", "spare_drop_carry", "spares",
+			"spares_bought", "trucks", "version", "warehouse_level"], "저장 칸")
 	var tk: Array = d["trucks"][0].keys()
 	tk.sort()
 	check_eq(tk, ["boost_lap", "destroy_count", "fail_count", "lap_clock", "lap_delivered", "settings", "star", "success_count"], "트럭 칸")
@@ -127,6 +151,57 @@ func test_format_3_file_reads() -> void:
 		check_eq([r["state"].money, t.star, t.lap_delivered], [5000000, 18, 2], "형식 3 값")
 		check_eq([t.settings, t.boost_lap], [{}, false], "형식 3: 세팅 없음, 오버부스트 아님")
 	_clean()
+
+
+## v5 C1 ⑪: 형식 4 파일(v4, 레벨·창고·퀘스트 칸 없음)도 읽힘. 새 칸은 처음 값
+func test_format_4_file_reads() -> void:
+	_clean()
+	var v4 := Save.to_dict(_sample_state(), 1794000000)
+	v4["version"] = 4
+	for key in Save.PROGRESS_INTS + ["parts_rolled", "milestones_done"]:
+		v4.erase(key)
+	_write_text(PATH, JSON.stringify(v4))
+	var r := Save.read_file(PATH, b)
+	check_eq(r["status"], Save.Status.OK, "형식 4 읽기 (%s)" % r["error"])
+	check(not FileAccess.file_exists(OLD_KEPT), "형식 4인데 save.v2.json이 생김")
+	if r["state"] != null:
+		var s: GameState = r["state"]
+		check_eq(_progress(s), _progress(GameState.new_game()), "형식 4: 새 칸은 처음 값 (레벨 1, 창고·야간팀 Lv1, 퀘스트 0)")
+		check_eq([s.money, s.truck(0).star, s.truck(0).part("cargo_box")["grade"]], [123456789, 22, 2], "형식 4: 원래 값")
+	_clean()
+
+
+## v5 C1 ⑪: 형식 5 칸의 이상한 값 — 범위로 자름, 모르는 부품·보너스 단계가 아닌 값은 버림, 숫자가 아니면 깨짐
+func test_progress_clamped() -> void:
+	var d := Save.to_dict(_sample_state(), 1794000000)
+	d["driver_level"] = 99
+	d["driver_xp"] = 10_000_000
+	d["ability_points"] = -3
+	d["reputation"] = 5.7
+	d["warehouse_level"] = 9
+	d["night_level"] = 0
+	d["quest_index"] = 999
+	d["parcels_total"] = -1
+	d["parts_rolled"] = { "ecu": true, "wing": true, "cargo_box": "yes" }
+	d["milestones_done"] = [10, 11, 10, 30, 18.5, "x"]
+	var r := Save.from_dict(d, b)
+	check_eq(r["status"], Save.Status.OK, "이상한 값이어도 읽힘 (%s)" % r["error"])
+	if r["state"] != null:
+		var s: GameState = r["state"]
+		check_eq([s.driver_level, s.driver_xp, s.ability_points, s.reputation], [50, 0, 0, 5], "레벨 99 → 50 (만렙 경험치 0), 음수 → 0, 소수 → 버림")
+		check_eq([s.warehouse_level, s.night_level, s.quest_index, s.parcels_total], [4, 1, 22, 0], "창고 9 → 4, 야간팀 0 → 1, 퀘스트 999 → 22, 음수 → 0")
+		check_eq(s.parts_rolled, { "ecu": true }, "모르는 부품·true가 아닌 값 버림")
+		check_eq(s.milestones_done, [10, 30], "보너스 단계가 아닌 값·겹친 값 버림")
+	var d2 := Save.to_dict(_sample_state(), 1794000000)
+	d2["driver_level"] = 3
+	d2["driver_xp"] = 1000
+	var r2 := Save.from_dict(d2, b)
+	if r2["state"] != null:
+		check_eq([r2["state"].driver_level, r2["state"].driver_xp], [3, 373], "레벨 3 경험치 1000 → 필요량 374 − 1")
+	for c in [["driver_level", "3"], ["quest_index", null], ["parts_rolled", []], ["milestones_done", {}]]:
+		var bad := Save.to_dict(_sample_state(), 1794000000)
+		bad[c[0]] = c[1]
+		check_eq(Save.from_dict(bad, b)["status"], Save.Status.BROKEN, "%s = %s 를 못 걸러냄" % [c[0], c[1]])
 
 
 ## v4 C1 ⑪: 세팅의 이상한 값 — 모르는 부품·옵션은 버리고, 등급·카운터는 범위로, 줄은 그 등급 줄 수까지

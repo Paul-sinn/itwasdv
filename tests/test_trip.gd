@@ -5,6 +5,7 @@ const Balance = preload("res://scripts/core/balance.gd")
 const Enhance = preload("res://scripts/core/enhance.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const TruckState = preload("res://scripts/core/truck_state.gd")
+const Quest = preload("res://scripts/core/quest.gd")
 const Setting = preload("res://scripts/core/setting.gd")
 const Trip = preload("res://scripts/core/trip.gd")
 
@@ -36,9 +37,11 @@ func _expected(star: int) -> Dictionary:
 	return { "power": power, "lap": lap, "pay": pay, "lap_income": 20 * pay, "hourly": 20 * pay * 3600.0 / lap, "v3_hourly": v3_hourly }
 
 
+## 퀘스트는 다 끝낸 상태로 (v5): 여기서는 배송 돈만 본다. 퀘스트 보상은 test_quest.gd
 func _game(star: int) -> GameState:
 	var s := GameState.new_game()
 	s.truck(0).star = star
+	s.quest_index = Quest.count(b)
 	return s
 
 
@@ -189,14 +192,14 @@ func test_advance_moves_only_truck_i() -> void:
 	check_eq(s.truck(1).lap_delivered, 4, "트럭 1: 100초에 네 집")
 
 
-## 지시서 C1 ⑦: 꺼둔 동안. 0초 이하 0, 상한 넘으면 상한까지, 스페어 소수 나머지가 이어짐
+## 지시서 C1 ⑦: 꺼둔 동안. 3분 미만(음수 포함)은 무시, 상한(창고 Lv1 4시간) 넘으면 상한까지, 스페어 소수 나머지가 이어짐
 func test_offline() -> void:
 	var hour := 3600.0
 	for away in [0.0, -3 * hour]:
 		var s := _game(10)
 		var r := Trip.apply_offline(s, bv3, away)
-		check_eq(r, { "money": 0, "parcels": 0, "spares": 0, "hours": 0.0 }, "%s초 꺼둠 → 전부 0" % away)
-		check_eq([s.money, s.spares, s.spare_drop_carry], [0, 0, 0.0], "%s초 꺼둠: 상태가 바뀜" % away)
+		check_eq(r, { "money": 0, "parcels": 0, "spares": 0, "hours": 0.0, "xp": 0, "full": false, "ignored": true }, "%s초 꺼둠 → 무시" % away)
+		check_eq([s.money, s.spares, s.spare_drop_carry, s.parcels_total], [0, 0, 0.0, 0], "%s초 꺼둠: 상태가 바뀜" % away)
 
 	# (v3 숫자) +0, 3시간: 시간당 425 × 3600 ÷ 140 = 10928.57 → × 3 × 0.5 = 16392.86 → 16392
 	#            배송 5 × 3600 ÷ 140 × 3 × 0.5 = 192.86 → 192
@@ -207,13 +210,16 @@ func test_offline() -> void:
 	check_eq(r3["parcels"], 192, "3시간 꺼둠 배송")
 	check_eq(typeof(r3["money"]), TYPE_INT, "꺼둔 동안 돈이 정수가 아님")
 	check_eq(s3.money, 16392, "상태에 돈이 더해짐")
+	check_eq(s3.parcels_total, 192, "꺼둔 동안 배송이 parcels_total에 더해짐")
+	check_eq([r3["xp"], r3["full"], r3["ignored"]], [0, false, false], "3시간: 경험치 0, 창고 안 참, 무시 아님")
 
-	# 20시간 → 상한 8시간
+	# 20시간 → 상한 (창고 Lv1 4시간)
 	var s20 := _game(0)
 	var r20 := Trip.apply_offline(s20, bv3, 20 * hour)
-	check_eq(r20["hours"], 8.0, "20시간 꺼둠 → 상한 8시간")
-	check_eq(r20["money"], floori(5 * 85 * 3600.0 / 140.0 * 8.0 * 0.5), "20시간 꺼둠 돈 = 8시간치의 절반")
-	check_eq(r20["money"], Trip.apply_offline(_game(0), bv3, 8 * hour)["money"], "20시간 = 8시간")
+	check_eq(r20["hours"], 4.0, "20시간 꺼둠 → 상한 4시간")
+	check_eq(r20["money"], floori(5 * 85 * 3600.0 / 140.0 * 4.0 * 0.5), "20시간 꺼둠 돈 = 4시간치의 절반")
+	check_eq(r20["money"], Trip.apply_offline(_game(0), bv3, 4 * hour)["money"], "20시간 = 4시간")
+	check(r20["full"], "20시간인데 창고가 안 참")
 
 	# 트럭마다 floor해서 더함
 	var s2 := _game(0)
@@ -226,8 +232,9 @@ func test_offline() -> void:
 
 ## 꺼둔 동안 스페어: 배송 × 확률을 소수 나머지에 쌓고 정수만큼 +
 func test_offline_spare_carry() -> void:
-	# (v3 숫자) 확률 0.0002: +0 8시간 배송 514건 → 0.1028씩. 10번이면 1.028 → 스페어 1, 나머지 0.028
+	# (v3 숫자) 확률 0.0002: +0 8시간(창고 Lv3) 배송 514건 → 0.1028씩. 10번이면 1.028 → 스페어 1, 나머지 0.028
 	var s := _game(0)
+	s.warehouse_level = 3
 	var got := 0
 	for k in 10:
 		var r := Trip.apply_offline(s, bv3, 20 * 3600.0)
@@ -247,6 +254,7 @@ func test_offline_spare_carry() -> void:
 	d["engine"]["spare_drop_chance"] = 0.01
 	var b1: Balance = Balance.from_dict(d)
 	var s1 := _game(0)
+	s1.warehouse_level = 3
 	check_eq(Trip.apply_offline(s1, b1, 20 * 3600.0)["spares"], 5, "첫 번째 스페어")
 	check_near(s1.spare_drop_carry, 0.14, 1e-9, "첫 번째 나머지")
 	check_eq(Trip.apply_offline(s1, b1, 20 * 3600.0)["spares"], 5, "두 번째 스페어")

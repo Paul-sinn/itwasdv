@@ -120,6 +120,8 @@ static func try_roll(state: GameState, b: Balance, i: int, part: String, rng: Ra
 	for k in line_count(b, new_grade):
 		lines.append(_draw(chances, rng))
 	p["pending"] = { "grade": new_grade, "lines": lines }
+	state.setting_rolls += 1
+	state.parts_rolled[part] = true
 	return { "ok": true, "grade_up": up, "pity": pity }
 
 

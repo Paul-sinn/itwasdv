@@ -9,9 +9,12 @@
 extends RefCounted
 
 const Balance = preload("res://scripts/core/balance.gd")
+const Depot = preload("res://scripts/core/depot.gd")
+const Driver = preload("res://scripts/core/driver.gd")
 const Economy = preload("res://scripts/core/economy.gd")
 const Enhance = preload("res://scripts/core/enhance.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
+const Quest = preload("res://scripts/core/quest.gd")
 const Setting = preload("res://scripts/core/setting.gd")
 const TruckState = preload("res://scripts/core/truck_state.gd")
 
@@ -76,10 +79,16 @@ static func hourly_income_at(b: Balance, t: TruckState, star: int) -> float:
 ##   { "type": "parcel", "pay": int, "house": int(0~N-1) } / { "type": "spare" } (바로 앞 배송에서 나옴)
 ##   { "type": "boost" } (새 바퀴를 출발할 때 오버부스트가 걸림)
 ## 바퀴 중간에 단계·세팅이 바뀌면 남은 집은 새 속도로 계산한다 (이미 지난 집은 바로 배송).
+## 배송마다 parcels_total +1, 기사 경험치. 부를 때마다 끝에 Quest.check 한 번 (레벨·퀘스트 알림은 state.take_events)
 static func advance(state: GameState, b: Balance, i: int, dt: float, rng: RandomNumberGenerator) -> Array:
 	var events := []
-	if dt <= 0.0:
-		return events
+	if dt > 0.0:
+		_drive(state, b, i, dt, rng, events)
+	Quest.check(state, b)
+	return events
+
+
+static func _drive(state: GameState, b: Balance, i: int, dt: float, rng: RandomNumberGenerator, events: Array) -> void:
 	var t := state.truck(i)
 	t.lap_clock += dt
 	var n := cargo(b, t)
@@ -92,6 +101,8 @@ static func advance(state: GameState, b: Balance, i: int, dt: float, rng: Random
 			if t.lap_clock < b.load_seconds + drive * k / (n + 1) + k * b.stop_seconds:
 				break
 			state.money += pay
+			state.parcels_total += 1
+			Driver.add_xp(state, b, b.driver_xp_per_parcel)
 			events.append({ "type": "parcel", "pay": pay, "house": t.lap_delivered })
 			t.lap_delivered = k
 			if Enhance.random01(rng) < b.spare_drop_chance:
@@ -106,30 +117,35 @@ static func advance(state: GameState, b: Balance, i: int, dt: float, rng: Random
 			drive = _drive_at(b, t, t.star, t.boost_lap)
 		else:
 			break
-	return events
 
 
-## 꺼둔 동안을 상태에 반영(모든 트럭)하고 { "money": int, "parcels": int, "spares": int, "hours": float } 를 돌려준다.
-##   시간 = min(꺼둔 초 ÷ 3600, cap_hours). 꺼둔 초가 0 이하(시계가 거꾸로 감)면 전부 0
-##   돈 = 트럭마다 floor(시간당 수입 × 시간 × rate)의 합 (시간당 수입은 오버부스트 평균)
-##   배송 = 트럭마다 floor(N × 3600 ÷ 평균 한 바퀴 초 × 시간 × rate)의 합
+## 꺼둔 동안을 상태에 반영(모든 트럭)하고 돌려준다:
+##   { "money": int, "parcels": int, "spares": int, "hours": float, "xp": int, "full": bool, "ignored": bool }
+##   꺼둔 초 < offline.ignore_under_seconds(3분)면 아무것도 안 함: ignored = true, 나머지 0 (시계가 거꾸로 간 음수도)
+##   시간 = min(꺼둔 초 ÷ 3600, 창고 시간). full = 창고 시간에 닿음
+##   돈 = 트럭마다 floor(시간당 수입 × 시간 × 야간팀 비율)의 합 (시간당 수입은 오버부스트 평균)
+##   배송 = 트럭마다 floor(N × 3600 ÷ 평균 한 바퀴 초 × 시간 × 야간팀 비율)의 합 → parcels_total에도 더함
 ##   스페어 = 배송 × 드랍 확률을 spare_drop_carry에 더하고 정수 부분만큼 (나머지는 다음에 이어짐)
+##   경험치 = 0 (꺼둔 동안 경험치는 v5b 노하우)
 ## 트럭의 바퀴 진행(lap_clock)은 그대로 둔다.
 static func apply_offline(state: GameState, b: Balance, seconds_away: float) -> Dictionary:
-	if seconds_away <= 0.0:
-		return { "money": 0, "parcels": 0, "spares": 0, "hours": 0.0 }
-	var hours := minf(seconds_away / Economy.SECONDS_PER_HOUR, b.offline_cap_hours)
+	if seconds_away < b.offline_ignore_under_seconds:
+		return { "money": 0, "parcels": 0, "spares": 0, "hours": 0.0, "xp": 0, "full": false, "ignored": true }
+	var cap := Depot.cap_hours(b, state)
+	var rate := Depot.rate(b, state)
+	var hours := minf(seconds_away / Economy.SECONDS_PER_HOUR, cap)
 	var money := 0
 	var parcels := 0
 	for t: TruckState in state.trucks:
-		money += floori(hourly_income(b, t) * hours * b.offline_rate)
-		parcels += floori(cargo(b, t) * Economy.SECONDS_PER_HOUR / avg_lap_seconds(b, t) * hours * b.offline_rate)
+		money += floori(hourly_income(b, t) * hours * rate)
+		parcels += floori(cargo(b, t) * Economy.SECONDS_PER_HOUR / avg_lap_seconds(b, t) * hours * rate)
 	state.spare_drop_carry += parcels * b.spare_drop_chance
 	var spares := floori(state.spare_drop_carry)
 	state.spare_drop_carry -= spares
 	state.money += money
 	state.spares += spares
-	return { "money": money, "parcels": parcels, "spares": spares, "hours": hours }
+	state.parcels_total += parcels
+	return { "money": money, "parcels": parcels, "spares": spares, "hours": hours, "xp": 0, "full": hours >= cap, "ignored": false }
 
 
 static func _speed_at(b: Balance, t: TruckState, star: int) -> float:

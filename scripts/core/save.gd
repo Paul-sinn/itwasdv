@@ -8,9 +8,13 @@
 ##   spares, spare_drop_carry
 ##   trucks [ { star, lap_clock, lap_delivered, boost_lap, success_count, fail_count, destroy_count,
 ##              settings { 부품 id: { grade, lines, counters, pending: null 또는 { grade, lines } } } } ]
+##   (형식 5) driver_level, driver_xp, ability_points, reputation, warehouse_level, night_level, quest_index,
+##            parcels_total, setting_rolls, spares_bought, parts_rolled { 부품 id: true }, milestones_done [ 단계 ]
 ## 모르는 키는 버리고 범위 밖 값은 자른다. 음수 돈·스페어, 빠진 칸, 틀린 모양은 깨진 저장.
 ## 세팅: 모르는 부품·그 부품에 없는 옵션 id는 버리고, 등급·카운터는 범위로 자르고, 줄은 그 등급 줄 수까지 (앞에서부터).
-## 형식 3 파일(v3)은 그대로 읽는다 (세팅 없음, 오버부스트 안 걸린 바퀴).
+## 형식 5 칸: 숫자가 아니면 깨진 저장, 숫자는 범위로 자름 (레벨 1~만렙, 경험치 0~다음 레벨 필요량−1, 창고·야간팀 1~표 끝,
+##            퀘스트 번호 0~목록 길이, 개수·평판 0 이상). 모르는 부품·보너스 단계가 아닌 값은 버림.
+## 형식 3·4 파일은 그대로 읽는다 (없는 칸은 처음 값: 세팅 없음, 오버부스트 안 걸린 바퀴, 레벨 1, 창고·야간팀 Lv1, 퀘스트 처음부터).
 ##
 ## 백업: 쓸 때마다 지금 파일을 path.bak1(가장 최근) → bak2 → bak3 으로 돌린다.
 ## 본 파일이 깨졌으면 path.broken 으로 옮기고 bak1 → bak2 → bak3 중 읽히는 첫 파일로 살린다.
@@ -18,12 +22,15 @@
 extends RefCounted
 
 const Balance = preload("res://scripts/core/balance.gd")
+const Depot = preload("res://scripts/core/depot.gd")
+const Driver = preload("res://scripts/core/driver.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
+const Quest = preload("res://scripts/core/quest.gd")
 const Setting = preload("res://scripts/core/setting.gd")
 const TruckState = preload("res://scripts/core/truck_state.gd")
 
 const DEFAULT_PATH := "user://save.json"
-const FORMAT_VERSION := 4   ## 1: v0·v1 / 2: 튜닝(v2) / 3: 한 바퀴 경제·트럭 여러 대(v3) / 4: 세팅 돌리기(v4)
+const FORMAT_VERSION := 5   ## 1: v0·v1 / 2: 튜닝(v2) / 3: 한 바퀴 경제·트럭 여러 대(v3) / 4: 세팅 돌리기(v4) / 5: 기사 레벨·퀘스트·창고(v5)
 const OLDEST_READABLE := 3  ## 이보다 옛 형식은 변환하지 않고 옮겨 둔다
 
 enum Status { OK, NONE, BROKEN }   ## 읽음 / 저장 파일 없음(새 게임) / 깨짐(새 게임)
@@ -32,6 +39,9 @@ const BACKUPS := 3
 const OLD_FILE_NAME := "save.v2.json"   ## 형식 1·2 파일을 옮겨 두는 이름 (본 파일과 같은 폴더)
 
 const TRUCK_COUNTS := ["success_count", "fail_count", "destroy_count"]
+## 형식 5에 더한 정수 칸 (GameState 변수 이름 그대로). 범위는 _progress_from에서
+const PROGRESS_INTS := ["driver_level", "driver_xp", "ability_points", "reputation", "warehouse_level", "night_level",
+		"quest_index", "parcels_total", "setting_rolls", "spares_bought"]
 const MAX_WHOLE := 1 << 53   # JSON 숫자가 정확한 정수로 왕복하는 한계
 const MAX_MONEY := 999_999_999_999_999_999   ## 돈 글자 18자리까지. 넘으면 이 값으로 자름 (to_int가 넘치면 음수로 돌아감)
 
@@ -50,14 +60,19 @@ static func to_dict(s: GameState, saved_at_unix: int) -> Dictionary:
 			"destroy_count": t.destroy_count,
 			"settings": t.settings.duplicate(true),
 		})
-	return {
+	var d := {
 		"version": FORMAT_VERSION,
 		"saved_at_utc": Time.get_datetime_string_from_unix_time(saved_at_unix),
 		"money": str(s.money),
 		"spares": s.spares,
 		"spare_drop_carry": s.spare_drop_carry,
 		"trucks": trucks,
+		"parts_rolled": s.parts_rolled.duplicate(),
+		"milestones_done": s.milestones_done.duplicate(),
 	}
+	for key in PROGRESS_INTS:
+		d[key] = s.get(key)
+	return d
 
 
 ## 저장 묶음 → 상태. 결과: { status, state, saved_at, error, recovered, old_kept } (read_file과 같은 모양)
@@ -112,6 +127,9 @@ static func from_dict(d, b: Balance) -> Dictionary:
 		t.settings = settings
 		s.trucks.append(t)
 
+	var why := _progress_from(d, b, s)
+	if why != "":
+		return _broken(why)
 	return _result(Status.OK, s, saved_at)
 
 
@@ -239,6 +257,33 @@ static func _is_number(v) -> bool:
 
 static func _is_finite_number(v) -> bool:
 	return _is_number(v) and is_finite(float(v))
+
+
+## 형식 5 칸(레벨·창고·퀘스트 진행) → 상태 s. 없는 칸은 처음 값(형식 3·4), 숫자는 범위로 자름. 틀린 모양이면 그 이유 (없으면 "")
+static func _progress_from(d: Dictionary, b: Balance, s: GameState) -> String:
+	for key in PROGRESS_INTS:
+		var v = d.get(key, s.get(key))
+		if not _is_finite_number(v):
+			return "%s 가 숫자가 아님: %s" % [key, v]
+		s.set(key, clampi(floori(v), 0, MAX_WHOLE))
+	s.driver_level = clampi(s.driver_level, 1, Driver.max_level(b))
+	s.driver_xp = clampi(s.driver_xp, 0, maxi(0, Driver.xp_need(b, s.driver_level) - 1))
+	s.warehouse_level = clampi(s.warehouse_level, 1, Depot.top_level(b, "warehouse"))
+	s.night_level = clampi(s.night_level, 1, Depot.top_level(b, "night"))
+	s.quest_index = mini(s.quest_index, Quest.count(b))
+	var rolled = d.get("parts_rolled", {})
+	if typeof(rolled) != TYPE_DICTIONARY:
+		return "parts_rolled 가 { } 묶음이 아님"
+	for part in rolled:
+		if b.setting_parts.has(part) and typeof(rolled[part]) == TYPE_BOOL and rolled[part]:
+			s.parts_rolled[part] = true
+	var done = d.get("milestones_done", [])
+	if typeof(done) != TYPE_ARRAY:
+		return "milestones_done 이 [ ] 목록이 아님"
+	for m in done:
+		if _is_finite_number(m) and m == floorf(m) and b.driver_star_milestones.has(int(m)) and not s.milestones_done.has(int(m)):
+			s.milestones_done.append(int(m))
+	return ""
 
 
 ## 저장된 세팅 → 깨끗한 세팅 (TruckState.settings 모양). 모양이 틀리면 null

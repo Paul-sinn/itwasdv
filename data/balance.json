@@ -1,5 +1,5 @@
 {
-  "version": "0.7",
+  "version": "0.8",
   "trip": {
     "unit_price": 2500,
     "base_cargo": 20,
@@ -22,8 +22,24 @@
     "spare_drop_chance": 0.00005
   },
   "offline": {
-    "cap_hours": 8,
-    "rate": 0.5
+    "ignore_under_seconds": 180
+  },
+  "driver": {
+    "max_level": 50,
+    "base_xp": 100,
+    "exponent": 1.2,
+    "points_per_level": 1,
+    "bonus_points_every_10": 2,
+    "xp_per_parcel": 10,
+    "star_milestones": [10, 15, 18, 20, 22, 25, 28, 30],
+    "star_milestone_xp": 500
+  },
+  "depot": {
+    "warehouse_hours": [4, 6, 8, 12],
+    "warehouse_prices": [2000000, 8000000, 40000000],
+    "warehouse_max_level_solo": 3,
+    "night_rates": [0.5, 0.6, 0.7, 0.8],
+    "night_prices": [3000000, 12000000, 50000000]
   },
   "setting": {
     "lines_by_grade": [1, 2, 3, 3, 3],
@@ -76,5 +92,29 @@
       "junk_radio": { "kind": "junk", "weight": 12 },
       "junk_gloss": { "kind": "junk", "weight": 12 }
     }
-  }
+  },
+  "quests": [
+    { "id": "first_parcel", "kind": "parcels", "target": 1, "xp": 200, "money": 10000 },
+    { "id": "parcels_20", "kind": "parcels", "target": 20, "xp": 200, "money": 20000 },
+    { "id": "first_enhance", "kind": "star", "target": 1, "xp": 200, "money": 30000 },
+    { "id": "first_setting", "kind": "setting_rolls", "target": 1, "xp": 200, "money": 40000 },
+    { "id": "star_3", "kind": "star", "target": 3, "xp": 200, "money": 50000 },
+    { "id": "setting_street", "kind": "setting_grade", "target": 1, "xp": 300, "money": 100000 },
+    { "id": "star_5", "kind": "star", "target": 5, "xp": 300, "money": 150000 },
+    { "id": "ecu_first", "kind": "part_rolled", "target": 1, "part": "ecu", "xp": 300, "money": 150000 },
+    { "id": "warehouse_2", "kind": "warehouse", "target": 2, "xp": 300, "money": 200000 },
+    { "id": "level_5", "kind": "level", "target": 5, "xp": 300, "money": 200000 },
+    { "id": "star_8", "kind": "star", "target": 8, "xp": 400, "money": 300000 },
+    { "id": "setting_sport", "kind": "setting_grade", "target": 2, "xp": 400, "money": 400000 },
+    { "id": "night_2", "kind": "night", "target": 2, "xp": 400, "money": 400000 },
+    { "id": "star_10", "kind": "star", "target": 10, "xp": 500, "money": 600000 },
+    { "id": "level_10", "kind": "level", "target": 10, "xp": 500, "money": 600000 },
+    { "id": "warehouse_3", "kind": "warehouse", "target": 3, "xp": 500, "money": 800000 },
+    { "id": "star_12", "kind": "star", "target": 12, "xp": 600, "money": 1000000 },
+    { "id": "first_spare", "kind": "spares_bought", "target": 1, "xp": 600, "money": 1000000 },
+    { "id": "star_15", "kind": "star", "target": 15, "xp": 800, "money": 2000000 },
+    { "id": "level_20", "kind": "level", "target": 20, "xp": 800, "money": 2000000 },
+    { "id": "setting_racing", "kind": "setting_grade", "target": 3, "xp": 1000, "money": 3000000 },
+    { "id": "star_18", "kind": "star", "target": 18, "xp": 1000, "money": 5000000 }
+  ]
 }
