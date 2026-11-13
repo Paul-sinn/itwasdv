@@ -8,3 +8,4 @@
 
 | 날짜 | 시트 탭 | balance.json 키 | 지시서 | 메모 |
 |---|---|---|---|---|
+| 2026-11-13 | 강화 단계 (B1, E4:E33) | `engine.base_power`, `engine.power_gain` | PROTOTYPE_V3 | 성공·퍼짐 확률은 이미 json에 있어서 안 옮김 (시트와 다름 → QUESTIONS Q1) |

@@ -27,6 +27,7 @@ data/balance.json        게임 숫자 전부 (게임과 시뮬이 같이 읽음
 docs/GAME_PLAN.md        기획서 (무엇을 왜 만드나, MVP 범위, 메이플 용어 변환표). 지시서는 여기서 나옴
 docs/numbers-source.md   시트 숫자를 balance.json으로 옮긴 기록 (옮긴 숫자는 json이 기준)
 docs/PROTOTYPE_V0~V2.md  끝난 시제품 지시서 (v2 튜닝 8칸은 v4 세팅 돌리기로 바뀜)
+docs/PROTOTYPE_V3.md     지금 지시서: 경제 뼈대 (한 바퀴 계산, 고정 비용, 스페어, 저장 3, 번역)
 docs/IDEAS.md            나중에 할 것 / 이미 정한 것
 tools/tune_sim.py        경제 시뮬레이터 (판정용. delivery_sim.py는 옛 모델이라 v3에서 지움)
 scripts/core/            계산 코드 (balance, economy, enhance, tune 튜닝, game_state, save)
