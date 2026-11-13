@@ -11,7 +11,7 @@ const Trip = preload("res://scripts/core/trip.gd")
 const STARS := [0, 10, 18, 30]
 
 var b: Balance = Balance.load_file()
-## v3 숫자(단가 100, 적재량 5, 정차 2초): 집마다 시각이 딱 떨어져서, 시각·배송 수를 손으로 계산한 테스트에 씀
+## v3 숫자(단가 100, 적재량 5, 정차 2초, 스페어 드랍 0.0002): 집마다 시각이 딱 떨어져서, 시각·배송 수를 손으로 계산한 테스트에 씀
 var bv3: Balance = _v3_balance()
 
 
@@ -20,6 +20,7 @@ func _v3_balance() -> Balance:
 	d["trip"]["unit_price"] = 100
 	d["trip"]["base_cargo"] = 5
 	d["trip"]["stop_seconds"] = 2
+	d["engine"]["spare_drop_chance"] = 0.0002
 	return Balance.from_dict(d)
 
 
@@ -225,7 +226,7 @@ func test_offline() -> void:
 
 ## 꺼둔 동안 스페어: 배송 × 확률을 소수 나머지에 쌓고 정수만큼 +
 func test_offline_spare_carry() -> void:
-	# 진짜 확률 0.0002: +0 8시간 배송 514건 → 0.1028씩. 10번이면 1.028 → 스페어 1, 나머지 0.028
+	# (v3 숫자) 확률 0.0002: +0 8시간 배송 514건 → 0.1028씩. 10번이면 1.028 → 스페어 1, 나머지 0.028
 	var s := _game(0)
 	var got := 0
 	for k in 10:

@@ -19,7 +19,7 @@
     "cost_base": 35000,
     "cost_mult": 1.5,
     "spare_price": 5000000,
-    "spare_drop_chance": 0.0002
+    "spare_drop_chance": 0.00005
   },
   "offline": {
     "cap_hours": 8,

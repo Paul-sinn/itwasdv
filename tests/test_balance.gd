@@ -22,7 +22,7 @@ func test_real_file_is_ok() -> void:
 	check_eq([b.unit_price, b.base_cargo, b.road_length, b.load_seconds, b.stop_seconds],
 			[2500, 20, 12000.0, 10.0, 0.5], "trip 숫자 (v4에서 고침)")
 	check_eq([b.fuel_rate, b.maint_rate], [0.1, 0.05], "기름값·정비비 비율")
-	check_eq([b.cost_base, b.cost_mult, b.spare_drop_chance], [35000.0, 1.5, 0.0002], "강화 비용(v4에서 고침)·스페어 드랍")
+	check_eq([b.cost_base, b.cost_mult, b.spare_drop_chance], [35000.0, 1.5, 0.00005], "강화 비용·스페어 드랍 (v4에서 고침)")
 	check_eq(b.spare_price, 5000000, "spare_price (v4에서 고침)")
 	# 원래 json에 있던 값 그대로
 	check_eq([b.offline_cap_hours, b.offline_rate], [8.0, 0.5], "꺼둔 동안 8시간·0.5")
