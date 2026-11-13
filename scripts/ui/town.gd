@@ -5,6 +5,8 @@
 ##      구석 줄 끝 작은 버튼 [강화] → tuning_pressed. 건물 클릭은 main.gd가 building_at()으로 가른다
 ## v6-bal: 처음 켰을 때 말풍선 "건물을 눌러보세요" (hint, set_hint. 언제 켜나는 main.gd)
 ## v5b: 팁이 나오면 "+금액" 옆에 "팁! +금액" (show_tip), 찍을 능력치 포인트가 남으면 레벨 옆 점 (set_point_dot)
+## v6b: 대형·VIP·급송 "+금액"은 앞 글자·색이 다름 (show_payout), 급송 전화 말풍선 [받기] + 남은 시간 막대,
+##      받은 뒤 구석 줄 "급송 N건 남음" (set_rush. 언제 울리나는 main.gd → Rush)
 ## 동네 설계 좌표(feel.gd TOWN_SIZE = 작은 화면 크기)로 만들고, 전체 화면에서는 같은 동네를 통째로 확대한다.
 ## 길·집·트럭은 확대해서 그리고(선명함), 글자는 확대 배수에 맞춘 글자 크기로 따로 놓는다.
 ## 그리기만 한다. 돈·배송은 main.gd → scripts/core/trip.gd (배송 이벤트가 오면 show_payout)
@@ -20,6 +22,11 @@ const BUILDINGS := ["tuning", "depot", "car_center"]
 const BUILDING_NAMES := { "tuning": "BUILDING_TUNING", "depot": "TOWN_DEPOT", "car_center": "BUILDING_CAR_CENTER" }
 
 signal tuning_pressed   ## 구석 작은 버튼 [강화]
+signal rush_accept_pressed   ## 급송 전화 말풍선 [받기]
+
+## 대형·VIP "+금액" 앞 글자 번역 키와 색 (배송 이벤트의 kind. "normal"은 글자 없음)
+const PAY_KEYS := { "large": "TOWN_PAY_LARGE", "vip": "TOWN_PAY_VIP" }
+const PAY_COLORS := { "large": Feel.COLOR_PAYOUT_LARGE, "vip": Feel.COLOR_PAYOUT_VIP }
 
 var truck: Truck
 var route: Route
@@ -32,10 +39,13 @@ var spares_shown := 0        ## 지금까지 띄운 "스페어 엔진 +1" 수 (�
 var boosts_shown := 0        ## 지금까지 띄운 "오버부스트!" 수 (확인용)
 var tips_shown: Array[String] = []   ## 지금까지 띄운 "팁! +금액" 글자 (확인용)
 var point_dot: Panel         ## 구석 줄 레벨 옆 점: 찍을 능력치 포인트가 남음 (set_point_dot)
+var rush_bubble: PanelContainer   ## 급송 전화 말풍선 "급송 요청! [받기]" + 남은 시간 막대 (벨이 울리는 동안)
+var rush_button: Button           ## 그 안 [받기]
 var notices_shown: Array[String] = []   ## 지금까지 띄운 알림 글자, 띄운 순서대로 (확인용)
 var hovered := ""            ## 마우스가 올라가 있는 건물 id ("" = 없음)
 var tuning_button: Button    ## 구석 줄 끝 작은 버튼 [강화]
 var hint: Label              ## 처음 켰을 때 말풍선 "건물을 눌러보세요" (켜고 끄기는 main.gd → set_hint)
+var master_visit := false    ## 명장 방문 중 → 튜닝숍에 색 테두리 (set_master_visit)
 
 var _houses: Array[Vector2] = []     ## 집 자리 (길 가운데 선 위, 설계 좌표)
 var _hud: HBoxContainer
@@ -50,6 +60,10 @@ var _name_tag: Label      ## 마우스 올린 건물 위 이름표
 var _payouts: Array[Label] = []   ## 떠오르는 중인 "+금액"·"스페어 엔진 +1"들
 var _last_payout: Label   ## 마지막 "+금액" (팁이 오면 그 옆에 "팁!"을 붙임)
 var _dot_style: StyleBoxFlat
+var _rush_text: Label
+var _rush_bar: ProgressBar
+var _rush_style: StyleBoxFlat
+var _rush_left: Label     ## 구석 줄 끝 "급송 N건 남음" (받은 급송이 남아 있을 때)
 
 
 func _ready() -> void:
@@ -90,6 +104,9 @@ func _ready() -> void:
 	tuning_button.add_theme_color_override("font_pressed_color", Feel.COLOR_TEXT)
 	tuning_button.pressed.connect(func(): tuning_pressed.emit())
 	_hud.add_child(tuning_button)
+	_rush_left = make_label(Feel.HUD_FONT_SIZE, Feel.COLOR_RUSH_LEFT)
+	_rush_left.visible = false
+	_hud.add_child(_rush_left)
 	_quest_label = make_label(Feel.QUEST_FONT_SIZE, Feel.COLOR_QUEST)
 	add_child(_quest_label)
 	_notice = make_label(Feel.NOTICE_FONT_SIZE, Feel.COLOR_NOTICE)
@@ -111,7 +128,50 @@ func _ready() -> void:
 	hint.add_theme_color_override("font_color", Feel.COLOR_HINT_TEXT)
 	hint.visible = false
 	add_child(hint)
+	_build_rush_bubble()
 	layout(Vector2.ZERO, 1.0, 1.0)
+
+
+## 급송 전화 말풍선: [글자 "급송 요청!" + [받기]] 위, 남은 시간 막대 아래. 처음엔 숨김
+func _build_rush_bubble() -> void:
+	rush_bubble = PanelContainer.new()
+	rush_bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE   # [받기]만 클릭을 받음
+	_rush_style = StyleBoxFlat.new()
+	_rush_style.bg_color = Feel.COLOR_RUSH_BG
+	rush_bubble.add_theme_stylebox_override("panel", _rush_style)
+	var box := VBoxContainer.new()
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rush_bubble.add_child(box)
+	var row := HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_child(row)
+	_rush_text = Label.new()
+	_rush_text.text = tr("TOWN_RUSH_CALL")
+	_rush_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_rush_text.add_theme_color_override("font_color", Feel.COLOR_RUSH_TEXT)
+	row.add_child(_rush_text)
+	rush_button = Button.new()
+	rush_button.text = tr("TOWN_RUSH_ACCEPT")
+	rush_button.focus_mode = Control.FOCUS_NONE
+	for c in ["font_color", "font_hover_color", "font_pressed_color"]:
+		rush_button.add_theme_color_override(c, Feel.COLOR_TEXT)
+	rush_button.pressed.connect(func(): rush_accept_pressed.emit())
+	row.add_child(rush_button)
+	_rush_bar = ProgressBar.new()
+	_rush_bar.show_percentage = false
+	_rush_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_rush_bar.max_value = 1.0
+	_rush_bar.step = 0.0
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = Feel.COLOR_RUSH_BAR_BG
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = Feel.COLOR_RUSH_BUTTON
+	_rush_bar.add_theme_stylebox_override("background", bg)
+	_rush_bar.add_theme_stylebox_override("fill", fill)
+	box.add_child(_rush_bar)
+	rush_bubble.visible = false
+	add_child(rush_bubble)
 
 
 ## 동네를 어디에 얼마나 크게 놓을지. top_left = 동네 왼쪽 위 (이 노드 좌표), z = 확대 배수
@@ -122,7 +182,7 @@ func layout(top_left: Vector2, z: float, text_k: float) -> void:
 	truck.set_view(origin, zoom)
 
 	_hud.add_theme_constant_override("separation", int(roundf(10.0 * text_scale)))
-	for l in [_star_label, _money_label, _level_label]:
+	for l in [_star_label, _money_label, _level_label, _rush_left]:
 		_set_font(l, Feel.HUD_FONT_SIZE)
 	_style_button()
 	var d := Feel.POINT_DOT_SIZE * text_scale
@@ -147,6 +207,7 @@ func layout(top_left: Vector2, z: float, text_k: float) -> void:
 	_set_font(_name_tag, Feel.NAME_TAG_FONT_SIZE)
 	_place_name_tag()
 	_place_hint()
+	_place_rush()
 
 	# 떠오르던 "+금액"은 자리가 안 맞게 되니 지운다
 	for p in _payouts:
@@ -213,6 +274,13 @@ func _place_name_tag() -> void:
 
 
 ## 처음 말풍선 켜고 끄기 (main.gd: 작은 화면이고 아직 건물을 안 눌렀을 때만 켬)
+## 명장 방문 중이면 튜닝숍 둘레에 색 테두리 (빛남 두께 안이라 보이는 곳 사각형은 그대로)
+func set_master_visit(on: bool) -> void:
+	if master_visit != on:
+		master_visit = on
+		queue_redraw()
+
+
 func set_hint(on: bool) -> void:
 	if hint.visible != on:
 		hint.visible = on
@@ -241,18 +309,49 @@ func _hint_tail() -> PackedVector2Array:
 	return PackedVector2Array([Vector2(tip.x - Feel.HINT_TAIL_HALF, base_y), tip, Vector2(tip.x + Feel.HINT_TAIL_HALF, base_y)])
 
 
-## 작은 버튼: 글자 크기·여백을 동네 글자 배수에 맞춤 (평소 / 올림 두 색)
+## 작은 버튼 [강화]·[받기]: 글자 크기·여백을 동네 글자 배수에 맞춤 (평소 / 올림 두 색)
 func _style_button() -> void:
-	tuning_button.add_theme_font_size_override("font_size", maxi(1, int(roundf(Feel.TOWN_BUTTON_FONT_SIZE * text_scale))))
+	_flat_button(tuning_button, Feel.COLOR_TUNING, Feel.TOWN_BUTTON_FONT_SIZE)
+	_flat_button(rush_button, Feel.COLOR_RUSH_BUTTON, Feel.RUSH_BUTTON_FONT_SIZE)
+
+
+func _flat_button(btn: Button, color: Color, font_size: int) -> void:
+	btn.add_theme_font_size_override("font_size", maxi(1, int(roundf(font_size * text_scale))))
 	for state in ["normal", "hover", "pressed"]:
 		var sb := StyleBoxFlat.new()
-		sb.bg_color = Feel.COLOR_TUNING.lightened(Feel.BUILDING_GLOW_LIGHTEN) if state != "normal" else Feel.COLOR_TUNING
+		sb.bg_color = color.lightened(Feel.BUILDING_GLOW_LIGHTEN) if state != "normal" else color
 		sb.set_corner_radius_all(int(roundf(Feel.TOWN_BUTTON_RADIUS * text_scale)))
 		sb.content_margin_left = Feel.TOWN_BUTTON_PAD.x * text_scale
 		sb.content_margin_right = Feel.TOWN_BUTTON_PAD.x * text_scale
 		sb.content_margin_top = Feel.TOWN_BUTTON_PAD.y * text_scale
 		sb.content_margin_bottom = Feel.TOWN_BUTTON_PAD.y * text_scale
-		tuning_button.add_theme_stylebox_override(state, sb)
+		btn.add_theme_stylebox_override(state, sb)
+
+
+## 급송 전화: ringing이면 말풍선 (ratio = 벨 남은 시간 비율 1 → 0, 막대), left > 0이면 구석 줄 "급송 N건 남음"
+func set_rush(ringing: bool, ratio: float, left: int) -> void:
+	if rush_bubble.visible != ringing:
+		rush_bubble.visible = ringing
+		_place_rush()
+	_rush_bar.value = clampf(ratio, 0.0, 1.0)
+	_rush_left.visible = left > 0
+	if left > 0:
+		_rush_left.text = tr("TOWN_RUSH_LEFT") % left
+
+
+## 말풍선: 글자·여백을 동네 글자 배수에, 폭은 RUSH_BUBBLE_RECT(양옆 집 사이)를 꽉 채우게
+func _place_rush() -> void:
+	_rush_text.add_theme_font_size_override("font_size", maxi(1, int(roundf(Feel.RUSH_FONT_SIZE * text_scale))))
+	_rush_style.set_corner_radius_all(int(roundf(Feel.RUSH_RADIUS * text_scale)))
+	_rush_style.content_margin_left = Feel.RUSH_PAD.x * text_scale
+	_rush_style.content_margin_right = Feel.RUSH_PAD.x * text_scale
+	_rush_style.content_margin_top = Feel.RUSH_PAD.y * text_scale
+	_rush_style.content_margin_bottom = Feel.RUSH_PAD.y * text_scale
+	_rush_bar.custom_minimum_size.y = Feel.RUSH_BAR_HEIGHT * text_scale
+	var r := view_rect(Feel.RUSH_BUBBLE_RECT)
+	rush_bubble.custom_minimum_size.x = r.size.x
+	rush_bubble.reset_size()
+	rush_bubble.position = Vector2(r.get_center().x - rush_bubble.size.x / 2.0, r.position.y)
 
 
 func set_hud(money: int, star: int, level: int) -> void:
@@ -312,10 +411,18 @@ func pop_star() -> void:
 	pop(_star_label)
 
 
-## 집 앞: "+금액"이 떠올랐다가 사라짐 (계산 쪽 배송 이벤트가 올 때)
-func show_payout(house: int, amount: int) -> void:
+## 집 앞: "+금액"이 떠올랐다가 사라짐 (계산 쪽 배송 이벤트가 올 때).
+## v6b: 대형·VIP·급송 배송은 앞에 글자("대형 +5,625", "급송 VIP +…")를 붙이고 색을 다르게 (대형·VIP 색이 급송 색보다 먼저)
+func show_payout(house: int, amount: int, kind := "normal", rush := false) -> void:
 	payouts_shown += 1
-	_last_payout = _float_text(_house_spot(house), "+" + Fmt.money(amount), Feel.PAYOUT_FONT_SIZE, Feel.COLOR_PAYOUT, Feel.PAYOUT_RISE, Feel.PAYOUT_DURATION)
+	var words := PackedStringArray()
+	if rush:
+		words.append(tr("TOWN_PAY_RUSH"))
+	if PAY_KEYS.has(kind):
+		words.append(tr(PAY_KEYS[kind]))
+	words.append("+" + Fmt.money(amount))
+	var color: Color = PAY_COLORS.get(kind, Feel.COLOR_PAYOUT_RUSH if rush else Feel.COLOR_PAYOUT)
+	_last_payout = _float_text(_house_spot(house), " ".join(words), Feel.PAYOUT_FONT_SIZE, color, Feel.PAYOUT_RISE, Feel.PAYOUT_DURATION)
 
 
 ## 배송에서 팁이 나옴: 바로 앞 "+금액" 옆에 "팁! +금액" (다른 색). "+금액"의 자식이라 같이 떠오르고 같이 사라지고,
@@ -423,8 +530,16 @@ func visible_rects(truck_pad: float) -> Array:
 	out.append_array(blds)
 	if _name_tag.visible:
 		out.append(Rect2(_name_tag.position, _name_tag.size).grow(o))
+	# 급송 말풍선: 양옆 집과 한 사각형으로 (사각형 수를 늘리지 않게. 말풍선이 두 집 사이를 꽉 채움)
+	var bubble := Rect2(rush_bubble.position, rush_bubble.size).grow(1.0) if rush_bubble.visible else Rect2()
 	for spot in _houses:
-		out.append(view_rect(_house_rect(spot)).grow(1.0))
+		var h := view_rect(_house_rect(spot)).grow(1.0)
+		if bubble.has_area() and h.intersects(bubble.grow(Feel.RUSH_JOIN_PX * zoom)):
+			bubble = bubble.merge(h)
+		else:
+			out.append(h)
+	if bubble.has_area():
+		out.append(bubble)
 	# "+N" 숫자가 커졌다 돌아올 때 잘리지 않게 넉넉하게
 	var pop_room := Feel.HUD_FONT_SIZE * text_scale * (Feel.STAR_POP_SCALE - 1.0)
 	# 바로 아래 "다음 할 일" 줄과 한 사각형으로 (사각형 수를 늘리지 않게. 둘 다 왼쪽 맞춤이라 빈 곳이 거의 안 생김)
@@ -470,6 +585,8 @@ func _draw() -> void:
 		draw_rect(d, colors[id].lightened(Feel.BUILDING_GLOW_LIGHTEN) if lit else colors[id])
 		var door := Feel.BUILDING_DOOR_SIZE
 		draw_rect(Rect2(d.end.x - d.size.x * Feel.BUILDING_DOOR_RIGHT, d.end.y - d.size.y * door.y, d.size.x * door.x, d.size.y * door.y), Feel.COLOR_ROAD_EDGE)
+		if id == "tuning" and master_visit:   # 건물 가장자리를 가운데로: 바깥 절반 = 빛남 두께
+			draw_rect(d, Feel.COLOR_MASTER, false, Feel.MASTER_MARK_WIDTH)
 
 	# 집 (벽 + 지붕 + 문). 길보다 먼저 그려서 길 뒤에 선 것처럼
 	var hs := Feel.TOWN_HOUSE_SIZE

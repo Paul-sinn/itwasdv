@@ -1,6 +1,6 @@
-## 큰 화면 [설정]을 누르면 가운데 뜨는 작은 화면: "화면: 전체 화면 / 창 모드".
-## 고르면 신호만 보낸다. 실제 창 바꾸기와 설정 저장은 screen_mode.gd (창 담당).
-## 지금 고른 값은 main.gd가 screen.full_style을 보고 show_style()로 알려준다.
+## 큰 화면 [설정]을 누르면 가운데 뜨는 작은 화면: "화면: 전체 화면 / 창 모드", (v6b) "급송 요청 전화: 켜기 / 끄기".
+## 고르면 신호만 보낸다. 실제 창 바꾸기와 설정 저장은 screen_mode.gd (창 담당), 급송 전화는 main.gd (게임 저장).
+## 지금 고른 값은 main.gd가 show_style()·show_rush()로 알려준다.
 extends PanelContainer
 
 const Feel = preload("res://scripts/ui/feel.gd")
@@ -8,14 +8,18 @@ const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
 
 signal style_picked(style: ScreenMode.FullStyle)
 signal close_pressed
+signal rush_picked(on: bool)   ## 급송 요청 전화 켜기 / 끄기
 
 var fullscreen_button: Button
 var windowed_button: Button
 var close_button: Button
+var rush_on_button: Button
+var rush_off_button: Button
 
 var _style: StyleBoxFlat
 var _box: VBoxContainer
 var _row: HBoxContainer
+var _rush_row: HBoxContainer
 var _font_sizes := {}   ## 글자 → 배수 곱하기 전 크기
 var _scale := 1.0
 
@@ -47,6 +51,21 @@ func _ready() -> void:
 	windowed_button.pressed.connect(func(): style_picked.emit(ScreenMode.FullStyle.WINDOWED))
 	_label(tr("SETTINGS_WINDOWED_NOTE"), Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
 
+	_label(tr("SETTINGS_RUSH"), Feel.PANEL_TEXT_SIZE, Feel.COLOR_DIM)
+	_rush_row = HBoxContainer.new()
+	_box.add_child(_rush_row)
+	var rush_group := ButtonGroup.new()
+	rush_on_button = _button(_rush_row, tr("SETTINGS_ON"))
+	rush_off_button = _button(_rush_row, tr("SETTINGS_OFF"))
+	for b in [rush_on_button, rush_off_button]:
+		b.toggle_mode = true
+		b.button_group = rush_group
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.add_theme_color_override("font_pressed_color", Feel.COLOR_STAR)
+		b.add_theme_color_override("font_hover_pressed_color", Feel.COLOR_STAR)
+	rush_on_button.pressed.connect(func(): rush_picked.emit(true))
+	rush_off_button.pressed.connect(func(): rush_picked.emit(false))
+
 	close_button = _button(_box, tr("SETTINGS_CLOSE"))
 	close_button.pressed.connect(func(): close_pressed.emit())
 	set_ui_scale(_scale)
@@ -56,6 +75,12 @@ func _ready() -> void:
 func show_style(style: ScreenMode.FullStyle) -> void:
 	fullscreen_button.set_pressed_no_signal(style == ScreenMode.FullStyle.FULLSCREEN)
 	windowed_button.set_pressed_no_signal(style == ScreenMode.FullStyle.WINDOWED)
+
+
+## 급송 요청 전화 지금 값 표시 (누른 상태로). 신호는 안 보냄
+func show_rush(on: bool) -> void:
+	rush_on_button.set_pressed_no_signal(on)
+	rush_off_button.set_pressed_no_signal(not on)
 
 
 ## 크기 배수 (1 = v0 패널 크기 기준)
@@ -68,7 +93,8 @@ func set_ui_scale(s: float) -> void:
 	_style.set_corner_radius_all(int(roundf(Feel.PANEL_RADIUS * s)))
 	_style.set_content_margin_all(Feel.PANEL_PADDING * s)
 	_box.add_theme_constant_override("separation", int(roundf(8.0 * s)))
-	_row.add_theme_constant_override("separation", int(roundf(8.0 * s)))
+	for row: HBoxContainer in [_row, _rush_row]:
+		row.add_theme_constant_override("separation", int(roundf(8.0 * s)))
 	for c: Control in _font_sizes:
 		c.add_theme_font_size_override("font_size", maxi(1, int(roundf(_font_sizes[c] * s))))
 	reset_size()

@@ -29,6 +29,11 @@ static func money(v: int) -> String:
 	return "%d.%d%s" % [tenths / 10, tenths % 10, units[i - 1]]
 
 
+## 건수·경험치처럼 단위를 안 붙이는 수: 12340 → "12,340" (돈은 money: "1.2만")
+static func count(n: int) -> String:
+	return _commas(n)
+
+
 ## 1234567 → "1,234,567"
 static func _commas(n: int) -> String:
 	var digits := str(n)
@@ -93,3 +98,15 @@ static func quest_name(id: String) -> String:
 
 static func quest_desc(id: String) -> String:
 	return _t("QUEST_" + id.to_upper() + "_DESC")
+
+
+## 명장 보너스 이름과 효과 (번역 키 MASTER_BONUS_<ID>, 수치는 balance의 master_bonuses).
+## 배수(_mult)는 "1.5", 나머지(할인·감소·확률)는 "20%"
+static func master_bonus(bonuses: Dictionary, id: String) -> String:
+	var v: float = bonuses.get(id, 0.0)
+	return _t("MASTER_BONUS_" + id.to_upper()) % (num(v) if id.ends_with("_mult") else percent(v))
+
+
+## 요일 이름 (0 = 월 … 6 = 일). short면 한 글자 ("월" / "Mon")
+static func day_name(day: int, short := false) -> String:
+	return _t(("DAY_SHORT_%d" if short else "DAY_%d") % day)

@@ -79,7 +79,7 @@ func _run() -> void:
 	for part in ["cargo_box", "ecu"]:
 		_click(st.part_buttons[part].get_global_rect().get_center())
 		await _frames(3)
-		prob_ok = prob_ok and st.selected == part and st._up.text.contains("등급업 확률 " + Fmt.percent(Setting.up_chance(b, 0)))
+		prob_ok = prob_ok and st.selected == part and st._up.text.contains("등급업 확률 " + Fmt.percent(Setting.up_chance(b, 0, m.state)))
 		var chances := Setting.option_chances(b, part, 0)
 		for op in chances:
 			if not st._chances.text.contains("%s %s" % [st.option_name(op), Fmt.percent(chances[op])]):
@@ -123,7 +123,7 @@ func _run() -> void:
 	await _frames(3)
 
 	# ⑥ 돈 모자람: 버튼 꺼짐 + 모자란 금액, 눌러도 안 돌아감
-	var cost0 := Setting.roll_cost(b, 0)
+	var cost0 := Setting.roll_cost(b, 0, m.state)
 	m.state.money = cost0 - 1234
 	await _frames(3)
 	var short_ok: bool = st.roll_button.disabled and st._wait.visible and st._wait.text.begins_with(Fmt.money(1234) + "원 모자람")
@@ -246,7 +246,7 @@ func _run() -> void:
 	t.star = 20
 	_click(p.engine_tab_button.get_global_rect().get_center())
 	await _frames(3)
-	var c := Enhance.chances_for(b, t)
+	var c := Enhance.chances_for(b, m.state, 0)
 	var plain := GameState.new_game()   # 같은 단계, 세팅·능력치 없음
 	plain.truck(0).star = t.star
 	var hourly := Trip.hourly_income(b, m.state, 0)

@@ -5,6 +5,8 @@
 ## v4: 오버부스트(ECU 프로토타입 3줄)가 걸린 바퀴마다 "오버부스트!" 글자, 1시간 돈이 평균 시간당 수입과 맞나
 ## v6-bal U1 ②: 오버부스트가 걸린 바퀴 내내 트럭 뒤 불꽃 (10초가 아니라), 다음 안 걸린 바퀴에서 꺼짐
 ##     작은 화면 트럭 뒤 불꽃(오버부스트·강화 성공)이 가장 길 때도 보이는 곳(main.visible_rects) 안인가
+## v6b: +15부터는 대형·VIP 배송이 섞여 배송 1건 돈이 1875 / 5625 / 9375원으로 갈림 → 1시간 돈이 한 바퀴치 안에 들어올 수 없음.
+##      그래서 +15 이상 경우는 대형·VIP 몫을 0으로 바꾼 balance로 돌린다 (보통 배송만). 대형·VIP 평균은 계산 쪽 50시간 테스트가 봄
 ## 진짜 게임 화면(main.tscn)을 작은 화면 크기로 띄우고, F2와 같은 60배속 측정을 켠 뒤 1시간치를 돌린다.
 ##
 ## 실행 (--fixed-fps 60 + 60배속 = 한 프레임에 게임 1초 → 몇 초 만에 끝남):
@@ -14,6 +16,7 @@ extends SceneTree
 const ErrorWatch = preload("res://tests/error_watch.gd")   ## 실행 중 스크립트 오류가 나면 실패로 끝냄
 
 const MAIN_SCENE := "res://scenes/main.tscn"
+const Master = preload("res://scripts/core/master.gd")
 const Save = preload("res://scripts/core/save.gd")
 const Trip = preload("res://scripts/core/trip.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
@@ -42,6 +45,7 @@ var _switches := 0
 var _max_speed_ratio := 0.0   ## 화면 트럭 속도 ÷ 상한 중 가장 큰 값
 var _max_lag := 0.0           ## 화면 트럭이 있어야 할 자리보다 가장 많이 뒤처진 거리 (설계 좌표 픽셀)
 var _start_counts := {}
+var _plain_only := false      ## 이 경우는 대형·VIP 몫을 0으로 바꿔 돌림 (+15 이상)
 var _flame_frames := 0        ## 작은 화면에서 불꽃이 나온 프레임 수
 var _flame_out := 0           ## 그중 가장 긴 불꽃이 보이는 곳 밖으로 나간 프레임 수
 ## v6-bal U1 ② (오버부스트 경우만): 걸린 바퀴 / 안 걸린 바퀴 동안 불꽃
@@ -79,7 +83,19 @@ func _start() -> void:
 		root.size = Feel.SMALL_SIZE if mode == 0 else Feel.WINDOWED_FULL_SIZE)
 	var c: Dictionary = CASES[_case]
 	_main.state.truck(0).star = c["star"]
+	_plain_only = false
+	for k in _main.balance.special:
+		if c["star"] >= _main.balance.special[k]["unlock_star"]:
+			_plain_only = true
+	if _plain_only:   # 대형·VIP 몫 0 → 보통 배송만 (위 v6b 설명)
+		for k in _main.balance.special:
+			_main.balance.special[k]["share"] = 0.0
+	# 명장(v6b C2): +10 이상이면 첫 Master.tick이 명장을 열며 그 주 보너스를 굴려 rng를 한 번 씀 → seed 전에 미리 (굴림 순서를 v6b 전과 같게)
+	Master.tick(_main.state, _main.balance, _main.now_local(), _main.rng)
 	_main.rng.seed = 20261113 + _case
+	# 급송 전화(v6b)는 이 확인과 상관없음 (받는 사람이 없음). 켜 두면 벨 간격 굴리기가 같은 rng를 써서
+	# 오버부스트·팁 굴림 순서가 seed마다 달라짐 → 꺼서 이 확인의 굴림을 v6b 전과 같게
+	_main.state.rush_enabled = false
 	if c.get("flame", false):
 		_main.town.truck.boost(Feel.BOOST_DURATION)
 	if c.get("overboost", false):
@@ -153,7 +169,7 @@ func _on_frame() -> void:
 	var b = _main.balance
 	var t = _main.state.truck(0)
 	var town = _main.town
-	var what := "+%d%s" % [t.star, " (화면 %d번 오감)" % _switches if _switches > 0 else ""]
+	var what := "+%d%s%s" % [t.star, " (화면 %d번 오감)" % _switches if _switches > 0 else "", " (대형·VIP 몫 0)" if _plain_only else ""]
 	var hourly := Trip.hourly_income(b, _main.state, 0)
 	var seconds: float = _main._measure_seconds
 	var earned: int = _main._measure_earned
@@ -172,7 +188,7 @@ func _on_frame() -> void:
 	var tip_events: int = _main.tips_found - _start_counts["tip_events"]
 	var tips_shown: int = town.tips_shown.size() - _start_counts["tips_shown"]
 	_report(shown == events and events > 0 and (earned - tips) % pay == 0 and tips_shown == tip_events,
-			"%s: ① '+돈' 글자 %d개 = 배송 이벤트 %d번 ((측정 뒤 번 돈 − 팁 %d원) ÷ 배송 1건 %d원 = %d건), '팁!' 글자 %d개 = 팁 이벤트 %d번" % [
+			"%s: ① '+돈' 글자 %d개 = 배송 이벤트 %d번, 모두 보통 배송이라 (측정 뒤 번 돈 − 팁 %d원) ÷ 보통 배송 1건 %d원 = %d건, '팁!' 글자 %d개 = 팁 이벤트 %d번" % [
 			what, shown, events, tips, pay, (earned - tips) / pay, tips_shown, tip_events])
 	_report(_max_lag <= 1.0, "%s: 화면 트럭이 계산 쪽 바퀴 진행을 따라감 (가장 많이 뒤처진 거리 %.1f픽셀)" % [what, _max_lag])
 	if CASES[_case].get("overboost", false):

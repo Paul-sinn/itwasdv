@@ -15,12 +15,18 @@
 ## v6-bal: 처음 켰을 때 작은 화면 말풍선 "건물을 눌러보세요". 건물·작은 버튼을 한 번 누르면(open_building) 다시 안 뜸
 ## v5b: 물류센터 능력치 [+] → Ability.add, [초기화] → Ability.reset (직후 저장). 팁 이벤트 → 동네 "팁!",
 ##      찍을 포인트가 남으면 구석 줄 점, 꺼둔 동안 노하우 경험치 한 줄
+## v6b: 현지 시각(now_local)을 만들어 Master.tick(켤 때는 꺼둔 동안 계산보다 먼저, 그 뒤 프레임마다)·Rush.tick(프레임마다).
+##      대형·VIP·급송 "+금액", 급송 전화 말풍선 [받기] → Rush.accept, [설정] 급송 전화 켜기/끄기, 주간 목표 달성 알림
+##      명장: +10 첫 달성(master_unlocked)이면 큰 화면 튜닝숍에서 요일 고르기 창(day_picker.gd), 요일 → Master.set_day,
+##      예고·방문 알림, 방문 중이면 띠의 튜닝숍 테두리. 강화는 [보험]을 켰으면 Enhance.try_enhance(…, insure, now_local)
 extends Control
 
 const Ability = preload("res://scripts/core/ability.gd")
 const Balance = preload("res://scripts/core/balance.gd")
 const Depot = preload("res://scripts/core/depot.gd")
 const Driver = preload("res://scripts/core/driver.gd")
+const Master = preload("res://scripts/core/master.gd")
+const Rush = preload("res://scripts/core/rush.gd")
 const Enhance = preload("res://scripts/core/enhance.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Quest = preload("res://scripts/core/quest.gd")
@@ -33,6 +39,7 @@ const Town = preload("res://scripts/ui/town.gd")
 const GaragePanel = preload("res://scripts/ui/garage_panel.gd")
 const ReturnPopup = preload("res://scripts/ui/return_popup.gd")
 const SettingsPanel = preload("res://scripts/ui/settings_panel.gd")
+const DayPicker = preload("res://scripts/ui/day_picker.gd")
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
 
 const AUTOSAVE_SECONDS := 30.0        ## 30초마다 저장 (배속과 상관없이 진짜 30초)
@@ -43,6 +50,8 @@ const HINT_KEY := "building_hint_seen"
 
 ## 저장 파일 위치. 확인 스크립트는 진짜 저장을 건드리지 않게 add_child 전에 바꾼다.
 var save_path := Save.DEFAULT_PATH
+## 현지 시각을 바꿔 넣기 (확인 스크립트용. 0 이상이면 now_local()이 이 값). 켤 때부터 쓰려면 add_child 전에
+var now_local_override := -1
 
 var balance: Balance
 var state: GameState
@@ -53,9 +62,12 @@ var screen: ScreenMode       ## 작은 화면 / 전체 화면 오가기 (창 다
 var small_button: Button     ## 큰 화면 [작게]
 var settings_button: Button  ## 큰 화면 [설정]
 var settings: SettingsPanel  ## [설정]을 누르면 가운데 뜨는 "화면: 전체 화면 / 창 모드"
+var day_picker: DayPicker    ## 명장 요일 고르기 창 (큰 화면 튜닝숍 가운데)
 var rng := RandomNumberGenerator.new()
 ## 처음 말풍선 "건물을 눌러보세요"를 이미 봤나 (건물·작은 버튼을 한 번 누르면 true. 작은 화면에서 false일 때만 뜸)
 var hint_seen := false
+## 명장이 열렸는데 아직 요일 고르기 창을 안 띄움 (큰 화면 튜닝숍을 볼 때 한 번 띄움)
+var _want_day_picker := false
 
 ## 켰을 때 넣은 꺼둔 동안 (Trip.apply_offline 결과 + away_seconds):
 ##   { money, parcels, spares, hours, xp, full, ignored, away_seconds }.
@@ -127,6 +139,7 @@ func _ready() -> void:
 	panel.driver.upgrade_pressed.connect(_on_upgrade_pressed)
 	panel.driver.ability_pressed.connect(_on_ability_pressed)
 	panel.driver.reset_pressed.connect(_on_ability_reset)
+	panel.master.day_pressed.connect(_on_day_picked)
 	town.tuning_pressed.connect(func(): open_building("tuning"))
 	_open_pending_setting()
 
@@ -150,7 +163,15 @@ func _ready() -> void:
 	add_child(settings)
 	settings.style_picked.connect(_on_style_picked)
 	settings.close_pressed.connect(close_settings)
+	settings.rush_picked.connect(_on_rush_picked)
+	town.rush_accept_pressed.connect(_on_rush_accept)
 	screen.full_style_changed.connect(func(style): settings.show_style(style))
+
+	day_picker = DayPicker.new()
+	day_picker.visible = false
+	add_child(day_picker)
+	day_picker.day_picked.connect(_on_day_picked)
+	day_picker.close_pressed.connect(func(): day_picker.visible = false)
 
 	popup = ReturnPopup.new()
 	popup.visible = false
@@ -188,6 +209,7 @@ func _layout() -> void:
 	settings_button.visible = full
 	if not full:
 		settings.visible = false
+		day_picker.visible = false   # 작게 하면 닫힘 (요일은 [명장] 칸에서 언제든)
 	_debug_label.visible = full and OS.is_debug_build()
 	town.show_ground = full
 	town.set_hint(not full and not hint_seen)
@@ -210,6 +232,7 @@ func _layout() -> void:
 	small_button.position = Vector2(view.x - m - small_button.size.x, m * 0.5)
 	settings_button.position = small_button.position - Vector2(settings_button.size.x + m * 0.5, 0)
 	settings.set_ui_scale(Feel.GARAGE_SCALE * _ui_scale)
+	day_picker.set_ui_scale(Feel.GARAGE_SCALE * _ui_scale)
 	_debug_label.add_theme_font_size_override("font_size", int(roundf(Feel.DEBUG_FONT_SIZE * _ui_scale)))
 
 	panel.set_ui_scale(Feel.GARAGE_SCALE * _ui_scale)
@@ -239,6 +262,9 @@ func _place_panel() -> void:
 
 func _process(delta: float) -> void:
 	var t := state.truck(TRUCK)
+	var now := now_local()
+	Master.tick(state, balance, now, rng)
+	Rush.tick(state, balance, delta, rng)
 	var events := Trip.advance(state, balance, TRUCK, delta, rng)
 	town.truck.follow(_lap_phase(t))
 	town.truck.boosting = t.boost_lap
@@ -246,7 +272,7 @@ func _process(delta: float) -> void:
 	for e in events:
 		match e["type"]:
 			"parcel":
-				town.show_payout(house, e["pay"])
+				town.show_payout(house, e["pay"], e.get("kind", "normal"), e.get("rush", false))
 				earned_total += e["pay"]
 				parcels_total += 1
 				if _measuring:
@@ -267,7 +293,14 @@ func _process(delta: float) -> void:
 	_show_events(state.take_events())
 	town.set_hud(state.money, t.star, state.driver_level)
 	town.set_point_dot(Ability.points_left(state) > 0)
+	town.set_rush(Rush.is_ringing(state), state.rush_ring / balance.rush_ring_seconds, Rush.parcels_left(state))
 	town.set_quest(_quest_line())
+	town.set_master_visit(Master.is_visiting(state, now))
+	panel.now_local = now
+	if _want_day_picker and is_full() and panel.building == "tuning" and not enhancing:
+		_want_day_picker = false
+		panel.show_tab(panel.Tab.MASTER)
+		day_picker.visible = true
 	if panel.visible:
 		panel.refresh(balance, state)
 		_place_panel()
@@ -276,6 +309,9 @@ func _process(delta: float) -> void:
 	if settings.visible:
 		settings.reset_size()
 		settings.position = ((get_viewport_rect().size - settings.size) / 2.0).max(Vector2.ZERO)
+	if day_picker.visible:
+		day_picker.reset_size()
+		day_picker.position = ((get_viewport_rect().size - day_picker.size) / 2.0).max(Vector2.ZERO)
 	if _measuring:
 		_measure_seconds += delta
 	if _debug_label.visible:
@@ -300,6 +336,7 @@ func _load_save() -> String:
 		Save.Status.OK:
 			state = r["state"]
 			var away := Time.get_unix_time_from_system() - float(r["saved_at"])
+			Master.tick(state, balance, now_local(), rng)   # 주가 바뀐 뒤 켰으면 꺼둔 동안 배송이 새 주에 들어가게 (먼저)
 			offline_report = Trip.apply_offline(state, balance, away)
 			offline_report["away_seconds"] = away
 			if r["recovered"]:
@@ -370,6 +407,17 @@ func _show_events(events: Array) -> void:
 				cur["points"] = cur.get("points", 0) + e["points"]
 			"max_level":
 				cur["max"] = true
+			"weekly_done":   # 경험치 보상으로 레벨업하면 그 줄이 이 알림에 붙음
+				_notify(cur)
+				cur = { "head": tr("NOTICE_WEEKLY") % [e["coupons"], Fmt.count(e["xp"])] }
+			"master_notice":
+				_notify(cur)
+				cur = { "head": tr("NOTICE_MASTER_TOMORROW") % Fmt.master_bonus(balance.master_bonuses, e["bonus"]) }
+			"master_visit":
+				_notify(cur)
+				cur = { "head": tr("NOTICE_MASTER_TODAY") % Fmt.master_bonus(balance.master_bonuses, e["bonus"]) }
+			"master_unlocked":   # 큰 화면 튜닝숍을 볼 때 요일 고르기 창 (_process)
+				_want_day_picker = true
 	_notify(cur)
 
 
@@ -434,11 +482,43 @@ func open_settings() -> void:
 	if not is_full():
 		return
 	settings.show_style(screen.full_style)
+	settings.show_rush(state.rush_enabled)
 	settings.visible = true
 
 
 func close_settings() -> void:
 	settings.visible = false
+
+
+## [설정] 급송 요청 전화 켜기/끄기 → 게임 저장에 (끄면 벨이 안 울림. 울리던 벨도 Rush.tick이 끔)
+func _on_rush_picked(on: bool) -> void:
+	state.rush_enabled = on
+	settings.show_rush(on)
+	_save()
+
+
+## 급송 전화 [받기] → Rush.accept (벨이 울릴 때만) → 저장
+func _on_rush_accept() -> void:
+	if Rush.accept(state, balance):
+		_save()
+
+
+## 지금 현지 시각 = 현지 시각을 1970-01-01 0시(현지)부터 센 초 (Master가 요일·주를 셈). 확인 스크립트는 now_local_override
+func now_local() -> int:
+	if now_local_override >= 0:
+		return now_local_override
+	return Time.get_unix_time_from_datetime_dict(Time.get_datetime_dict_from_system())
+
+
+## 명장 요일 (고르기 창 또는 [명장] 칸) → Master.set_day (처음이면 이번 주부터, 바꾸면 다음 주부터) → 저장.
+## 고르기 창에서 골랐으면 창을 닫고 [명장] 칸에서 결과를 보여 줌
+func _on_day_picked(day: int) -> void:
+	Master.set_day(state, day, now_local())
+	if day_picker.visible:
+		day_picker.visible = false
+		panel.show_tab(panel.Tab.MASTER)
+	_save()
+	panel.refresh(balance, state)
 
 
 ## 전체 화면 / 창 모드 고름 → 창 바꾸기·저장은 screen_mode.gd. 실제로 바뀐 값을 다시 표시
@@ -450,12 +530,13 @@ func _on_style_picked(style: ScreenMode.FullStyle) -> void:
 # ---------------- 강화 · 스페어 ----------------
 
 ## 강화 버튼: 뜸 → 굴리기(enhance.gd) → 결과 연출 → 저장
-## 굴리기는 뜸이 끝난 뒤에 한다 (뜸 동안 꺼도 돈이 안 빠짐)
+## 굴리기는 뜸이 끝난 뒤에 한다 (뜸 동안 꺼도 돈이 안 빠짐). [보험]을 켰으면 보험을 걸고 (요금·쿠폰은 계산 쪽)
 func _on_enhance_pressed() -> void:
-	if enhancing or rolling or Enhance.block_reason(state, balance, TRUCK) != Enhance.Block.NONE:
+	var insure := panel.insure
+	if enhancing or rolling or Enhance.block_reason(state, balance, TRUCK, insure, now_local()) != Enhance.Block.NONE:
 		return
 	enhancing = true
-	var danger := Enhance.needs_spare(balance, state.truck(TRUCK).star)
+	var danger := Enhance.needs_spare(balance, state.truck(TRUCK).star) and not insure
 	panel.begin_suspense()
 	var wait := (Feel.SUSPENSE_DANGER if danger else Feel.SUSPENSE_SAFE) * suspense_scale
 	if danger:
@@ -464,16 +545,19 @@ func _on_enhance_pressed() -> void:
 
 	var t := state.truck(TRUCK)   # 뜸 동안 F3(처음부터)이면 상태가 바뀌어서 다시 읽음
 	var star_before := t.star
-	var result := Enhance.try_enhance(state, balance, TRUCK, rng)
+	var r := Enhance.try_enhance(state, balance, TRUCK, rng, insure, now_local())
 	panel.end_suspense()
 	var fx := panel.ui_scale()   # 흔들림 세기: 차고 크기에 맞춰
-	match result:
+	match r["result"]:
 		Enhance.Result.SUCCESS:
-			panel.show_result(tr("RESULT_SUCCESS") % [star_before, t.star], Feel.COLOR_SUCCESS)
+			# 명장 "2단계" 보너스로 두 단계 올랐으면 "+2!"
+			panel.show_result(tr("RESULT_DOUBLE" if r["double"] else "RESULT_SUCCESS") % [star_before, t.star], Feel.COLOR_SUCCESS)
 			panel.celebrate()
 			town.pop_star()
 			town.truck.flash(Feel.FLASH_DURATION)
 			town.truck.boost(Feel.BOOST_DURATION)
+		Enhance.Result.FAIL when r["insured"]:   # 퍼짐이 떴지만 보험이 막음 (단계 그대로, 스페어 안 씀)
+			panel.show_result(tr("RESULT_INSURED") % t.star, Feel.COLOR_INSURED)
 		Enhance.Result.FAIL:
 			panel.show_result(tr("RESULT_FAIL"), Feel.COLOR_FAIL)
 			_shake(func(o): _panel_shake = o, Feel.FAIL_SHAKE_PX * fx, Feel.FAIL_SHAKE_DURATION)

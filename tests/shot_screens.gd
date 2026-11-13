@@ -83,7 +83,7 @@ func _run() -> void:
 	m.screen.enter_full()
 	t.star = 18
 	m.state.spares = 0
-	m.state.money = Economy.enhance_cost(b, 18)
+	m.state.money = Economy.enhance_cost(b, 18, m.state)
 	t.success_count = 31
 	t.fail_count = 12
 	t.destroy_count = 1
@@ -207,6 +207,17 @@ func _run() -> void:
 	m.screen.enter_small()
 	await _wait(0.3)
 	await _shot("small_point_dot")
+
+	# 11) v6b: 작은 화면 급송 전화 말풍선 + 대형·VIP·급송 "+금액"
+	m.state.rush_left = 0
+	m.state.rush_next = 0.1   # 곧 벨
+	await _until(func(): return m.town.rush_bubble.visible, 3.0)
+	m.town.show_payout(0, 5625, "large")
+	m.town.show_payout(1, 9375, "vip")
+	m.town.show_payout(2, 3750, "normal", true)
+	await _wait(0.2)
+	await _shot("small_rush_call")
+	await _shot_rects("small_rush_call_visible")
 
 	Save.delete_file(TEST_SAVE)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SETTINGS))
