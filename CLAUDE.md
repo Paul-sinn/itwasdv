@@ -11,6 +11,7 @@
 ## 규칙
 1. 게임 숫자(확률, 가격, 수익)는 `data/balance.json`에만 둔다. 코드에 직접 쓰지 않는다.
    - 예외: 연출용 숫자(이동 시간, 흔들림 세기 등)는 `scripts/ui/feel.gd`에 상수로 모은다.
+   - 기획 숫자 시트와의 관계: json에 들어간 숫자는 json이 기준. 시트에서 옮길 때마다 `docs/numbers-source.md`에 한 줄
 2. 강화 판정(성공/실패/퍼짐 굴리기)은 `scripts/core/enhance.gd` 한 파일에만 둔다.
    화면 코드에서 확률 계산 금지. (나중에 서버로 옮길 수 있게)
 3. `scripts/core/`는 화면(노드) 없이 돌아가는 순수 계산 코드로 유지한다. 테스트할 수 있게.
@@ -24,11 +25,10 @@
 ```
 data/balance.json        게임 숫자 전부 (게임과 시뮬이 같이 읽음)
 docs/GAME_PLAN.md        기획서 (무엇을 왜 만드나, MVP 범위, 메이플 용어 변환표). 지시서는 여기서 나옴
-docs/PROTOTYPE_V1.md     지금 할 일 (시제품 v1 지시서)
-docs/PROTOTYPE_V2.md     지금 할 일 (튜닝·큐브: 트럭 8칸, 에이전트 둘이 나눠 만듦)
-docs/PROTOTYPE_V0.md     끝난 시제품 v0 지시서
+docs/numbers-source.md   시트 숫자를 balance.json으로 옮긴 기록 (옮긴 숫자는 json이 기준)
+docs/PROTOTYPE_V0~V2.md  끝난 시제품 지시서 (v2 튜닝 8칸은 v4 세팅 돌리기로 바뀜)
 docs/IDEAS.md            나중에 할 것 / 이미 정한 것
-tools/delivery_sim.py    경제 시뮬레이터 (파이썬, 가상 유저 1만 명)
+tools/tune_sim.py        경제 시뮬레이터 (판정용. delivery_sim.py는 옛 모델이라 v3에서 지움)
 scripts/core/            계산 코드 (balance, economy, enhance, tune 튜닝, game_state, save)
 scripts/ui/              화면 코드 (main, town 동네, route 꼬불길 계산, truck, garage_panel 차고,
                          settings_panel 설정, screen_mode 두 화면 오가기, desktop_window 창, tray_icon 알림 영역)
@@ -100,7 +100,7 @@ powershell -ExecutionPolicy Bypass -File "C:\Users\PAUL SHIN\OneDrive\바탕 화
 & "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64.exe" --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" --editor
 
 # 시뮬 (-X utf8: 결과를 파일로 돌리면 막대그래프 글자(█) 때문에 cp949 오류가 나서)
-python -X utf8 "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\tools\delivery_sim.py"
+python -I -X utf8 "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\tools\tune_sim.py"
 ```
 
 그 밖에:
@@ -130,16 +130,18 @@ python -X utf8 "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv\
 - 프로젝트 안의 `.csv`는 Godot가 번역 파일로 가져간다 → 기록 파일은 `.gdignore`가 있는 폴더(`tests/soak_logs`)에
 
 ## 현재 작업
-`docs/PROTOTYPE_V0.md` 끝 (플레이 테스트 "아니오" 1개, 결과는 `docs/IDEAS.md`).
-`docs/PROTOTYPE_V1.md` (작은 화면 + 큰 화면): 창 담당 / 동네 담당 두 에이전트가 병렬로 만들고 `prototype-v1`에 합침.
-화면 없는 확인은 전부 통과. 남은 것:
-- 진짜 창 확인: 2026-11-10 사용자 자리 비운 동안 돌림. `check_switch.ps1` 전부 통과 (Windows 20/20, Godot 10750/10750,
-  220번 오가도 메모리 +2.2MB·GDI 0), `check_desktop.ps1` 44/44. 그때 전체 화면 맨 위 2줄 빈틈을 찾아 고침
-- 오래 켜두기: 따로 안 함. 사용자가 2026-11-10에 2시간 넘게 켜 두고 화면 어두워짐·작업표시줄 깨짐 없음을 확인
+**2026-11-13 grillme 끝:** 기획서 v2(`docs/GAME_PLAN.md`)의 규칙을 16장에 [확정]. 다음은 **시제품 v3 지시서 (경제 뼈대, 16.9)** → `delivery-dev`.
+- 지금 코드가 기획서와 크게 다른 곳 (v3~v4에서 바뀜): 강화 = 수입 배수 → 속도 기반 한 바퀴 계산 / 강화 비용 = 수입 N시간치 → 고정표 /
+  퍼지면 트럭 멈춤 → 스페어를 들고 있어야 누름 / 튜닝 8칸 → 세팅 돌리기 4부품 / 트럭 1대 → 여러 대 / 돈 float → 정수 / ★ → +18 / 번역 없음 → 번역 파일
+- v2 튜닝 확인·플레이 테스트는 건너뜀 (없어질 기능)
+- 남은 손 확인 (사용자): 알림 영역 아이콘 왼쪽 클릭(다른 프로그램을 쓰던 중에도 큰 화면이 앞으로 오나), 오른쪽 클릭 메뉴, v1 플레이 테스트 (지시서 맨 아래 5문항)
+- v3에 띠 24시간 켜두기 시험이 들어감 (창이 뜨니 돌리기 전에 사용자에게 물어봄)
+
+지난 기록:
+- v0 끝 (플레이 테스트 "아니오" 1개, 결과는 `docs/IDEAS.md`)
+- v1 (작은 화면 + 큰 화면): 창 담당 / 동네 담당 두 에이전트가 병렬로 만들고 `prototype-v1`에 합침. 화면 없는 확인 전부 통과.
+  진짜 창 확인 2026-11-10: `check_switch.ps1` 전부 통과 (Windows 20/20, Godot 10750/10750, 220번 오가도 메모리 +2.2MB·GDI 0),
+  `check_desktop.ps1` 44/44. 그때 전체 화면 맨 위 2줄 빈틈을 찾아 고침
+- 오래 켜두기: 사용자가 2026-11-10에 2시간 넘게 켜 두고 화면 어두워짐·작업표시줄 깨짐 없음을 확인
   (v0 기록 1시간 44분: GDI·USER·핸들 그대로, 작업 메모리만 98~472MB 오르내림. 원인 모름 → 평소 쓸 때 지켜보기)
-- 사용자가 손으로: 알림 영역 아이콘 왼쪽 클릭(다른 프로그램을 쓰던 중에도 큰 화면이 앞으로 오나), 오른쪽 클릭 메뉴
-- v1 플레이 테스트 (지시서 맨 아래 5문항)
-- 튜닝(큐브): `docs/PROTOTYPE_V2.md` 1~3단계 끝 (2026-11-12, 추천안). 계산 담당(window 에이전트, 가지 `v2-core`) /
-  화면 담당(town 에이전트, 가지 `v2-ui`)이 병렬로 만들고 `prototype-v2`에 합침. 화면 없는 확인 전부 통과.
-  시뮬 `python -I -X utf8 tools/tune_sim.py`: 튜닝 있으면 20강 1.7배·25강 4배 빨라짐 (너무 세면 `tune` 숫자부터)
-  남은 것: 튜닝 화면을 눈으로 확인(스크린샷은 `tests/shot_screens.gd`, 창이 뜨니 사용자에게 먼저 물어봄), v2 플레이 테스트
+- v2 튜닝(큐브) 1~3단계 끝 (2026-11-12): 계산 담당(가지 `v2-core`) / 화면 담당(가지 `v2-ui`)이 병렬로 만들고 `prototype-v2`에 합침
