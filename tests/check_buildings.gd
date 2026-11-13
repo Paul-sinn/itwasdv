@@ -8,6 +8,8 @@
 ## ⑨ +18 스페어 0개면 강화 칸에 이유 글 + [카센터로] → 카센터   ⑩ 고르다 만 세팅이 있으면 켤 때 튜닝숍 세팅 칸
 ## ⑪ [작게]·Esc 뒤 다시 건물을 누르면 그 건물 화면 (알림 영역 아이콘은 마지막에 보던 건물, 처음엔 튜닝숍)
 ## ⑫ en에서도 건물 이름·NPC 인사말에 한글·키 없음 (ko는 "차고"라는 말이 안 보임)   ⑬ 오른쪽 클릭 메뉴는 건물·도로 어디서든
+## v6-bal U1 ④ 처음 말풍선: 새 설정이면 작은 화면에 뜸(visible_rects() 안) → 도로 클릭엔 그대로 → 건물 클릭 뒤 사라짐
+##   → 다시 켜도 안 뜸 (settings.cfg). 작은 버튼으로도 사라짐. en 글자에 한글 없음
 ## 확인하는 동안 게임 시간을 멈춘다 (트럭이 건물 앞을 지나가지 않게). 진짜 저장·설정 파일은 건드리지 않는다.
 ##
 ## 실행:
@@ -26,6 +28,7 @@ const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const Town = preload("res://scripts/ui/town.gd")
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
+const Main = preload("res://scripts/ui/main.gd")
 const TEST_SAVE := "user://test_town_buildings.json"
 const TEST_SETTINGS := "user://test_buildings_settings.cfg"
 const RICH := 1000000000
@@ -47,6 +50,7 @@ func _run() -> void:
 	await process_frame
 	TranslationServer.set_locale("ko")   # 아래에서 한국어 글자를 비교함 (OS 언어와 상관없이)
 	(ScreenMode as Object).set("settings_path", TEST_SETTINGS)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SETTINGS))   # 처음 켠 것처럼 (말풍선이 뜸)
 	Save.delete_file(TEST_SAVE)
 	var b := Balance.load_file()
 
@@ -241,6 +245,50 @@ func _run() -> void:
 			"⑬ 오른쪽 클릭 (도로 + 건물 세 개) → 메뉴 %d번 / %d번, 작은 화면 그대로" % [asks[0], right_spots.size()])
 	await _close(m)
 
+	# U1 ④ 처음 말풍선: 새 설정 → 작은 화면에 뜸 → 도로·말풍선 클릭엔 그대로 → 건물 클릭 → 사라짐·설정 저장
+	#   → 다시 켜도 안 뜸. 새 설정에서 작은 버튼으로도 사라짐
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SETTINGS))
+	m = await _launch()
+	town = m.town
+	var hint_bad: Array = await _check_hint(m)
+	var hint_first: bool = town.hint.visible
+	var hint_text: String = town.hint.text
+	var hint_spot: Vector2 = town.hint.get_global_rect().get_center()
+	var spot_with: bool = _has_point(m.visible_rects(), hint_spot)
+	var road_at: Vector2 = town.to_view(town.route.point_at(town.route.total() * 0.5)) + town.global_position
+	for at: Vector2 in [road_at, town.hint.get_global_rect().get_center()]:
+		if town.building_at(at - town.global_position) != "":
+			hint_bad.append("%s 자리가 건물 위" % at)
+		_click(at)
+		await _frames(2)
+	var after_road: bool = town.hint.visible and not m.is_full()
+	_click(town.building_rects()["car_center"].get_center() + town.global_position)
+	await _frames(3)
+	var gone_full: bool = m.is_full() and not town.hint.visible
+	_key(KEY_ESCAPE)
+	await _frames(2)
+	var gone_small: bool = not m.is_full() and not town.hint.visible
+	var spot_without: bool = _has_point(m.visible_rects(), hint_spot)
+	var hint_saved: bool = ScreenMode.load_value(Main.HINT_SECTION, Main.HINT_KEY, false) == true
+	await _close(m)
+	m = await _launch()
+	var not_again: bool = not m.is_full() and not m.town.hint.visible
+	await _close(m)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SETTINGS))
+	m = await _launch()
+	var fresh_again: bool = m.town.hint.visible
+	_click(m.town.tuning_button.get_global_rect().get_center())
+	await _frames(3)
+	var button_full: bool = m.is_full() and m.panel.building == "tuning"
+	_key(KEY_ESCAPE)
+	await _frames(2)
+	var button_gone: bool = fresh_again and button_full and not m.is_full() and not m.town.hint.visible
+	await _close(m)
+	_report(hint_first and hint_text == "건물을 눌러보세요" and hint_bad.is_empty() and after_road and gone_full and gone_small
+			and spot_with and not spot_without and hint_saved and not_again and button_gone,
+			"U1 ④ 말풍선 '%s': 새 설정이면 작은 화면에 뜸 (작은 화면 %d가지 보이는 곳 안, 건물·집·구석 줄·할 일 줄과 안 겹침, 큰 화면엔 없음) %s, 도로·말풍선 클릭엔 그대로, 카센터 클릭 → 사라짐 (말풍선 자리가 보이는 곳 %s → %s)·설정 파일에 저장 %s, 다시 켜도 안 뜸 %s, 새 설정에서 작은 버튼으로도 사라짐 %s" % [
+			hint_text, SMALL_SIZES.size(), hint_bad, spot_with, spot_without, hint_saved, not_again, button_gone])
+
 	# ⑩ 고르다 만 세팅이 있는 저장으로 켬 → 튜닝숍 세팅 칸 (건물을 누르면 그 고르는 화면)
 	var s := GameState.new_game()
 	s.money = RICH
@@ -267,11 +315,15 @@ func _run() -> void:
 	# ⑫ en: 건물 간판·이름표·위쪽 줄·NPC 이름·인사말 (+ 작은 버튼), 간판은 건물 안. ko는 "차고"가 안 보임
 	TranslationServer.set_locale("en")
 	Save.delete_file(TEST_SAVE)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SETTINGS))   # en 말풍선도 보이게
 	m = await _launch()
 	town = m.town
 	p = m.panel
 	await _check_layout(m, "en")
-	var en_texts := [town.tuning_button.text]
+	var en_hint_bad: Array = await _check_hint(m)
+	_report(town.hint.visible and town.hint.text == "Click a building" and not _untranslated(town.hint.text) and en_hint_bad.is_empty(),
+			"U1 ④ en 말풍선 '%s' 한글·키 없음, 작은 화면 %d가지 보이는 곳 안·건물·집·구석 줄과 안 겹침 %s" % [town.hint.text, SMALL_SIZES.size(), en_hint_bad])
+	var en_texts := [town.tuning_button.text, town.hint.text]
 	for id: String in Town.BUILDINGS:
 		en_texts.append(town._signs[id].text)
 		_move(town.building_rects()[id].get_center())
@@ -351,6 +403,42 @@ func _check_layout(m: Node, tag: String) -> void:
 			tag, SMALL_SIZES.size(), FULL_SIZES.size(), bad])
 
 
+## 처음 말풍선 자리: 작은 화면 크기 3가지에서 보이고, 동네 안·보이는 곳 안, 건물·집·구석 줄·할 일 줄과 안 겹침.
+## 큰 화면에서는 안 보임. 문제 목록을 돌려줌 (끝나면 작은 화면 기본 크기로)
+func _check_hint(m: Node) -> Array:
+	var town = m.town
+	var bad := []
+	for size: Vector2i in SMALL_SIZES:
+		m.screen.enter_small()
+		root.size = size
+		await _frames(3)
+		var r := Rect2(town.hint.position, town.hint.size)
+		if not town.hint.visible:
+			bad.append("%s 안 보임" % size)
+		if not town.area().encloses(r):
+			bad.append("%s 동네 밖" % size)
+		if not _enclosed(m.visible_rects(), Rect2(r.position + town.global_position, r.size)):
+			bad.append("%s 보이는 곳 밖" % size)
+		var others: Array = [["구석 줄", Rect2(town._hud.position, town._hud.size)], ["할 일 줄", Rect2(town._quest_label.position, town._quest_label.size)]]
+		for id: String in Town.BUILDINGS:
+			others.append([id, town.building_rects()[id]])
+		for spot in town._houses:
+			others.append(["집", town.view_rect(town._house_rect(spot))])
+		for o in others:
+			if r.intersects(o[1]):
+				bad.append("%s ↔ %s" % [size, o[0]])
+		if m.visible_rects().size() > 30:
+			bad.append("%s 보이는 곳 사각형 %d개 (30개 이하)" % [size, m.visible_rects().size()])
+	m.screen.enter_full()
+	await _frames(3)
+	if town.hint.visible:
+		bad.append("큰 화면에 보임")
+	m.screen.enter_small()
+	root.size = Feel.SMALL_SIZE
+	await _frames(3)
+	return bad
+
+
 ## 지금 보이는 건물 화면 id (위쪽 줄과 상관없이 실제로 보이는 칸으로 판단)
 func _shown(p) -> String:
 	if p._engine_box.is_visible_in_tree() or p.setting.is_visible_in_tree():
@@ -379,6 +467,10 @@ func _untranslated(x: String) -> bool:
 func _saved_state(b: Balance):
 	var r := Save.read_file(TEST_SAVE, b)
 	return r["state"] if r["status"] == Save.Status.OK else null
+
+
+func _has_point(rects: Array, at: Vector2) -> bool:
+	return rects.any(func(v: Rect2): return v.has_point(at))
 
 
 func _enclosed(rects: Array, r: Rect2) -> bool:

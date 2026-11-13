@@ -41,7 +41,7 @@ signal full_style_changed(style: FullStyle)
 ## open_menu_at_mouse()가 불림 (메뉴를 띄우기 전에 보냄. 화면 없는 테스트에서는 아이콘이 없어 이것만)
 signal menu_asked
 
-## 설정 파일 위치 (고른 full_style을 저장). 확인 스크립트는 main을 만들기 전에 바꾼다.
+## 설정 파일 위치 (고른 full_style, 처음 말풍선을 봤는지). 확인 스크립트는 main을 만들기 전에 바꾼다.
 static var settings_path := "user://settings.cfg"
 
 var mode: Mode = Mode.SMALL
@@ -130,18 +130,28 @@ func set_full_style(style: FullStyle) -> void:
 
 ## 설정 파일에서 full_style 읽기. 없거나 이상하면 기본(FULLSCREEN)
 static func load_full_style() -> FullStyle:
-	var cfg := ConfigFile.new()
-	if cfg.load(settings_path) != OK:
-		return FullStyle.FULLSCREEN
-	var i := STYLE_NAMES.find(str(cfg.get_value(SETTINGS_SECTION, SETTINGS_KEY, "")))
+	var i := STYLE_NAMES.find(str(load_value(SETTINGS_SECTION, SETTINGS_KEY, "")))
 	return FullStyle.WINDOWED if i == FullStyle.WINDOWED else FullStyle.FULLSCREEN
 
 
 ## 설정 파일에 full_style 쓰기 (파일의 다른 설정은 그대로 둠)
 static func save_full_style(style: FullStyle) -> void:
+	save_value(SETTINGS_SECTION, SETTINGS_KEY, STYLE_NAMES[style])
+
+
+## 설정 파일의 값 하나 읽기. 파일이나 값이 없으면 default (main.gd 처음 말풍선도 씀)
+static func load_value(section: String, key: String, default: Variant) -> Variant:
+	var cfg := ConfigFile.new()
+	if cfg.load(settings_path) != OK:
+		return default
+	return cfg.get_value(section, key, default)
+
+
+## 설정 파일에 값 하나 쓰기 (파일의 다른 설정은 그대로 둠)
+static func save_value(section: String, key: String, value: Variant) -> void:
 	var cfg := ConfigFile.new()
 	cfg.load(settings_path)   # 없으면 빈 채로
-	cfg.set_value(SETTINGS_SECTION, SETTINGS_KEY, STYLE_NAMES[style])
+	cfg.set_value(section, key, value)
 	var err := cfg.save(settings_path)
 	if err != OK:
 		push_warning("설정 저장 실패 (오류 %d): %s" % [err, settings_path])

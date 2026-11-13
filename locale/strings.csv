@@ -177,6 +177,7 @@ QUEST_STAR_18_DESC,엔진을 +18까지 강화하기,Upgrade the engine to +18
 BUILDING_TUNING,튜닝숍,Tuning Shop
 BUILDING_CAR_CENTER,카센터,Car Center
 TOWN_TUNING_BUTTON,강화,Upgrade
+TOWN_HINT_BUILDING,건물을 눌러보세요,Click a building
 GARAGE_TO_CAR,카센터로,To Car Center
 CAR_NOTE,+%d부터 강화하려면 1개가 있어야 해요. 퍼지면 자동으로 써요,From +%d you need one to upgrade. It's used automatically if the engine blows up
 CAR_SHORT,%s원 모자람 · %s,₩%s short · %s

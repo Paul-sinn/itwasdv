@@ -3,6 +3,7 @@
 ## 오른쪽 위 알림(할 일 끝·레벨업 등. 여러 개면 하나씩 차례로).
 ## v6a: 건물 세 개(물류센터·튜닝숍·카센터, 임시 사각형 + 간판). 마우스를 올리면 빛남 + 이름표.
 ##      구석 줄 끝 작은 버튼 [강화] → tuning_pressed. 건물 클릭은 main.gd가 building_at()으로 가른다
+## v6-bal: 처음 켰을 때 말풍선 "건물을 눌러보세요" (hint, set_hint. 언제 켜나는 main.gd)
 ## 동네 설계 좌표(feel.gd TOWN_SIZE = 작은 화면 크기)로 만들고, 전체 화면에서는 같은 동네를 통째로 확대한다.
 ## 길·집·트럭은 확대해서 그리고(선명함), 글자는 확대 배수에 맞춘 글자 크기로 따로 놓는다.
 ## 그리기만 한다. 돈·배송은 main.gd → scripts/core/trip.gd (배송 이벤트가 오면 show_payout)
@@ -31,6 +32,7 @@ var boosts_shown := 0        ## 지금까지 띄운 "오버부스트!" 수 (확�
 var notices_shown: Array[String] = []   ## 지금까지 띄운 알림 글자, 띄운 순서대로 (확인용)
 var hovered := ""            ## 마우스가 올라가 있는 건물 id ("" = 없음)
 var tuning_button: Button    ## 구석 줄 끝 작은 버튼 [강화]
+var hint: Label              ## 처음 켰을 때 말풍선 "건물을 눌러보세요" (켜고 끄기는 main.gd → set_hint)
 
 var _houses: Array[Vector2] = []     ## 집 자리 (길 가운데 선 위, 설계 좌표)
 var _hud: HBoxContainer
@@ -90,6 +92,12 @@ func _ready() -> void:
 	_name_tag = make_label(Feel.NAME_TAG_FONT_SIZE, Feel.COLOR_NAME_TAG)
 	_name_tag.visible = false
 	add_child(_name_tag)
+	hint = Label.new()
+	hint.text = tr("TOWN_HINT_BUILDING")
+	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE   # 말풍선을 눌러도 아무 일 없음 (건물·작은 버튼만)
+	hint.add_theme_color_override("font_color", Feel.COLOR_HINT_TEXT)
+	hint.visible = false
+	add_child(hint)
 	layout(Vector2.ZERO, 1.0, 1.0)
 
 
@@ -122,6 +130,7 @@ func layout(top_left: Vector2, z: float, text_k: float) -> void:
 		board.position = Vector2(r.get_center().x - board.size.x / 2.0, r.position.y + Feel.SIGN_TOP * zoom)
 	_set_font(_name_tag, Feel.NAME_TAG_FONT_SIZE)
 	_place_name_tag()
+	_place_hint()
 
 	# 떠오르던 "+금액"은 자리가 안 맞게 되니 지운다
 	for p in _payouts:
@@ -185,6 +194,35 @@ func _place_name_tag() -> void:
 	var x := clampf(r.get_center().x - _name_tag.size.x / 2.0, box.position.x, box.end.x - _name_tag.size.x)
 	var y := maxf(box.position.y, r.position.y - _name_tag.size.y - Feel.NAME_TAG_GAP * zoom)
 	_name_tag.position = Vector2(x, y)
+
+
+## 처음 말풍선 켜고 끄기 (main.gd: 작은 화면이고 아직 건물을 안 눌렀을 때만 켬)
+func set_hint(on: bool) -> void:
+	if hint.visible != on:
+		hint.visible = on
+		queue_redraw()   # 꼬리
+
+
+## 말풍선: 글자 크기·여백·둥글기를 동네 글자 배수에 맞추고, 위쪽 가운데를 HINT_POS에
+func _place_hint() -> void:
+	hint.add_theme_font_size_override("font_size", maxi(1, int(roundf(Feel.HINT_FONT_SIZE * text_scale))))
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Feel.COLOR_HINT_BG
+	sb.set_corner_radius_all(int(roundf(Feel.HINT_RADIUS * text_scale)))
+	sb.content_margin_left = Feel.HINT_PAD.x * text_scale
+	sb.content_margin_right = Feel.HINT_PAD.x * text_scale
+	sb.content_margin_top = Feel.HINT_PAD.y * text_scale
+	sb.content_margin_bottom = Feel.HINT_PAD.y * text_scale
+	hint.add_theme_stylebox_override("normal", sb)
+	hint.reset_size()
+	hint.position = to_view(Feel.HINT_POS) - Vector2(hint.size.x / 2.0, 0.0)
+
+
+## 말풍선 꼬리 (설계 좌표): 말풍선 위쪽 1px 안에서 HINT_TAIL_TIP까지
+func _hint_tail() -> PackedVector2Array:
+	var tip := Feel.HINT_TAIL_TIP
+	var base_y := Feel.HINT_POS.y + 1.0
+	return PackedVector2Array([Vector2(tip.x - Feel.HINT_TAIL_HALF, base_y), tip, Vector2(tip.x + Feel.HINT_TAIL_HALF, base_y)])
 
 
 ## 작은 버튼: 글자 크기·여백을 동네 글자 배수에 맞춤 (평소 / 올림 두 색)
@@ -321,11 +359,17 @@ func visible_rects(truck_pad: float) -> Array:
 	for piece in route.pieces:
 		out.append(view_rect(piece.grow(half)))
 	# 건물: 빛남 두께만큼 넉넉하게 + 간판. 맞붙은 건물(튜닝숍·카센터)은 한 사각형으로 (사각형 수를 늘리지 않게)
+	# 처음 말풍선(+ 꼬리)도 꼬리 끝이 튜닝숍에 닿아서 그 사각형에 합쳐짐 (글자가 가장 많이 떴을 때도 30개 이하로)
 	var blds: Array[Rect2] = []
 	var rects := building_rects()
+	var pieces: Array[Rect2] = []
 	for id: String in BUILDINGS:
 		var r: Rect2 = rects[id].grow(Feel.BUILDING_GLOW_PX * zoom + 1.0)
-		r = r.merge(Rect2(_signs[id].position, _signs[id].size).grow(o))
+		pieces.append(r.merge(Rect2(_signs[id].position, _signs[id].size).grow(o)))
+	if hint.visible:
+		var tail := _hint_tail()
+		pieces.append(Rect2(hint.position, hint.size).merge(view_rect(Rect2(tail[0], Vector2.ZERO).expand(tail[1]).expand(tail[2]))).grow(1.0))
+	for r in pieces:
 		var joined := false
 		for i in blds.size():
 			if blds[i].intersects(r):
@@ -403,6 +447,10 @@ func _draw() -> void:
 	draw_circle(pts[pts.size() - 1], w / 2.0, Feel.COLOR_ROAD_EDGE, true, -1.0, true)
 	draw_polyline(pts, Feel.COLOR_ROAD, w - 3.0, true)
 	draw_circle(pts[pts.size() - 1], (w - 3.0) / 2.0, Feel.COLOR_ROAD, true, -1.0, true)
+
+	# 말풍선 꼬리 (길 위에. 말풍선 글상자는 hint 글자가 그 위에 그림)
+	if hint.visible:
+		draw_colored_polygon(_hint_tail(), Feel.COLOR_HINT_BG)
 	draw_set_transform_matrix(Transform2D.IDENTITY)
 
 

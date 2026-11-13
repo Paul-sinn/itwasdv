@@ -12,6 +12,7 @@
 ## v4: 차고 [세팅] 칸 → Setting.try_roll / Setting.choose (굴리기·고르기는 scripts/core/setting.gd)
 ## v5: 계산 쪽 알림(state.take_events: 할 일 끝·레벨업·만렙·강화 첫 달성)을 프레임마다 꺼내 동네에 하나씩,
 ##     차고 [기사·물류센터] → Depot.upgrade, 강화·세팅·스페어·올리기 직후 Quest.check (바로 반응하게)
+## v6-bal: 처음 켰을 때 작은 화면 말풍선 "건물을 눌러보세요". 건물·작은 버튼을 한 번 누르면(open_building) 다시 안 뜸
 extends Control
 
 const Balance = preload("res://scripts/core/balance.gd")
@@ -33,6 +34,9 @@ const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
 
 const AUTOSAVE_SECONDS := 30.0        ## 30초마다 저장 (배속과 상관없이 진짜 30초)
 const TRUCK := 0   ## 지금은 트럭 1대 (번호 0). 사는 화면·고르는 탭은 v7
+## 처음 말풍선을 봤는지 (설정 파일 settings.cfg에. 게임 저장 파일 아님)
+const HINT_SECTION := "first_run"
+const HINT_KEY := "building_hint_seen"
 
 ## 저장 파일 위치. 확인 스크립트는 진짜 저장을 건드리지 않게 add_child 전에 바꾼다.
 var save_path := Save.DEFAULT_PATH
@@ -47,6 +51,8 @@ var small_button: Button     ## 큰 화면 [작게]
 var settings_button: Button  ## 큰 화면 [설정]
 var settings: SettingsPanel  ## [설정]을 누르면 가운데 뜨는 "화면: 전체 화면 / 창 모드"
 var rng := RandomNumberGenerator.new()
+## 처음 말풍선 "건물을 눌러보세요"를 이미 봤나 (건물·작은 버튼을 한 번 누르면 true. 작은 화면에서 false일 때만 뜸)
+var hint_seen := false
 
 ## 켰을 때 넣은 꺼둔 동안 (Trip.apply_offline 결과 + away_seconds):
 ##   { money, parcels, spares, hours, xp, full, ignored, away_seconds }.
@@ -90,6 +96,7 @@ func _ready() -> void:
 
 	state = GameState.new_game()
 	var load_notice := _load_save()
+	hint_seen = ScreenMode.load_value(HINT_SECTION, HINT_KEY, false) == true
 
 	# 창: 투명 창 / 평범한 창(--windowed) / 화면 없음(테스트). 작은 화면 ↔ 전체 화면
 	screen = ScreenMode.new()
@@ -176,6 +183,7 @@ func _layout() -> void:
 		settings.visible = false
 	_debug_label.visible = full and OS.is_debug_build()
 	town.show_ground = full
+	town.set_hint(not full and not hint_seen)
 
 	if not full:
 		# 작은 화면: 동네를 창에 꽉 차게 (창 = 동네 설계 크기면 1배)
@@ -588,6 +596,10 @@ func _on_click(pos: Vector2) -> void:
 
 ## 큰 화면으로 바꾸고 그 건물 화면을 보여 준다 ("tuning" / "depot" / "car_center")
 func open_building(id: String) -> void:
+	if not hint_seen:   # 처음 말풍선은 건물·작은 버튼을 한 번 누르면 다시 안 뜸
+		hint_seen = true
+		ScreenMode.save_value(HINT_SECTION, HINT_KEY, true)
+		town.set_hint(false)
 	panel.show_building(id)
 	screen.enter_full()
 
