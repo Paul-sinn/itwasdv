@@ -425,9 +425,9 @@ func test_fuel_cut_prototype_is_cap() -> void:
 ## v4 C1 ⑨: 엔진 보호 3줄(프로토타입 10% × 3 = 30%) → 퍼짐 × 0.7, 줄어든 만큼 실패 (+20 퍼짐 4%, v6-bal)
 func test_setting_engine_guard() -> void:
 	var t := _game(20).truck(0)
-	check_eq(Enhance.chances_for(b, t), Enhance.chances(b, 20), "세팅 없으면 chances와 같음")
+	check_eq(Enhance.chances_for(b, _st(t), 0), Enhance.chances(b, 20), "세팅 없으면 chances와 같음")
 	_put(t, "ecu", 4, ["engine_guard", "engine_guard", "engine_guard"])
-	var c := Enhance.chances_for(b, t)
+	var c := Enhance.chances_for(b, _st(t), 0)
 	check_near(c["destroy"], 0.04 * 0.7, 1e-12, "+20 퍼짐 4% × 0.7")
 	check_near(c["success"], 0.3, 1e-12, "성공은 그대로")
 	check_near(c["fail"], 1.0 - 0.3 - 0.04 * 0.7, 1e-12, "줄어든 만큼 실패")
@@ -437,7 +437,7 @@ func test_setting_engine_guard() -> void:
 	d["setting"]["options"]["engine_guard"]["values"] = [0, 0, 0.04, 0.06, 0.2]
 	var b2: Balance = Balance.from_dict(d)
 	check(b2.is_ok(), "엔진 보호 0.2 balance가 막힘: %s" % ", ".join(b2.errors))
-	check_near(Enhance.chances_for(b2, t)["destroy"], 0.04 * 0.7, 1e-12, "합 60%여도 상한 30%")
+	check_near(Enhance.chances_for(b2, _st(t), 0)["destroy"], 0.04 * 0.7, 1e-12, "합 60%여도 상한 30%")
 	# try_enhance도 이 확률로 굴림: 보호 100%면 1000번 눌러도 안 퍼짐
 	var d3 := real_balance_dict()
 	d3["setting"]["engine_guard_cap"] = 1.0

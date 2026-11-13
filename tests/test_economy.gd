@@ -10,17 +10,17 @@ var b: Balance = Balance.load_file()
 ## 지시서 C1 ⑥: 강화 비용 = round(cost_base × cost_mult ^ 단계), 정수
 func test_enhance_cost_formula() -> void:
 	for star in b.max_star:
-		var cost = Economy.enhance_cost(b, star)
+		var cost = Economy.base_enhance_cost(b, star)
 		check_eq(typeof(cost), TYPE_INT, "+%d 비용이 정수가 아님" % star)
 		check_eq(cost, roundi(35000.0 * pow(1.5, star)), "+%d 비용" % star)
 	# 손으로 계산한 값 (0.5는 0에서 먼 쪽으로 올림)
-	check_eq(Economy.enhance_cost(b, 0), 35000, "+0 비용")
-	check_eq(Economy.enhance_cost(b, 1), 52500, "+1 비용")
-	check_eq(Economy.enhance_cost(b, 3), 118125, "+3 비용")
-	check_eq(Economy.enhance_cost(b, 4), 177188, "+4 비용 (177187.5 → 177188)")
-	check_eq(Economy.enhance_cost(b, 5), 265781, "+5 비용 (265781.25 → 265781)")
+	check_eq(Economy.base_enhance_cost(b, 0), 35000, "+0 비용")
+	check_eq(Economy.base_enhance_cost(b, 1), 52500, "+1 비용")
+	check_eq(Economy.base_enhance_cost(b, 3), 118125, "+3 비용")
+	check_eq(Economy.base_enhance_cost(b, 4), 177188, "+4 비용 (177187.5 → 177188)")
+	check_eq(Economy.base_enhance_cost(b, 5), 265781, "+5 비용 (265781.25 → 265781)")
 	for star in [0, 10, 17, 18, 29]:
-		note("+%d 강화 비용 %d원" % [star, Economy.enhance_cost(b, star)])
+		note("+%d 강화 비용 %d원" % [star, Economy.base_enhance_cost(b, star)])
 
 
 func test_spare_price() -> void:

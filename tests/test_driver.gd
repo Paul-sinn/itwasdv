@@ -135,10 +135,10 @@ func test_enhance_success_calls_milestone() -> void:
 	s.truck(0).star = 9
 	s.money = 1_000_000_000
 	var rng := RandomNumberGenerator.new()
-	check_eq(Enhance.try_enhance(s, b1, 0, rng), Enhance.Result.SUCCESS, "+9 성공")
+	check_eq(Enhance.try_enhance(s, b1, 0, rng)["result"], Enhance.Result.SUCCESS, "+9 성공")
 	check_eq(s.milestones_done, [10], "+10 성공 → 보너스")
 	check_eq(_of_type(s.take_events(), "milestone").size(), 1, "보너스 알림 1번")
-	check_eq(Enhance.try_enhance(s, b1, 0, rng), Enhance.Result.SUCCESS, "+10 성공")
+	check_eq(Enhance.try_enhance(s, b1, 0, rng)["result"], Enhance.Result.SUCCESS, "+10 성공")
 	check_eq(s.milestones_done, [10], "+11은 보너스 단계 아님")
 	# 늘 실패하는 balance: 보너스 없음
 	for i in d["engine"]["success"].size():
@@ -147,7 +147,7 @@ func test_enhance_success_calls_milestone() -> void:
 	var s0 := GameState.new_game()
 	s0.truck(0).star = 9
 	s0.money = 1_000_000_000
-	check_eq(Enhance.try_enhance(s0, b0, 0, rng), Enhance.Result.FAIL, "+9 실패")
+	check_eq(Enhance.try_enhance(s0, b0, 0, rng)["result"], Enhance.Result.FAIL, "+9 실패")
 	check_eq([s0.milestones_done, s0.take_events()], [[], []], "실패하면 보너스·알림 없음")
 
 

@@ -5,7 +5,6 @@
 extends RefCounted
 
 const Balance = preload("res://scripts/core/balance.gd")
-const Economy = preload("res://scripts/core/economy.gd")
 const TruckState = preload("res://scripts/core/truck_state.gd")
 const GameState = preload("res://scripts/core/game_state.gd")   # new_game()의 돌려주는 모양 표시용 (자기 자신)
 
@@ -30,6 +29,18 @@ var rush_enabled: bool = true     ## [설정] 급송 요청 전화 켜기/끄기
 var rush_next: float = -1.0       ## 다음 벨까지 남은 초 (-1 = 아직 안 굴림 → 다음 tick에서)
 var rush_ring: float = 0.0        ## 벨이 울리는 남은 초 (0 = 안 울림)
 var rush_left: int = 0            ## 남은 급송 건수 (트럭 0 배송마다 −1)
+
+# --- v6b 명장 방문일 (master.gd). active_bonus만 저장 안 함 ---
+var active_bonus: String = ""     ## 방문 중일 때 그 주 보너스 id, 아니면 "". 저장 안 함 (Master.tick이 채움)
+var master_unlocked: bool = false ## +10 첫 달성으로 열림
+var master_day: int = -1          ## 이번 주에 적용되는 요일 (0 월 … 6 일). -1 = 안 고름
+var master_next_day: int = -1     ## 다음 주부터 바뀔 요일. -1 = 없음
+var master_week: int = -1         ## master_day를 맞춘 주 (Master.week_index). 주가 바뀌면 master_next_day를 적용
+var master_bonus: String = ""     ## master_bonus_week 주의 보너스 id
+var master_bonus_week: int = -1   ## master_bonus가 어느 주 것인가
+var master_next_bonus: String = ""   ## 다음 주 보너스 (월요일 방문을 일요일에 예고할 때 미리 굴림). "" = 아직
+var master_notice_week: int = -1  ## 예고를 보낸 방문의 주 (한 주에 한 번)
+var master_visit_week: int = -1   ## 방문 알림을 보낸 주 (한 주에 한 번)
 
 # --- 물류센터 (depot.gd) ---
 var warehouse_level: int = 1
@@ -59,14 +70,14 @@ func truck(i: int) -> TruckState:
 
 ## 스페어 엔진은 언제든 고정가로 살 수 있다
 func can_buy_spare(b: Balance) -> bool:
-	return money >= Economy.spare_price(b)
+	return money >= b.spare_price   # = Economy.spare_price (economy.gd가 이 파일을 불러서 여기서는 안 부름)
 
 
 ## 돈을 내고 스페어 +1. 돈이 모자라면 아무것도 안 하고 false.
 func buy_spare(b: Balance) -> bool:
 	if not can_buy_spare(b):
 		return false
-	money -= Economy.spare_price(b)
+	money -= b.spare_price
 	spares += 1
 	spares_bought += 1
 	return true
@@ -81,6 +92,7 @@ func add_event(event: Dictionary) -> void:
 ##   { "type": "level_up", "level": int, "points": int } / { "type": "max_level" }
 ##   { "type": "quest_done", "id": String, "xp": int, "money": int } / { "type": "milestone", "star": int, "xp": int }
 ##   { "type": "weekly_done", "coupons": int, "xp": int } / { "type": "rush_call" } / { "type": "rush_missed" } (v6b)
+##   { "type": "master_unlocked" } / { "type": "master_notice", "bonus": String } / { "type": "master_visit", "bonus": String } (v6b)
 func take_events() -> Array:
 	var out := _events
 	_events = []
