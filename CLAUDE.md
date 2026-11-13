@@ -1,7 +1,7 @@
 # 택배 방치형 (가제)
 
 스팀용 데스크톱 방치형 게임. 작업표시줄 바로 위 얇은 띠에서 택배 트럭이 알아서 배송하고,
-번 돈으로 엔진을 강화한다 (메이플 스타포스식: 성공 / 실패(유지) / 퍼짐).
+번 돈으로 엔진을 강화한다 (성공 / 실패(유지) / 퍼짐 → 스페어 엔진을 쓰고 +15).
 게임 안 결제 없음. 한 번 사면 끝나는 유료 게임.
 
 ## 기술
@@ -26,11 +26,12 @@
 data/balance.json        게임 숫자 전부 (게임과 시뮬이 같이 읽음)
 docs/GAME_PLAN.md        기획서 (무엇을 왜 만드나, MVP 범위, 메이플 용어 변환표). 지시서는 여기서 나옴
 docs/numbers-source.md   시트 숫자를 balance.json으로 옮긴 기록 (옮긴 숫자는 json이 기준)
-docs/PROTOTYPE_V0~V2.md  끝난 시제품 지시서 (v2 튜닝 8칸은 v4 세팅 돌리기로 바뀜)
-docs/PROTOTYPE_V3.md     지금 지시서: 경제 뼈대 (한 바퀴 계산, 고정 비용, 스페어, 저장 3, 번역)
+docs/PROTOTYPE_V0~V2.md  끝난 시제품 지시서 (v2 튜닝 8칸은 v3에서 지움. v4 세팅 돌리기로 새로)
+docs/PROTOTYPE_V3.md     끝난 지시서: 경제 뼈대 (한 바퀴 계산, 고정 비용, 스페어, 저장 3, 번역)
+locale/strings.csv       화면 글자 (keys, ko, en). 고치면 --import 뒤 .translation 두 개도 같이 커밋
 docs/IDEAS.md            나중에 할 것 / 이미 정한 것
-tools/tune_sim.py        경제 시뮬레이터 (판정용. delivery_sim.py는 옛 모델이라 v3에서 지움)
-scripts/core/            계산 코드 (balance, economy, enhance, tune 튜닝, game_state, save)
+tools/tune_sim.py        경제 시뮬레이터 (판정용. --table = 단계별 표)
+scripts/core/            계산 코드 (balance, trip 한 바퀴·스페어 드랍, economy 가격, enhance, truck_state, game_state, save)
 scripts/ui/              화면 코드 (main, town 동네, route 꼬불길 계산, truck, garage_panel 차고,
                          settings_panel 설정, screen_mode 두 화면 오가기, desktop_window 창, tray_icon 알림 영역)
 scenes/                  Godot 씬
@@ -61,13 +62,19 @@ PowerShell (사용자 터미널): 어느 폴더에서든 그대로 복사해서 
 # 테스트 (전부 통과면 마지막 줄 "테스트 N개 중 N개 통과")
 & "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -s tests/run_tests.gd
 
-# 동네 1시간 수익 (0/10/20/30강 + 화면 오가기. 게임 1시간을 몇 초 만에)
+# 동네 1시간 수익 (+0/+10/+20/+30, "+돈" 수 = 배송 수. 게임 1시간을 몇 초 만에)
 & "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" --fixed-fps 60 -s tests/check_town_hour.gd
 
-# 차고 (작은 화면 클릭 → 큰 화면, 0~30강, 퍼짐 → 수리, 여러 창 크기, [설정], [작게])
+# 차고 (작은 화면 클릭 → 큰 화면, +0~+30, 스페어 사기·필요 안내, 퍼짐 → 스페어 쓰고 +15, [설정], [작게])
 & "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -s tests/check_garage.gd
 
-# 저장·꺼둔 동안 수익 (진짜 저장 파일은 안 건드림)
+# 번역·돈 표기 (ko·en 키, 코드에 한글 화면 글자 없음, 1.2만 / 12K)
+& "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -s tests/check_i18n.gd
+
+# 번역 파일 다시 만들기 (locale/strings.csv를 고친 뒤 한 번)
+& "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" --import
+
+# 저장·꺼둔 동안 수익·백업 복구·옛 형식 안내 (진짜 저장 파일은 안 건드림)
 & "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -s tests/check_save.gd
 
 # 작은 화면 ↔ 큰 화면 오가기 (창은 안 건드림. 마지막 줄 "확인 N개 중 N개 통과")
@@ -131,12 +138,11 @@ python -I -X utf8 "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwas
 - 프로젝트 안의 `.csv`는 Godot가 번역 파일로 가져간다 → 기록 파일은 `.gdignore`가 있는 폴더(`tests/soak_logs`)에
 
 ## 현재 작업
-**2026-11-13 grillme 끝:** 기획서 v2(`docs/GAME_PLAN.md`)의 규칙을 16장에 [확정]. 다음은 **시제품 v3 지시서 (경제 뼈대, 16.9)** → `delivery-dev`.
-- 지금 코드가 기획서와 크게 다른 곳 (v3~v4에서 바뀜): 강화 = 수입 배수 → 속도 기반 한 바퀴 계산 / 강화 비용 = 수입 N시간치 → 고정표 /
-  퍼지면 트럭 멈춤 → 스페어를 들고 있어야 누름 / 튜닝 8칸 → 세팅 돌리기 4부품 / 트럭 1대 → 여러 대 / 돈 float → 정수 / ★ → +18 / 번역 없음 → 번역 파일
-- v2 튜닝 확인·플레이 테스트는 건너뜀 (없어질 기능)
-- 남은 손 확인 (사용자): 알림 영역 아이콘 왼쪽 클릭(다른 프로그램을 쓰던 중에도 큰 화면이 앞으로 오나), 오른쪽 클릭 메뉴, v1 플레이 테스트 (지시서 맨 아래 5문항)
-- v3에 띠 24시간 켜두기 시험이 들어감 (창이 뜨니 돌리기 전에 사용자에게 물어봄)
+**2026-11-13 v3 (경제 뼈대) 끝:** `prototype-v3`에 합침. 화면 없는 확인 전부 통과, QA 통과 11 / 실패 0. 다음은 **v4 세팅 돌리기** (기획서 16.9) → `delivery-dev`.
+- 사용자가 볼 것·정할 것은 바깥 폴더 `QUESTIONS.md`, 진행 기록은 `PROGRESS.md`
+- 남은 손 확인 (사용자): v3 플레이 테스트 5문항(`docs/PROTOTYPE_V3.md` 맨 아래), 띠 24시간 켜두기(`soak_desktop.ps1 -minutes 1440`), 영어 화면(`--language en`), 알림 영역 아이콘 클릭, v1 플레이 테스트
+- 숫자: 단가·도로 길이·강화 비용 등은 임시 시작값. 밸런스 제안(스페어 드랍 0.000004 등)은 허락 전이라 json에 안 넣음
+- 지금 코드가 기획서와 다른 곳 (뒤 시제품에서): 세팅 돌리기 없음(v4) / 트럭은 데이터만 여러 대(v7) / 보험·명장 없음(v6) / 꺼둔 동안 8시간·50% 고정(v5 창고·야간팀)
 
 지난 기록:
 - v0 끝 (플레이 테스트 "아니오" 1개, 결과는 `docs/IDEAS.md`)
@@ -145,4 +151,5 @@ python -I -X utf8 "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwas
   `check_desktop.ps1` 44/44. 그때 전체 화면 맨 위 2줄 빈틈을 찾아 고침
 - 오래 켜두기: 사용자가 2026-11-10에 2시간 넘게 켜 두고 화면 어두워짐·작업표시줄 깨짐 없음을 확인
   (v0 기록 1시간 44분: GDI·USER·핸들 그대로, 작업 메모리만 98~472MB 오르내림. 원인 모름 → 평소 쓸 때 지켜보기)
+- v3 경제 뼈대 (2026-11-13): 계산 담당(`v3-core`) C1~C3, 화면 담당(`v3-ui`) U1~U2. 조율자는 코드를 안 고치고 분배·리뷰만
 - v2 튜닝(큐브) 1~3단계 끝 (2026-11-12): 계산 담당(가지 `v2-core`) / 화면 담당(가지 `v2-ui`)이 병렬로 만들고 `prototype-v2`에 합침
