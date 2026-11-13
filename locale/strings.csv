@@ -1,0 +1,67 @@
+keys,ko,en
+FMT_MONEY_GROUP,4,3
+FMT_MONEY_UNITS,"만,억,조","K,M,B,T"
+MONEY,%s원,₩%s
+FMT_WAIT_NEVER,버는 돈이 없어서 모을 수 없음,"No income, so you can't save up"
+FMT_WAIT_MIN,약 %d분 뒤 가능,Ready in about %d min
+FMT_WAIT_HOUR_MIN,약 %d시간 %d분 뒤 가능,Ready in about %d h %d min
+FMT_AWAY_UNDER_MIN,1분 미만,under 1 min
+FMT_MIN,%d분,%d min
+FMT_HOUR,%d시간,%d h
+FMT_HOUR_MIN,%d시간 %d분,%d h %d min
+SETTINGS,설정,Settings
+SMALL_ESC,작게 (Esc),Small (Esc)
+POPUP_OK,확인,OK
+SETTINGS_SCREEN,화면,Display
+SETTINGS_FULLSCREEN,전체 화면,Fullscreen
+SETTINGS_WINDOWED,창 모드,Windowed
+SETTINGS_WINDOWED_NOTE,창 모드는 창 크기를 마음대로 바꿀 수 있어요.,In windowed mode you can resize the window freely.
+SETTINGS_CLOSE,닫기,Close
+TRAY_FULL,전체 화면,Full screen
+TRAY_SMALL,작게,Small
+TRAY_QUIT,끝내기,Quit
+TOWN_DEPOT,물류센터,Depot
+GARAGE_TITLE,엔진 +%d,Engine +%d
+GARAGE_TITLE_MAX,엔진 +%d (최대),Engine +%d (max)
+GARAGE_ENHANCE,강화,Upgrade
+GARAGE_ENHANCING,강화 중…,Upgrading…
+GARAGE_BUY_SPARE,스페어 엔진 구매 (%s원),Buy spare engine (₩%s)
+GARAGE_HOURLY,시간당 %s원,₩%s per hour
+GARAGE_HOURLY_NEXT,시간당 %s원 → 성공하면 %s원,₩%s per hour → ₩%s on success
+GARAGE_CHANCES,성공 %s · 실패(유지) %s · 퍼짐 %s,Success %s · Fail (no change) %s · Blow-up %s
+GARAGE_DANGER,퍼질 확률 %s,Blow-up chance %s
+GARAGE_COST,비용 %s원,Cost ₩%s
+GARAGE_SHORT_WAIT,강화 비용 부족 · %s,Not enough money · %s
+GARAGE_STATS,누른 횟수 %d · 성공 %d / 실패 %d / 퍼짐 %d,Tries %d · success %d / fail %d / blow-up %d
+RESULT_SUCCESS,성공!  +%d → +%d,Success!  +%d → +%d
+RESULT_FAIL,실패,Fail
+RESULT_DESTROY,엔진 퍼짐!,Engine blew up!
+LOAD_BROKEN,"저장 파일이 깨져서 새로 시작합니다.
+(깨진 파일은 %s 로 남겨 둠)","The save file was broken, so a new game started.
+(The broken file was kept as %s)"
+RETURN_MAIN,자리 비운 %s 동안 +%s원,Away for %s: +₩%s
+RETURN_MAIN_ZERO,자리 비운 동안 +0원,While away: +₩0
+RETURN_NOTE,"꺼둔 동안은 %s만, 최대 %s시간치까지 쌓입니다.","While the game is off you get %s, up to %s hours' worth."
+RETURN_CLOCK_BACK,컴퓨터 시계가 저장했을 때보다 %s 이전이라 0원입니다.,"Your PC clock is %s earlier than the last save, so ₩0."
+CHEAT_MONEY,F1 돈 +%s원,F1 money +₩%s
+CHEAT_RESET,F3 저장 초기화,F3 save reset
+DEBUG_ON,켜짐,on
+DEBUG_OFF,꺼짐,off
+DEBUG_MEASURE,측정: 게임 시간 %s · 번 돈 %s원 · 시간당 수익으로 계산한 값 %s원 (%.1f%%),measured: game time %s · earned ₩%s · expected from hourly ₩%s (%.1f%%)
+FATAL_BALANCE,게임 숫자 파일에 문제가 있어서 시작하지 않았습니다. 고친 뒤 다시 실행하세요.,"The game numbers file has a problem, so the game did not start. Fix it and run again."
+GARAGE_SPARES,스페어 엔진 %d개,Spare engines: %d
+GARAGE_DANGER_NOTE,퍼지면 스페어 엔진 1개를 자동으로 써서 +%d로 (트럭은 계속 달림),"If it blows up, 1 spare engine is used and it drops to +%d (the truck keeps running)"
+GARAGE_NEED_SPARE,퍼질 수 있는 단계라 스페어 엔진이 있어야 강화할 수 있음,This level can blow up: you need a spare engine to upgrade
+RESULT_DESTROY_NOTE,스페어 엔진 1개 사용 → +%d (남은 스페어 %d개),Used 1 spare engine → +%d (%d spares left)
+RESULT_SPARE_BOUGHT,스페어 엔진 구매! (가진 것 %d개),Bought a spare engine! (you have %d)
+TOWN_SPARE,스페어 엔진 +1,Spare engine +1
+RETURN_DETAIL,배송 %d건 · 스페어 엔진 +%d개,%d deliveries · spare engines +%d
+LOAD_RECOVERED,"저장 파일이 깨져서 백업에서 되살렸습니다.
+(깨진 파일은 %s 로 남겨 둠)","The save file was broken, so it was restored from a backup.
+(The broken file was kept as %s)"
+LOAD_OLD_KEPT,"예전 버전 저장 파일은 이번 버전과 맞지 않아 새로 시작합니다.
+(예전 파일은 %s 로 남겨 둠)","Your save from an older version doesn't fit this version, so a new game started.
+(The old file was kept as %s)"
+CHEAT_BREAK,F5 강제 퍼짐 → +%d (스페어 %d개),F5 forced blow-up → +%d (%d spares)
+CHEAT_SPARE,F6 스페어 엔진 +1 (%d개),F6 spare engine +1 (%d)
+DEBUG_KEYS,[디버그] F1 돈 · F2 %s배속(%s) · F3 처음부터 · F4 단계 +1 · F5 퍼짐 · F6 스페어 +1,[debug] F1 money · F2 ×%s speed (%s) · F3 restart · F4 +1 · F5 blow-up · F6 spare +1

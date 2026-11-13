@@ -1,8 +1,8 @@
 ## v1 동네: 꼬불꼬불한 길 하나, 길가에 집 TOWN_HOUSES채, 길 끝(시작점)에 물류센터, 트럭,
-## 구석 ★·돈, 집 앞 "+금액".
+## 구석 강화 단계("+N")·돈, 집 앞 "+금액"·"스페어 엔진 +1".
 ## 동네 설계 좌표(feel.gd TOWN_SIZE = 작은 화면 크기)로 만들고, 전체 화면에서는 같은 동네를 통째로 확대한다.
 ## 길·집·트럭은 확대해서 그리고(선명함), 글자는 확대 배수에 맞춘 글자 크기로 따로 놓는다.
-## 그리기만 한다. 돈 계산은 main.gd → economy.gd
+## 그리기만 한다. 돈·배송은 main.gd → scripts/core/trip.gd (배송 이벤트가 오면 show_payout)
 extends Node2D
 
 const Feel = preload("res://scripts/ui/feel.gd")
@@ -16,14 +16,16 @@ var zoom := 1.0              ## 동네 설계 좌표 → 화면 배수
 var origin := Vector2.ZERO   ## 동네 설계 좌표 (0,0)이 이 노드 안 어디에 오나
 var text_scale := 1.0        ## 동네 글자 배수 (작은 화면 1, 전체 화면은 확대 배수를 따르되 상한 있음)
 var show_ground := false     ## 동네 바닥을 칠할까 (전체 화면에서만. 투명 작은 화면은 바탕화면이 보여야 함)
-var jackpots_shown := 0      ## 지금까지 띄운 "대박!" 글자 수 (확인용)
+var payouts_shown := 0       ## 지금까지 띄운 "+금액" 수 (확인용)
+var payouts_at_truck := 0    ## 그중 트럭이 그 집 앞에 서 있을 때 뜬 수 (확인용)
+var spares_shown := 0        ## 지금까지 띄운 "스페어 엔진 +1" 수 (확인용)
 
 var _houses: Array[Vector2] = []     ## 집 자리 (길 가운데 선 위, 설계 좌표)
 var _hud: HBoxContainer
 var _star_label: Label
 var _money_label: Label
 var _depot_label: Label
-var _payouts: Array[Label] = []   ## 떠오르는 중인 "+금액"들
+var _payouts: Array[Label] = []   ## 떠오르는 중인 "+금액"·"스페어 엔진 +1"들
 
 
 func _ready() -> void:
@@ -48,7 +50,7 @@ func _ready() -> void:
 	_hud.add_child(_money_label)
 
 	_depot_label = make_label(Feel.LABEL_FONT_SIZE, Feel.COLOR_TEXT)
-	_depot_label.text = "물류센터"
+	_depot_label.text = tr("TOWN_DEPOT")
 	add_child(_depot_label)
 	layout(Vector2.ZERO, 1.0, 1.0)
 
@@ -93,32 +95,42 @@ func area() -> Rect2:
 	return view_rect(Rect2(Vector2.ZERO, Feel.TOWN_SIZE))
 
 
-func set_hud(money: float, star: int) -> void:
-	_star_label.text = "★%d" % star
-	_money_label.text = "%s원" % Fmt.money(money)
+func set_hud(money: int, star: int) -> void:
+	_star_label.text = "+%d" % star
+	_money_label.text = tr("MONEY") % Fmt.money(money)
 
 
-## 성공 연출: ★ 숫자가 커졌다 돌아옴
+## 계산 쪽 배송 번호(0~cargo-1) → 화면 집 번호. 짐이 집 수보다 많으면 앞에서부터 나눠 맡음
+func house_for(parcel_house: int, cargo: int) -> int:
+	return clampi(parcel_house * _houses.size() / maxi(cargo, 1), 0, _houses.size() - 1)
+
+
+## 성공 연출: "+N" 숫자가 커졌다 돌아옴
 func pop_star() -> void:
 	pop(_star_label)
 
 
-## 집 앞: "+금액"이 트럭 위로 떠올랐다가 사라짐.
-## jackpot_mult > 0 이면 대박 배송: "대박! ×3 +1,234원" (더 크게, 금색, 더 오래)
-func show_payout(house: int, amount: float, jackpot_mult := 0.0) -> void:
-	var jackpot := jackpot_mult > 0.0
-	var font_size := Feel.JACKPOT_FONT_SIZE if jackpot else Feel.PAYOUT_FONT_SIZE
-	var label := make_label(font_size, Feel.COLOR_JACKPOT if jackpot else Feel.COLOR_PAYOUT)
+## 집 앞: "+금액"이 떠올랐다가 사라짐 (계산 쪽 배송 이벤트가 올 때)
+func show_payout(house: int, amount: int) -> void:
+	payouts_shown += 1
+	if truck.is_at(house):
+		payouts_at_truck += 1
+	_float_text(house, "+" + Fmt.money(amount), Feel.PAYOUT_FONT_SIZE, Feel.COLOR_PAYOUT, Feel.PAYOUT_RISE, Feel.PAYOUT_DURATION)
+
+
+## 배송하다 스페어 엔진을 받음: "스페어 엔진 +1" (더 크게, 금색, 더 오래)
+func show_spare(house: int) -> void:
+	spares_shown += 1
+	_float_text(house, tr("TOWN_SPARE"), Feel.SPARE_FONT_SIZE, Feel.COLOR_SPARE, Feel.SPARE_RISE, Feel.SPARE_DURATION)
+
+
+func _float_text(house: int, text: String, font_size: int, color: Color, rise_px: float, seconds: float) -> void:
+	var label := make_label(font_size, color)
 	_set_font(label, font_size)
-	if jackpot:
-		label.text = "대박! ×%s +%s원" % [Fmt.num(jackpot_mult), Fmt.payout(amount)]
-		jackpots_shown += 1
-	else:
-		label.text = "+%s" % Fmt.payout(amount)
+	label.text = text
 	add_child(label)   # 트리에 넣은 뒤에 크기를 재야 글자 폭이 맞음
 	label.reset_size()
-	var rise := (Feel.JACKPOT_RISE if jackpot else Feel.PAYOUT_RISE) * text_scale
-	var seconds := Feel.JACKPOT_DURATION if jackpot else Feel.PAYOUT_DURATION
+	var rise := rise_px * text_scale
 	var spot := _houses[clampi(house, 0, _houses.size() - 1)]
 	var top := to_view(spot) - Vector2(0, Feel.TOWN_HOUSE_SIZE.y + Feel.TOWN_ROOF_HEIGHT) * zoom
 	# 동네 밖으로 안 나가게 (작은 화면은 창 = 동네라 밖은 안 보임): 옆으로는 안쪽에, 다 올라가도 위쪽 안에
@@ -126,6 +138,7 @@ func show_payout(house: int, amount: float, jackpot_mult := 0.0) -> void:
 	var x := clampf(top.x - label.size.x / 2.0, box.position.x, maxf(box.position.x, box.end.x - label.size.x))
 	var y := maxf(top.y - label.size.y, box.position.y + rise)
 	label.position = Vector2(x, y)
+	label.set_meta(&"rise", rise)
 	_payouts.append(label)
 	var tw := label.create_tween()
 	tw.set_parallel(true)
@@ -136,7 +149,7 @@ func show_payout(house: int, amount: float, jackpot_mult := 0.0) -> void:
 		label.queue_free())
 
 
-## 떠오르는 중인 "+금액" 수 (확인용)
+## 떠오르는 중인 글자 수 (확인용)
 func payout_count() -> int:
 	return _payouts.size()
 
@@ -159,7 +172,7 @@ func visible_rects(truck_pad: float) -> Array:
 	out.append(Rect2(_depot_label.position, _depot_label.size).grow(o))
 	for spot in _houses:
 		out.append(view_rect(_house_rect(spot)).grow(1.0))
-	# ★ 숫자가 커졌다 돌아올 때 잘리지 않게 넉넉하게
+	# "+N" 숫자가 커졌다 돌아올 때 잘리지 않게 넉넉하게
 	var pop_room := Feel.HUD_FONT_SIZE * text_scale * (Feel.STAR_POP_SCALE - 1.0)
 	out.append(Rect2(_hud.position, _hud.get_combined_minimum_size()).grow(o + pop_room))
 	out.append(truck.click_rect().grow(truck_pad))

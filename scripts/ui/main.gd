@@ -1,34 +1,32 @@
 ## 게임 시작점. 숫자(balance)와 상태(game_state)를 들고, 동네와 차고에 보여주고,
-## 집에 들를 때마다 돈을 넣고, 버튼·치트 키를 scripts/core 함수로 연결한다.
-## 확률·가격 계산은 하지 않는다 → scripts/core/
+## 매 프레임 Trip.advance로 트럭 0을 진행시켜 배송 이벤트("+돈", 스페어 엔진)를 동네에 띄우고,
+## 버튼·치트 키를 scripts/core 함수로 연결한다.
+## 확률·가격·돈 계산은 하지 않는다 → scripts/core/
 ##
 ## v1 화면 두 개 (창 다루기는 screen_mode.gd):
 ##   작은 화면: 동네만. 보이는 곳 아무 데나 클릭 → 전체 화면. 차고는 안 열림
 ##   큰 화면: 왼쪽에 같은 동네를 크게 + 오른쪽에 차고 + [설정] [작게] 버튼
 ##     큰 화면은 전체 화면 또는 창 모드(사용자가 [설정]에서 고름). 창 모드는 창 크기가 수시로 바뀜
 ##     → 창 크기가 바뀔 때마다 _layout() (최소 1280x720에서도 안 깨지게)
-## v2 튜닝: 차고 [튜닝] 칸 → Tune.try_tune, 배송마다 Tune.roll_jackpot → state.delivery_pay,
-##   돈 숫자는 전부 GameState의 튜닝 반영 함수 (current_hourly, enhance_cost, offline_earnings …)
+## v3: 돈은 정수. 화면 트럭은 연출이고, 갈 곳만 계산 쪽 바퀴 진행(TruckState)에서 정한다 (_truck_target)
 extends Control
 
 const Balance = preload("res://scripts/core/balance.gd")
-const Economy = preload("res://scripts/core/economy.gd")
 const Enhance = preload("res://scripts/core/enhance.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Save = preload("res://scripts/core/save.gd")
-const Tune = preload("res://scripts/core/tune.gd")
+const Trip = preload("res://scripts/core/trip.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const Town = preload("res://scripts/ui/town.gd")
 const GaragePanel = preload("res://scripts/ui/garage_panel.gd")
 const ReturnPopup = preload("res://scripts/ui/return_popup.gd")
 const SettingsPanel = preload("res://scripts/ui/settings_panel.gd")
-const TuneTab = preload("res://scripts/ui/tune_tab.gd")
-const TuneText = preload("res://scripts/ui/tune_text.gd")
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
 
 const AUTOSAVE_SECONDS := 30.0        ## 30초마다 저장 (배속과 상관없이 진짜 30초)
 const RETURN_POPUP_MIN_AWAY := 60.0   ## 이보다 짧게 껐다 켜면 복귀 팝업 안 띄움 (돈은 넣음)
+const TRUCK := 0   ## 지금은 트럭 1대 (번호 0). 사는 화면·고르는 탭은 v7
 
 ## 저장 파일 위치. 확인 스크립트는 진짜 저장을 건드리지 않게 add_child 전에 바꾼다.
 var save_path := Save.DEFAULT_PATH
@@ -44,16 +42,19 @@ var settings_button: Button  ## 큰 화면 [설정]
 var settings: SettingsPanel  ## [설정]을 누르면 가운데 뜨는 "화면: 전체 화면 / 창 모드"
 var rng := RandomNumberGenerator.new()
 
-## 켰을 때 계산한 꺼둔 동안 수익 (확인용): { away_seconds, earned }. 저장이 없었으면 빈 묶음
+## 켰을 때 넣은 꺼둔 동안 (Trip.apply_offline 결과 + away_seconds): { money, parcels, spares, hours, away_seconds }.
+## 저장이 없었으면 빈 묶음
 var offline_report := {}
 
-## 켠 뒤로 배송으로 번 돈 합계 (확인용)
-var earned_total := 0.0
+## 켠 뒤로 배송 이벤트로 번 돈 · 배송 수 · 받은 스페어 수 (확인용)
+var earned_total := 0
+var parcels_total := 0
+var spares_found := 0
 
 # F2 배속 측정: 배속을 켠 순간부터 게임 시간과 번 돈을 잰다
 var _measuring := false
 var _measure_seconds := 0.0
-var _measure_earned := 0.0
+var _measure_earned := 0
 var _measure_hourly := 0.0
 var _debug_label: Label
 var _last_cheat := ""
@@ -62,11 +63,9 @@ var _ui_scale := 1.0               ## 전체 화면 글자·간격 배수 (창 �
 var _panel_spot := Vector2.ZERO    ## 차고 오른쪽 위 모서리 (흔들림 빼고)
 var _panel_shake := Vector2.ZERO   ## 실패 연출: 차고 흔들림
 
-## 강화 뜸 중 (결과 기다리는 중). 이때는 강화·튜닝 버튼을 또 눌러도 무시
+## 강화 뜸 중 (결과 기다리는 중). 이때는 강화 버튼을 또 눌러도 무시
 var enhancing := false
-## 튜닝 뜸 중. 이때도 강화·튜닝 버튼을 또 눌러도 무시
-var tuning := false
-## 뜸(강화·튜닝 결과 나오기 전 기다림) 길이 배수. 확인 스크립트가 튜닝을 수백 번 누를 때만 줄임 (1 = 그대로)
+## 뜸(강화 결과 나오기 전 기다림) 길이 배수. 확인 스크립트가 여러 번 누를 때만 줄임 (1 = 그대로)
 var suspense_scale := 1.0
 
 
@@ -79,7 +78,7 @@ func _ready() -> void:
 		_show_fatal(balance.errors)
 		return
 
-	state = GameState.new()
+	state = GameState.new_game()
 	var load_notice := _load_save()
 
 	# 창: 투명 창 / 평범한 창(--windowed) / 화면 없음(테스트). 작은 화면 ↔ 전체 화면
@@ -96,22 +95,20 @@ func _ready() -> void:
 
 	town = Town.new()
 	add_child(town)
-	town.truck.delivered.connect(_on_delivered)
 
 	panel = GaragePanel.new()
 	add_child(panel)
 	panel.enhance_pressed.connect(_on_enhance_pressed)
 	panel.spare_pressed.connect(_on_spare_pressed)
-	panel.tune_pressed.connect(_on_tune_pressed)
 
 	small_button = Button.new()
-	small_button.text = "작게 (Esc)"
+	small_button.text = tr("SMALL_ESC")
 	small_button.focus_mode = Control.FOCUS_NONE
 	small_button.pressed.connect(func(): screen.enter_small())
 	add_child(small_button)
 
 	settings_button = Button.new()
-	settings_button.text = "설정"
+	settings_button.text = tr("SETTINGS")
 	settings_button.focus_mode = Control.FOCUS_NONE
 	settings_button.pressed.connect(func(): close_settings() if settings.visible else open_settings())
 	add_child(settings_button)
@@ -142,10 +139,7 @@ func _ready() -> void:
 	_layout()
 	screen.rects_provider = visible_rects
 
-	if load_notice != "":
-		popup.open(load_notice, "")
-	elif not offline_report.is_empty():
-		_open_return_popup()
+	_open_return_popup(load_notice)
 	_save()   # 꺼둔 동안 수익을 넣었으면 바로 저장 (다시 켰을 때 두 번 받지 않게)
 
 
@@ -214,10 +208,22 @@ func _place_panel() -> void:
 
 
 func _process(delta: float) -> void:
-	town.truck.star = state.star
-	town.truck.running = not state.broken
-	town.truck.tune_grade = state.best_grade()
-	town.set_hud(state.money, state.star)
+	var t := state.truck(TRUCK)
+	var house := 0
+	for e in Trip.advance(state, balance, TRUCK, delta, rng):
+		if e["type"] == "parcel":
+			house = town.house_for(e["house"], Trip.cargo(balance, t))
+			town.show_payout(house, e["pay"])
+			earned_total += e["pay"]
+			parcels_total += 1
+			if _measuring:
+				_measure_earned += e["pay"]
+		else:   # "spare": 바로 앞 배송에서 나옴 → 같은 집에
+			town.show_spare(house)
+			spares_found += 1
+	town.truck.star = t.star
+	town.truck.target = _truck_target(t)
+	town.set_hud(state.money, t.star)
 	if panel.visible:
 		panel.refresh(balance, state)
 		_place_panel()
@@ -232,54 +238,62 @@ func _process(delta: float) -> void:
 		_update_debug_label()
 
 
-## 집에 들름: 대박인지 굴리고(Tune) → 그 배송 돈(GameState) → 동네에 "+금액" 또는 "대박! ×N +금액"
-func _on_delivered(house: int, seconds: float) -> void:
-	var jackpot := Tune.roll_jackpot(state, balance, rng)
-	var pay := state.delivery_pay(balance, seconds, jackpot)
-	state.money += pay
-	earned_total += pay
-	if _measuring:
-		_measure_earned += pay
-	# 글자만 만듦 (돈은 위에서 이미 넣음)
-	town.show_payout(house, pay, state.jackpot_mult(balance) if jackpot else 0.0)
+## 화면 트럭이 갈 곳: 짐 싣는 중이거나 다 돌고 돌아가는 중이면 물류센터(-1), 아니면 다음 배송 집.
+## 트럭은 거기 먼저 가서 기다리고, "+돈"은 계산 쪽 배송 이벤트가 올 때 뜬다
+func _truck_target(t) -> int:
+	var n := Trip.cargo(balance, t)
+	if t.lap_delivered >= n or (t.lap_delivered == 0 and t.lap_clock < balance.load_seconds):
+		return -1
+	return town.house_for(t.lap_delivered, n)
 
 
 # ---------------- 저장 · 꺼둔 동안 수익 ----------------
 
-## 저장 파일을 읽어 상태를 되살리고 꺼둔 동안 수익을 넣는다.
-## 저장이 깨졌으면 새로 시작하고, 알려줄 글자를 돌려준다.
+## 저장 파일을 읽어 상태를 되살리고 꺼둔 동안을 넣는다 (Trip.apply_offline).
+## 알려줄 일(백업에서 살림 / 옛 형식 파일을 남김 / 깨져서 새로 시작)이 있으면 그 글자를 돌려준다.
 func _load_save() -> String:
 	var r := Save.read_file(save_path, balance)
+	var broken_name := save_path.get_file() + ".broken"
 	match r["status"]:
 		Save.Status.OK:
 			state = r["state"]
 			var away := Time.get_unix_time_from_system() - float(r["saved_at"])
-			var earned := state.offline_earnings(balance, away)   # 연료 탱크·내비 반영
-			state.money += earned
-			offline_report = { "away_seconds": away, "earned": earned }
+			offline_report = Trip.apply_offline(state, balance, away)
+			offline_report["away_seconds"] = away
+			if r["recovered"]:
+				push_warning("저장 파일이 깨져서 백업에서 살림: " + r["error"])
+				return tr("LOAD_RECOVERED") % broken_name
+		Save.Status.NONE:
+			if r["old_kept"] != "":
+				return tr("LOAD_OLD_KEPT") % r["old_kept"].get_file()
 		Save.Status.BROKEN:
 			push_warning("저장 파일이 깨져서 새로 시작: " + r["error"])
-			return "저장 파일이 깨져서 새로 시작합니다.\n(깨진 파일은 %s 로 남겨 둠)" % (save_path.get_file() + ".broken")
+			return tr("LOAD_BROKEN") % broken_name
 	return ""
 
 
-func _open_return_popup() -> void:
+## 복귀 팝업: 알릴 일(notice)이 있으면 그게 큰 글자, 꺼둔 동안 요약은 아래 작은 글자로
+func _open_return_popup(notice: String) -> void:
+	var away_lines := _offline_lines()
+	if notice != "":
+		popup.open(notice, "\n".join(away_lines))
+	elif not away_lines.is_empty():
+		popup.open(away_lines[0], away_lines[1])
+
+
+## 꺼둔 동안 요약 두 줄 [큰 글자, 작은 글자]. 저장이 없었거나 1분 안에 다시 켰으면 빈 목록
+func _offline_lines() -> PackedStringArray:
+	if offline_report.is_empty():
+		return PackedStringArray()
 	var away: float = offline_report["away_seconds"]
-	var earned: float = offline_report["earned"]
 	if away >= 0.0 and away < RETURN_POPUP_MIN_AWAY:
-		return
-	var note := "꺼둔 동안은 %s만, 최대 %s시간치까지 쌓입니다." % [
-		Fmt.percent(state.offline_rate(balance)), Fmt.num(state.offline_cap_hours(balance))]
-	if state.grade("fuel_tank") > 0 or state.grade("navigation") > 0:
-		note += " (연료 탱크·내비 포함)"
+		return PackedStringArray()
 	if away < 0.0:
-		note = "컴퓨터 시계가 저장했을 때보다 %s 이전이라 0원입니다." % Fmt.away(away)
-	elif state.broken:
-		note = "엔진 고장 중이라 꺼둔 동안 번 돈이 없습니다."
-	var main_text := "자리 비운 %s 동안 +%s원" % [Fmt.away(maxf(away, 0.0)), Fmt.money(earned)]
-	if away < 0.0:
-		main_text = "자리 비운 동안 +0원"
-	popup.open(main_text, note)
+		return PackedStringArray([tr("RETURN_MAIN_ZERO"), tr("RETURN_CLOCK_BACK") % Fmt.away(away)])
+	var main_text := tr("RETURN_MAIN") % [Fmt.away(away), Fmt.money(offline_report["money"])]
+	var note := tr("RETURN_DETAIL") % [offline_report["parcels"], offline_report["spares"]] + "\n" \
+			+ tr("RETURN_NOTE") % [Fmt.percent(balance.offline_rate), Fmt.num(balance.offline_cap_hours)]
+	return PackedStringArray([main_text, note])
 
 
 ## 복귀 팝업: 창 가운데 (작은 화면이면 480x220 안에)
@@ -339,40 +353,45 @@ func _on_style_picked(style: ScreenMode.FullStyle) -> void:
 	settings.show_style(screen.full_style)
 
 
-# ---------------- 강화 ----------------
+# ---------------- 강화 · 스페어 ----------------
 
-## 강화 버튼: 뜸 → 굴리기(enhance.gd) → 결과 연출
+## 강화 버튼: 뜸 → 굴리기(enhance.gd) → 결과 연출 → 저장
 ## 굴리기는 뜸이 끝난 뒤에 한다 (뜸 동안 꺼도 돈이 안 빠짐)
 func _on_enhance_pressed() -> void:
-	if enhancing or tuning or Enhance.block_reason(state, balance) != Enhance.Block.NONE:
+	if enhancing or Enhance.block_reason(state, balance, TRUCK) != Enhance.Block.NONE:
 		return
 	enhancing = true
-	var danger: bool = state.enhance_chances(balance)["destroy"] > 0.0
+	var danger := Enhance.needs_spare(balance, state.truck(TRUCK).star)
 	panel.begin_suspense()
 	var wait := (Feel.SUSPENSE_DANGER if danger else Feel.SUSPENSE_SAFE) * suspense_scale
 	if danger:
 		town.truck.shake(wait, Feel.ENGINE_SHAKE_PX)   # 트럭 자기 좌표라 동네가 커지면 같이 커짐
 	await get_tree().create_timer(wait, true, false, true).timeout   # 배속과 상관없이 진짜 시간
 
-	var star_before := state.star
-	var result := Enhance.try_enhance(state, balance, rng)
+	var t := state.truck(TRUCK)   # 뜸 동안 F3(처음부터)이면 상태가 바뀌어서 다시 읽음
+	var star_before := t.star
+	var result := Enhance.try_enhance(state, balance, TRUCK, rng)
 	panel.end_suspense()
 	var fx := panel.ui_scale()   # 흔들림 세기: 차고 크기에 맞춰
 	match result:
 		Enhance.Result.SUCCESS:
-			panel.show_result("성공!  ★%d → ★%d" % [star_before, state.star], Feel.COLOR_SUCCESS)
+			panel.show_result(tr("RESULT_SUCCESS") % [star_before, t.star], Feel.COLOR_SUCCESS)
 			panel.celebrate()
 			town.pop_star()
 			town.truck.flash(Feel.FLASH_DURATION)
 			town.truck.boost(Feel.BOOST_MULT, Feel.BOOST_DURATION)
 		Enhance.Result.FAIL:
-			panel.show_result("실패", Feel.COLOR_FAIL)
+			panel.show_result(tr("RESULT_FAIL"), Feel.COLOR_FAIL)
 			_shake(func(o): _panel_shake = o, Feel.FAIL_SHAKE_PX * fx, Feel.FAIL_SHAKE_DURATION)
 		Enhance.Result.DESTROY:
-			panel.show_result("엔진 퍼짐!", Feel.COLOR_DANGER, Feel.DESTROY_TEXT_SIZE)
-			town.truck.running = false
+			# 스페어 엔진을 자동으로 써서 broken_drop_to로. 트럭은 계속 달림
+			panel.show_result(tr("RESULT_DESTROY"), Feel.COLOR_DANGER, Feel.DESTROY_TEXT_SIZE,
+					tr("RESULT_DESTROY_NOTE") % [t.star, state.spares])
 			town.truck.smoke_burst(Feel.DESTROY_SMOKE_BURST)
 			_shake(func(o): position = o, Feel.DESTROY_SHAKE_PX * fx, Feel.DESTROY_SHAKE_DURATION)
+		Enhance.Result.BLOCKED:
+			panel.clear_result()
+	_save()   # 기획서 15.5: 강화 버튼 직후 저장
 	panel.refresh(balance, state)
 	enhancing = false
 
@@ -386,39 +405,12 @@ func _shake(setter: Callable, px: float, seconds: float) -> void:
 	tw.tween_callback(func(): setter.call(Vector2.ZERO))
 
 
+## 스페어 엔진 구매 (언제든, 돈이 있으면)
 func _on_spare_pressed() -> void:
 	if state.buy_spare(balance):
-		panel.show_result("스페어 엔진 장착. 다시 출발!", Feel.COLOR_SUCCESS)
+		panel.show_result(tr("RESULT_SPARE_BOUGHT") % state.spares, Feel.COLOR_SUCCESS)
+		_save()
 	panel.refresh(balance, state)
-
-
-# ---------------- 튜닝 ----------------
-
-## [튜닝] 버튼: 짧은 뜸 → 굴리기(tune.gd) → 등급업이면 번쩍 + 등급 글자 커짐, 실패는 조용히 "그대로"
-## 굴리기는 뜸이 끝난 뒤에 한다 (뜸 동안 꺼도 돈이 안 빠짐). 고장 중에도 된다 (이미 있는 돈으로)
-func _on_tune_pressed(part: String) -> void:
-	if enhancing or tuning or Tune.block_reason(state, balance, part) != Tune.Block.NONE:
-		return
-	tuning = true
-	panel.tune.begin_suspense()
-	await get_tree().create_timer(Feel.TUNE_SUSPENSE * suspense_scale, true, false, true).timeout   # 진짜 시간
-
-	var before := state.grade(part)
-	var result := Tune.try_tune(state, balance, part, rng)
-	panel.tune.end_suspense()
-	var part_name := TuneText.part_name(part)
-	match result:
-		Tune.Result.UP:
-			var after := state.grade(part)
-			panel.tune.show_result("%s 등급업!  %s → %s" % [part_name, Tune.grade_name(balance, before),
-					Tune.grade_name(balance, after)], TuneTab.grade_color(after))
-			panel.celebrate_tune(part, after)
-		Tune.Result.SAME:
-			panel.tune.show_result("%s 그대로 (%s)" % [part_name, Tune.grade_name(balance, before)], Feel.COLOR_FAIL)
-		Tune.Result.BLOCKED:
-			panel.tune.clear_result()
-	panel.refresh(balance, state)
-	tuning = false
 
 
 # ---------------- 클릭 · 치트 키 ----------------
@@ -447,7 +439,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_F3: _cheat_reset()
 		KEY_F4: _cheat_star_up()
 		KEY_F5: _cheat_break()
-		KEY_F6: _cheat_tune_up()
+		KEY_F6: _cheat_spare()
 		_: return
 	get_viewport().set_input_as_handled()
 
@@ -460,11 +452,11 @@ func _on_click(_pos: Vector2) -> void:
 		get_viewport().set_input_as_handled()
 
 
-## F1: 돈 + 1시간치. 고장 중에도 쓸 수 있게 "지금 강수의" 시간당 수익으로 준다.
+## F1: 돈 + 지금 단계 1시간치
 func _cheat_money() -> void:
-	var amount := Economy.hourly_income(balance, state.star)
+	var amount := int(Trip.hourly_income(balance, state.truck(TRUCK)))
 	state.money += amount
-	_last_cheat = "F1 돈 +%s원" % Fmt.money(amount)
+	_last_cheat = tr("CHEAT_MONEY") % Fmt.money(amount)
 
 
 ## F2: 시간 60배속 켜기/끄기. 켜는 순간부터 "측정"을 새로 시작한다.
@@ -473,54 +465,56 @@ func _toggle_fast_time() -> void:
 		Engine.time_scale = Feel.CHEAT_TIME_SCALE
 		_measuring = true
 		_measure_seconds = 0.0
-		_measure_earned = 0.0
-		_measure_hourly = state.current_hourly(balance)
+		_measure_earned = 0
+		_measure_hourly = Trip.hourly_income(balance, state.truck(TRUCK))
 	else:
 		Engine.time_scale = 1.0
 		_measuring = false   # 측정 결과는 화면에 그대로 남겨 둔다
 
 
-## F3: 저장 초기화 → 처음부터 (돈 0, 0강, 통계 0)
+## F3: 저장 초기화 → 처음부터 (돈 0, +0, 스페어 0, 통계 0)
 func _cheat_reset() -> void:
 	Save.delete_file(save_path)
-	state = GameState.new()
-	earned_total = 0.0
+	state = GameState.new_game()
+	earned_total = 0
+	parcels_total = 0
+	spares_found = 0
 	panel.clear_result()
-	panel.tune.clear_result()
 	popup.visible = false
 	_save()
-	_last_cheat = "F3 저장 초기화"
+	_last_cheat = tr("CHEAT_RESET")
 
 
-## F4: 강수 +1 (최대 강수까지)
+## F4: 강화 단계 +1 (최대 단계까지)
 func _cheat_star_up() -> void:
-	state.star = mini(state.star + 1, balance.max_star)
-	_last_cheat = "F4 ★%d" % state.star
+	var t := state.truck(TRUCK)
+	t.star = mini(t.star + 1, balance.max_star)
+	_last_cheat = "F4 +%d" % t.star
 
 
-## F5: 강제로 퍼지게 하기 (통계에는 안 셈)
+## F5: 강제로 퍼지게 하기 (스페어가 있으면 1개 씀. 통계에는 안 셈)
 func _cheat_break() -> void:
-	Enhance.break_engine(state, balance)
-	_last_cheat = "F5 강제 퍼짐 → ★%d 고장" % state.star
+	Enhance.force_destroy(state, balance, TRUCK)
+	town.truck.smoke_burst(Feel.DESTROY_SMOKE_BURST)
+	_last_cheat = tr("CHEAT_BREAK") % [state.truck(TRUCK).star, state.spares]
 
 
-## F6: 튜닝 7부위 전부 등급 +1 (최고 등급까지. 통계에는 안 셈)
-func _cheat_tune_up() -> void:
-	for part in Tune.PARTS:
-		state.set_grade(balance, part, state.grade(part) + 1)
-	_last_cheat = "F6 튜닝 전부 +1 (가장 높은 등급 %s)" % Tune.grade_name(balance, state.best_grade())
+## F6: 스페어 엔진 +1
+func _cheat_spare() -> void:
+	state.spares += 1
+	_last_cheat = tr("CHEAT_SPARE") % state.spares
 
 
 func _update_debug_label() -> void:
-	var text := "[디버그] F1 돈 · F2 %s배속(%s) · F3 처음부터 · F4 ★+1 · F5 퍼짐 · F6 튜닝 +1" % [
-		Fmt.money(Feel.CHEAT_TIME_SCALE), "켜짐" if Engine.time_scale != 1.0 else "꺼짐"]
+	var text := tr("DEBUG_KEYS") % [
+		Fmt.num(Feel.CHEAT_TIME_SCALE), tr("DEBUG_ON") if Engine.time_scale != 1.0 else tr("DEBUG_OFF")]
 	if _last_cheat != "":
 		text += "   ▶ " + _last_cheat
 	if _measure_seconds > 0.0:
 		var expected := _measure_hourly * _measure_seconds / 3600.0
 		var ratio := _measure_earned / expected * 100.0 if expected > 0.0 else 0.0
-		text += "   측정: 게임 시간 %s · 번 돈 %s원 · 시간당 수익으로 계산한 값 %s원 (%.1f%%)" % [
-			Fmt.duration(_measure_seconds), Fmt.money(_measure_earned), Fmt.money(expected), ratio]
+		text += "   " + tr("DEBUG_MEASURE") % [
+			Fmt.duration(_measure_seconds), Fmt.money(_measure_earned), Fmt.money(int(expected)), ratio]
 	_debug_label.text = text
 
 
@@ -536,6 +530,6 @@ func _show_fatal(errors: PackedStringArray) -> void:
 	label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	label.add_theme_color_override("font_color", Feel.COLOR_ERROR)
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.text = "게임 숫자 파일에 문제가 있어서 시작하지 않았습니다. 고친 뒤 다시 실행하세요.\n" + "\n".join(errors)
+	label.text = tr("FATAL_BALANCE") + "\n" + "\n".join(errors)
 	add_child(label)
 	set_process(false)

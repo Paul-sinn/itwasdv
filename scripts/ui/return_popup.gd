@@ -35,7 +35,7 @@ func _ready() -> void:
 	box.add_child(_note_label)
 
 	var ok := Button.new()
-	ok.text = "확인"
+	ok.text = tr("POPUP_OK")
 	ok.focus_mode = Control.FOCUS_NONE
 	ok.add_theme_font_size_override("font_size", Feel.PANEL_BUTTON_SIZE)
 	ok.pressed.connect(func(): visible = false)

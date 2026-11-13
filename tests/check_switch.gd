@@ -154,8 +154,8 @@ func _run() -> void:
 ## 한 번 오가기: 큰 화면 → 작은 화면
 func _round(n: int, measure_window: bool) -> void:
 	signals.clear()
-	var star_before: int = m.state.star
-	var money_before: float = m.state.money
+	var star_before: int = m.state.truck(0).star
+	var money_before: int = m.state.money
 	screen.enter_full()
 	_check_full("%d번째 큰 화면 (바로)" % n)
 	await _settle()
@@ -169,7 +169,7 @@ func _round(n: int, measure_window: bool) -> void:
 	if measure_window:
 		await _win("small%d" % n, "small", DesktopWindow.small_rect())
 	_check(signals == [ScreenMode.Mode.FULL, ScreenMode.Mode.SMALL], "%d번째: 신호는 FULL, SMALL 한 번씩: %s" % [n, signals])
-	_check(m.state.star == star_before, "%d번째: 강수가 바뀜 %d → %d" % [n, star_before, m.state.star])
+	_check(m.state.truck(0).star == star_before, "%d번째: 강화 단계가 바뀜 %d → %d" % [n, star_before, m.state.truck(0).star])
 	_check(m.state.money >= money_before, "%d번째: 돈이 줄어듦 %s → %s" % [n, money_before, m.state.money])
 
 

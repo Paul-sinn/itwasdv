@@ -41,10 +41,10 @@ static func supported() -> bool:
 func _ready() -> void:
 	if NativeMenu.has_feature(NativeMenu.FEATURE_POPUP_MENU):
 		_menu_rid = NativeMenu.create_menu()
-		NativeMenu.add_item(_menu_rid, "전체 화면", choose, Callable(), Item.FULL)
-		NativeMenu.add_item(_menu_rid, "작게", choose, Callable(), Item.SMALL)
+		NativeMenu.add_item(_menu_rid, tr("TRAY_FULL"), choose, Callable(), Item.FULL)
+		NativeMenu.add_item(_menu_rid, tr("TRAY_SMALL"), choose, Callable(), Item.SMALL)
 		NativeMenu.add_separator(_menu_rid)
-		NativeMenu.add_item(_menu_rid, "끝내기", choose, Callable(), Item.QUIT)
+		NativeMenu.add_item(_menu_rid, tr("TRAY_QUIT"), choose, Callable(), Item.QUIT)
 
 	indicator = StatusIndicator.new()
 	indicator.icon = make_icon()

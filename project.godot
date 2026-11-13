@@ -29,3 +29,7 @@ renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 environment/defaults/default_clear_color=Color(0.13, 0.15, 0.19, 1)
 viewport/transparent_background=true
+
+[internationalization]
+
+locale/translations=PackedStringArray("res://locale/strings.ko.translation", "res://locale/strings.en.translation")
