@@ -86,7 +86,7 @@ func test_fail_keeps_star_at_every_step() -> void:
 		var result := Enhance.Result.SUCCESS
 		for i in 1000:
 			t.star = star
-			result = Enhance.try_enhance(s, b, 0, rng)
+			result = Enhance.try_enhance(s, b, 0, rng)["result"]
 			if result == Enhance.Result.FAIL:
 				break
 		check_eq(result, Enhance.Result.FAIL, "+%d: 1000번 안에 실패가 안 나옴" % star)
@@ -114,7 +114,7 @@ func test_destroy_uses_spare() -> void:
 	var s := _game(18, 10 ** 12)
 	check(Enhance.needs_spare(b, 18), "+18은 스페어가 있어야 함")
 	check_eq(Enhance.block_reason(s, b, 0), Enhance.Block.NO_SPARE, "+18 스페어 0: 막힌 이유")
-	check_eq(Enhance.try_enhance(s, b, 0, rng), Enhance.Result.BLOCKED, "+18 스페어 0인데 강화가 됨")
+	check_eq(Enhance.try_enhance(s, b, 0, rng)["result"], Enhance.Result.BLOCKED, "+18 스페어 0인데 강화가 됨")
 	check_eq(s.money, 10 ** 12, "막혔는데 돈이 빠짐")
 
 	# 스페어 2개 들고 +20에서 퍼질 때까지 누른다 (+20 퍼짐 4%)
@@ -124,7 +124,7 @@ func test_destroy_uses_spare() -> void:
 	while result != Enhance.Result.DESTROY and tries < 1000:
 		tries += 1
 		s.truck(0).star = 20   # 성공해서 +21이 되면 다시 +20으로
-		result = Enhance.try_enhance(s, b, 0, rng)
+		result = Enhance.try_enhance(s, b, 0, rng)["result"]
 	check_eq(result, Enhance.Result.DESTROY, "1000번 안에 안 퍼짐")
 	var t := s.truck(0)
 	check_eq(t.star, 15, "퍼진 뒤 단계")
@@ -157,7 +157,7 @@ func test_buy_spare() -> void:
 func test_needs_spare_matches_destroy() -> void:
 	for star in b.max_star:
 		check_eq(Enhance.needs_spare(b, star), b.destroy[star] > 0.0, "+%d 스페어 필요 여부" % star)
-		var s := _game(star, Economy.enhance_cost(b, star))
+		var s := _game(star, Economy.base_enhance_cost(b, star))
 		s.spares = 1
 		check_eq(Enhance.block_reason(s, b, 0), Enhance.Block.NONE, "+%d: 비용 딱 + 스페어 1개인데 막힘" % star)
 		s.money -= 1
@@ -177,8 +177,8 @@ func test_each_press_updates_state() -> void:
 			t.star = 0
 		var star0 := t.star
 		var money0 := s.money
-		var cost := Economy.enhance_cost(b, star0)
-		var result := Enhance.try_enhance(s, b, 0, rng)
+		var cost := Economy.base_enhance_cost(b, star0)
+		var result: Enhance.Result = Enhance.try_enhance(s, b, 0, rng)["result"]
 		check_eq(s.money, money0 - cost, "%d번째: 비용이 정확히 안 빠짐" % i)
 		match result:
 			Enhance.Result.SUCCESS:
@@ -199,7 +199,7 @@ func test_blocked_when_no_money_or_max() -> void:
 	var rng := RandomNumberGenerator.new()
 	var s := _game(0, 34999)   # +0 비용 35000
 	check_eq(Enhance.block_reason(s, b, 0), Enhance.Block.NO_MONEY, "34999원으로 강화 가능으로 나옴")
-	check_eq(Enhance.try_enhance(s, b, 0, rng), Enhance.Result.BLOCKED, "돈이 모자란데 강화가 됨")
+	check_eq(Enhance.try_enhance(s, b, 0, rng)["result"], Enhance.Result.BLOCKED, "돈이 모자란데 강화가 됨")
 	check_eq(s.money, 34999, "막혔는데 돈이 빠짐")
 	check_eq(s.truck(0).fail_count + s.truck(0).success_count, 0, "막혔는데 횟수가 셈")
 	s.money = 35000
@@ -209,7 +209,7 @@ func test_blocked_when_no_money_or_max() -> void:
 	s.money = 10 ** 15
 	s.spares = 5
 	check_eq(Enhance.block_reason(s, b, 0), Enhance.Block.MAX_STAR, "+30인데 강화 가능으로 나옴")
-	check_eq(Enhance.try_enhance(s, b, 0, rng), Enhance.Result.BLOCKED, "+30인데 강화가 됨")
+	check_eq(Enhance.try_enhance(s, b, 0, rng)["result"], Enhance.Result.BLOCKED, "+30인데 강화가 됨")
 
 	# 돈도 스페어도 없으면 스페어부터 알려 줌
 	var s2 := _game(18, 0)
@@ -225,7 +225,7 @@ func test_enhance_picks_truck_i() -> void:
 	s.trucks.append(TruckState.new())
 	s.truck(1).star = 3
 	for k in 50:
-		Enhance.try_enhance(s, b, 1, rng)
+		Enhance.try_enhance(s, b, 1, rng)["result"]
 	var t1 := s.truck(1)
 	check_eq(s.truck(0).star, 0, "트럭 0이 바뀜")
 	check_eq(t1.success_count + t1.fail_count + t1.destroy_count, 50, "트럭 1 누른 횟수")

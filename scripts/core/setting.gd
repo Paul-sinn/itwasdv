@@ -35,13 +35,22 @@ static func unlocked(b: Balance, t: TruckState, part: String) -> bool:
 	return t.star >= unlock_star(b, part)
 
 
-static func roll_cost(b: Balance, grade: int) -> int:
-	return b.roll_cost[grade]
+## 돌리기 1번 비용. 명장 "세팅 비용 할인" 보너스 중이면(s.active_bonus) round(비용 × (1 − 할인)). 화면 = 실제
+static func roll_cost(b: Balance, grade: int, s: GameState) -> int:
+	var cost: int = b.roll_cost[grade]
+	if s.active_bonus == "setting_discount":
+		cost = roundi(cost * (1.0 - b.master_bonuses["setting_discount"]))
+	return cost
 
 
-## 한 번 돌릴 때 등급업 확률. 최고 등급은 0
-static func up_chance(b: Balance, grade: int) -> float:
-	return b.up_chance[grade] if grade < max_grade(b) else 0.0
+## 한 번 돌릴 때 등급업 확률. 최고 등급은 0. 명장 "세팅 등급업 확률 상승" 중이면 × setting_up_mult (최대 1, 천장은 그대로)
+static func up_chance(b: Balance, grade: int, s: GameState) -> float:
+	if grade >= max_grade(b):
+		return 0.0
+	var p := b.up_chance[grade]
+	if s.active_bonus == "setting_up_mult":
+		p = minf(1.0, p * b.master_bonuses["setting_up_mult"])
+	return p
 
 
 ## 천장 (이 횟수째는 무조건 등급업). 최고 등급은 0
@@ -90,7 +99,7 @@ static func block_reason(state: GameState, b: Balance, i: int, part: String) -> 
 	var p := t.part(part)
 	if p["pending"] != null:
 		return Block.PENDING
-	if state.money < roll_cost(b, p["grade"]):
+	if state.money < roll_cost(b, p["grade"], state):
 		return Block.NO_MONEY
 	return Block.NONE
 
@@ -102,7 +111,7 @@ static func try_roll(state: GameState, b: Balance, i: int, part: String, rng: Ra
 		return { "ok": false }
 	var p := state.truck(i).part(part)
 	var grade: int = p["grade"]
-	state.money -= roll_cost(b, grade)
+	state.money -= roll_cost(b, grade, state)
 	var up := false
 	var pity := false
 	if grade < max_grade(b):   # 최고 등급은 등급업 없음 (카운터 안 셈)
@@ -110,7 +119,7 @@ static func try_roll(state: GameState, b: Balance, i: int, part: String, rng: Ra
 		if p["counters"][grade] >= ceiling(b, grade):
 			up = true
 			pity = true
-		elif Enhance.random01(rng) < up_chance(b, grade):
+		elif Enhance.random01(rng) < up_chance(b, grade, state):
 			up = true
 		if up:
 			p["counters"][grade] = 0

@@ -1,5 +1,5 @@
 {
-  "version": "0.11",
+  "version": "0.12",
   "trip": {
     "unit_price": 2500,
     "base_cargo": 20,
@@ -49,6 +49,11 @@
   },
   "rush": { "min_minutes": 30, "max_minutes": 60, "ring_seconds": 30, "parcels": 20, "pay_mult": 2 },
   "weekly": { "target_parcels": 30000, "xp": 2000, "coupons": 1 },
+  "master": {
+    "unlock_star": 10,
+    "insure_fee_mult": 2,
+    "bonuses": { "destroy_cut": 0.3, "enhance_discount": 0.2, "setting_up_mult": 1.5, "success_mult": 1.2, "spare_mult": 2, "setting_discount": 0.2, "double_step": 0.1 }
+  },
   "depot": {
     "warehouse_hours": [4, 6, 8, 12],
     "warehouse_prices": [2000000, 3000000, 40000000],

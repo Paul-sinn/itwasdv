@@ -86,9 +86,10 @@ static func tip_pay(b: Balance, s: GameState, i: int) -> int:
 	return _tip(b, s, i, 1.0)
 
 
-## 트럭 i의 스페어 드랍 확률 (배송 1건마다) = spare_drop_chance × (1 + 정비 지식). 정비 지식은 트럭 0만
+## 트럭 i의 스페어 드랍 확률 (켜 둔 동안 배송 1건마다) = spare_drop_chance × (1 + 정비 지식)
+##   × 명장 "스페어 드랍 2배" 보너스 중이면 spare_mult (모든 트럭. 꺼둔 동안은 안 들어감). 정비 지식은 트럭 0만
 static func spare_chance(b: Balance, s: GameState, i: int) -> float:
-	return b.spare_drop_chance * (1.0 + _ability(b, s, i, "mech"))
+	return _spare_chance(b, s, i, true)
 
 
 ## 트럭 i의 지금 바퀴 수입 = 실은 건수 × 배송 1건 돈 (팁 뺌)
@@ -209,7 +210,7 @@ static func apply_offline(state: GameState, b: Balance, seconds_away: float) -> 
 		money += floori(hourly_income(b, state, i) * hours * rate)
 		var n := floori(cargo(b, state.truck(i)) * Economy.SECONDS_PER_HOUR / avg_lap_seconds(b, state, i) * hours * rate)
 		parcels += n
-		state.spare_drop_carry += n * spare_chance(b, state, i)
+		state.spare_drop_carry += n * _spare_chance(b, state, i, false)   # 명장 보너스는 켜 둔 동안만
 		if i == 0:   # 1e-9: 1080 × 10 × 0.175처럼 딱 떨어져야 할 곱이 1889.999…로 1 모자라지 않게 (실수 찌꺼기만 막음)
 			xp = floori(n * b.driver_xp_per_parcel * Ability.value(b, state, "knowhow") + 1e-9)
 	var spares := floori(state.spare_drop_carry)
@@ -235,6 +236,14 @@ static func _drive_at(b: Balance, t: TruckState, star: int, boosted: bool) -> fl
 ## 한 바퀴 초 = 싣기 + 달리기 + n집 × 정차 (n은 실은 건수, 평균 계산에서는 소수점 평균. 정차는 _stop)
 static func _lap_from_drive(b: Balance, n: float, drive: float, stop: float) -> float:
 	return b.load_seconds + drive + n * stop
+
+
+## 드랍 확률. with_bonus = 명장 "스페어 드랍 2배"를 넣나 (켜 둔 동안만 넣음)
+static func _spare_chance(b: Balance, s: GameState, i: int, with_bonus: bool) -> float:
+	var p := b.spare_drop_chance * (1.0 + _ability(b, s, i, "mech"))
+	if with_bonus and s.active_bonus == "spare_mult":
+		p *= b.master_bonuses["spare_mult"]
+	return p
 
 
 ## 트럭 i가 집 앞에 서는 초 = stop_seconds × (1 − 상하차)

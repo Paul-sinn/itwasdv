@@ -75,11 +75,11 @@ func test_json_matches_spec() -> void:
 ## 작은 함수들: 최고 등급, 최고 등급에서 등급업 0·천장 0, 잡옵 수치 0
 func test_small_functions() -> void:
 	check_eq(Setting.max_grade(b), 4, "최고 등급")
-	check_eq(Setting.up_chance(b, 4), 0.0, "프로토타입 등급업 확률")
+	check_eq(Setting.up_chance(b, 4, GameState.new()), 0.0, "프로토타입 등급업 확률")
 	check_eq(Setting.ceiling(b, 4), 0, "프로토타입 천장")
-	check_eq(Setting.up_chance(b, 3), 0.003, "레이싱 등급업 확률")
+	check_eq(Setting.up_chance(b, 3, GameState.new()), 0.003, "레이싱 등급업 확률")
 	check_eq(Setting.ceiling(b, 0), 5, "순정 천장")
-	check_eq(Setting.roll_cost(b, 4), 10000000, "프로토타입 돌리기 비용")
+	check_eq(Setting.roll_cost(b, 4, GameState.new()), 10000000, "프로토타입 돌리기 비용")
 	check_eq(Setting.option_value(b, "speed", 4), 0.2, "프로토타입 이동 속도")
 	check_eq(Setting.option_value(b, "junk_cupholder", 3), 0.0, "잡옵 수치")
 	var t := TruckState.new()

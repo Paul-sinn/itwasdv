@@ -28,3 +28,4 @@
 | 2026-11-13 | 시트에 없음 (임시 시작값, 조율자 → QUESTIONS Q20) | `special.large.share`, `special.vip.share`, `rush.ring_seconds`, `rush.parcels`, `weekly.target_parcels` | PROTOTYPE_V6B | 10%, 5%, 30초, 20건, 30000건 |
 | 2026-11-13 | 기획서 16.6 / 4.12 (Q15 답) | `rush.min_minutes`, `rush.max_minutes`, `rush.pay_mult` | PROTOTYPE_V6B | 30~60분, ×2 |
 | 2026-11-13 | 경험치 얻는 법 (스냅샷 7번), 명장 보험 쿠폰 (9번) | `weekly.xp`, `weekly.coupons` | PROTOTYPE_V6B | 2000, 1장 |
+| 2026-11-13 | 명장 방문일 (스냅샷 9번), 기획서 2장·16.1 (Q15 답) | `master.unlock_star`, `master.insure_fee_mult`, `master.bonuses.*` | PROTOTYPE_V6B | +10에 열림, 보험 = 비용 × 2, 보너스 7개 (퍼짐 −30%, 강화 비용 −20%, 세팅 등급업 ×1.5, 성공 ×1.2, 드랍 ×2, 세팅 비용 −20%, 2단계 10%. 초안) |

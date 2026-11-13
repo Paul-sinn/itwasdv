@@ -36,6 +36,7 @@ const TEST_FILES := [
 	"res://tests/test_driver.gd",
 	"res://tests/test_ability.gd",
 	"res://tests/test_v6b.gd",
+	"res://tests/test_master.gd",
 	"res://tests/test_depot.gd",
 	"res://tests/test_quest.gd",
 	"res://tests/test_fmt.gd",
