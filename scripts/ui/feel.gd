@@ -8,7 +8,7 @@ const TRUCK_SIZE := Vector2(44, 22)
 const WHEEL_RADIUS := 4.5
 
 # --- 트럭 속도 (눈에 보이는 연출일 뿐. 시간당 수익과 무관) ---
-const TRIP_SPEEDUP_PER_STAR := 0.95  ## 1강마다 달리는 시간에 곱하는 수 (작을수록 빨라짐)
+const TRIP_SPEEDUP_PER_STAR := 0.95  ## 강화 1단계마다 달리는 시간에 곱하는 수 (작을수록 빨라짐)
 
 # --- "+금액" 떠오르기 (작은 화면 기준. 전체 화면에서는 동네 글자 배수만큼 커짐) ---
 const PAYOUT_RISE := 24.0        ## 위로 올라가는 거리 (픽셀)
@@ -30,7 +30,7 @@ const TRAY_ICON_SIZE := 32                    ## 알림 영역 아이콘 그림 
 const TRAY_MENU_DELAY := 0.3                  ## 아이콘 오른쪽 클릭 뒤 메뉴를 띄우기까지 초 (버튼을 뗀 뒤에 뜨게)
 
 # --- 글자 크기 (작은 화면 기준) ---
-const HUD_FONT_SIZE := 13        ## 구석 ★·돈
+const HUD_FONT_SIZE := 13        ## 구석 "+N"·돈
 const LABEL_FONT_SIZE := 10      ## "물류센터"
 const DEBUG_FONT_SIZE := 11      ## 디버그 줄 (전체 화면에서만, 높이 900 기준)
 
@@ -90,7 +90,7 @@ const ENGINE_SHAKE_GROW := 2.0        ## 떨림이 뜸 끝으로 갈수록 몇 �
 
 const FLASH_DURATION := 0.35          ## 성공 번쩍임이 사라지는 시간
 const FLASH_ALPHA := 0.75             ## 번쩍임 처음 밝기 (0~1)
-const STAR_POP_SCALE := 1.7           ## 성공 시 ★ 숫자가 커지는 배수
+const STAR_POP_SCALE := 1.7           ## 성공 시 "+N" 숫자가 커지는 배수
 const STAR_POP_DURATION := 0.45       ## 커졌다 돌아오는 시간
 const BOOST_MULT := 3.5               ## 성공 시 트럭 순간 가속 배수
 const BOOST_DURATION := 0.9           ## 가속이 원래대로 줄어드는 시간
@@ -116,7 +116,7 @@ const TOWN_HOUSES := 5            ## 꼬불길 가의 집 수 (사용자 결정 
 const TOWN_STOP_SECONDS := 1.5    ## 집 앞에서 멈추는 초 (사용자 결정 2026-11-10)
 const TOWN_DEPOT_STOP_SECONDS := 1.0  ## 물류센터에서 짐 싣느라 서 있는 초
 
-## 0강일 때 물류센터 → 마지막 집 → 물류센터 한 바퀴를 달리는 초 (멈춘 시간 빼고).
+## +0일 때 물류센터 → 마지막 집 → 물류센터 한 바퀴를 달리는 초 (멈춘 시간 빼고).
 ## 강수마다 TRIP_SPEEDUP_PER_STAR 배씩 빨라지고, TOWN_DRIVE_SECONDS_MIN보다 빨라지지는 않음 (하한)
 const TOWN_DRIVE_SECONDS_BASE := 32.0
 const TOWN_DRIVE_SECONDS_MIN := 8.0
@@ -141,7 +141,7 @@ const TOWN_ROOF_OVERHANG := 3.0
 const TOWN_DEPOT_RECT := Rect2(8, 150, 58, 46)
 const TOWN_TRUCK_SCALE := 0.6     ## 트럭 그림(TRUCK_SIZE) 배수
 const TOWN_TRUCK_LIFT := 3.0      ## 바퀴 바닥이 길 가운데 선보다 얼마나 아래 (길 위에 올라탄 느낌)
-const TOWN_HUD_POS := Vector2(8, 4)   ## 구석 ★·돈
+const TOWN_HUD_POS := Vector2(8, 4)   ## 구석 "+N"·돈
 
 # --- v1: 전체 화면 (동네 담당) ---
 const FULL_REF_SIZE := Vector2(1600, 900)  ## 글자·간격은 이 창 크기 기준. 창이 크면 비례해서 키움 (높이·폭 중 덜 큰 쪽)
@@ -150,7 +150,7 @@ const FULL_UI_SCALE_MAX := 2.0
 const FULL_MARGIN := 28.0         ## 창 가장자리·동네·차고 사이 간격 (높이 900 기준)
 const GARAGE_SCALE := 1.5         ## 전체 화면 차고 = v0 패널의 몇 배 (높이 900 기준)
 const SETTINGS_WIDTH := 300.0     ## [설정] 화면 폭 (v0 패널 크기 기준, 차고와 같은 배수로 키움)
-const FULL_TOWN_TEXT_MAX := 2.5   ## 동네를 확대해도 동네 글자(★·돈·+금액)는 이 배수(× 화면 배수)까지만
+const FULL_TOWN_TEXT_MAX := 2.5   ## 동네를 확대해도 동네 글자("+N"·돈·+금액)는 이 배수(× 화면 배수)까지만
 
 
 ## 지금 강수에서 한 바퀴(물류센터 → 마지막 집 → 물류센터) 달리는 초 (멈춘 시간 빼고)

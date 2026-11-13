@@ -32,6 +32,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	await process_frame
+	TranslationServer.set_locale("ko")   # 아래에서 한국어 글자를 비교함 (OS 언어와 상관없이)
 	root.size = Feel.SMALL_SIZE
 	(ScreenMode as Object).set("settings_path", TEST_SETTINGS)   # screen_mode.gd에 settings_path가 없으면 아무 일 없음
 	Save.delete_file(TEST_SAVE)

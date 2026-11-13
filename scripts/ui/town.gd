@@ -1,5 +1,5 @@
 ## v1 동네: 꼬불꼬불한 길 하나, 길가에 집 TOWN_HOUSES채, 길 끝(시작점)에 물류센터, 트럭,
-## 구석 ★·돈, 집 앞 "+금액".
+## 구석 강화 단계("+N")·돈, 집 앞 "+금액".
 ## 동네 설계 좌표(feel.gd TOWN_SIZE = 작은 화면 크기)로 만들고, 전체 화면에서는 같은 동네를 통째로 확대한다.
 ## 길·집·트럭은 확대해서 그리고(선명함), 글자는 확대 배수에 맞춘 글자 크기로 따로 놓는다.
 ## 그리기만 한다. 돈 계산은 main.gd → economy.gd
@@ -48,7 +48,7 @@ func _ready() -> void:
 	_hud.add_child(_money_label)
 
 	_depot_label = make_label(Feel.LABEL_FONT_SIZE, Feel.COLOR_TEXT)
-	_depot_label.text = "물류센터"
+	_depot_label.text = tr("TOWN_DEPOT")
 	add_child(_depot_label)
 	layout(Vector2.ZERO, 1.0, 1.0)
 
@@ -94,11 +94,11 @@ func area() -> Rect2:
 
 
 func set_hud(money: float, star: int) -> void:
-	_star_label.text = "★%d" % star
-	_money_label.text = "%s원" % Fmt.money(money)
+	_star_label.text = "+%d" % star
+	_money_label.text = tr("MONEY") % Fmt.money(int(money))
 
 
-## 성공 연출: ★ 숫자가 커졌다 돌아옴
+## 성공 연출: "+N" 숫자가 커졌다 돌아옴
 func pop_star() -> void:
 	pop(_star_label)
 
@@ -111,7 +111,7 @@ func show_payout(house: int, amount: float, jackpot_mult := 0.0) -> void:
 	var label := make_label(font_size, Feel.COLOR_JACKPOT if jackpot else Feel.COLOR_PAYOUT)
 	_set_font(label, font_size)
 	if jackpot:
-		label.text = "대박! ×%s +%s원" % [Fmt.num(jackpot_mult), Fmt.payout(amount)]
+		label.text = tr("TOWN_JACKPOT") % [Fmt.num(jackpot_mult), Fmt.payout(amount)]
 		jackpots_shown += 1
 	else:
 		label.text = "+%s" % Fmt.payout(amount)
@@ -159,7 +159,7 @@ func visible_rects(truck_pad: float) -> Array:
 	out.append(Rect2(_depot_label.position, _depot_label.size).grow(o))
 	for spot in _houses:
 		out.append(view_rect(_house_rect(spot)).grow(1.0))
-	# ★ 숫자가 커졌다 돌아올 때 잘리지 않게 넉넉하게
+	# "+N" 숫자가 커졌다 돌아올 때 잘리지 않게 넉넉하게
 	var pop_room := Feel.HUD_FONT_SIZE * text_scale * (Feel.STAR_POP_SCALE - 1.0)
 	out.append(Rect2(_hud.position, _hud.get_combined_minimum_size()).grow(o + pop_room))
 	out.append(truck.click_rect().grow(truck_pad))

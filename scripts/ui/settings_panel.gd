@@ -28,14 +28,14 @@ func _ready() -> void:
 
 	_box = VBoxContainer.new()
 	add_child(_box)
-	_label("설정", Feel.PANEL_TITLE_SIZE, Feel.COLOR_TEXT)
-	_label("화면", Feel.PANEL_TEXT_SIZE, Feel.COLOR_DIM)
+	_label(tr("SETTINGS"), Feel.PANEL_TITLE_SIZE, Feel.COLOR_TEXT)
+	_label(tr("SETTINGS_SCREEN"), Feel.PANEL_TEXT_SIZE, Feel.COLOR_DIM)
 
 	_row = HBoxContainer.new()
 	_box.add_child(_row)
 	var group := ButtonGroup.new()
-	fullscreen_button = _button(_row, "전체 화면")
-	windowed_button = _button(_row, "창 모드")
+	fullscreen_button = _button(_row, tr("SETTINGS_FULLSCREEN"))
+	windowed_button = _button(_row, tr("SETTINGS_WINDOWED"))
 	for b in [fullscreen_button, windowed_button]:
 		b.toggle_mode = true
 		b.button_group = group
@@ -45,9 +45,9 @@ func _ready() -> void:
 		b.add_theme_color_override("font_hover_pressed_color", Feel.COLOR_STAR)
 	fullscreen_button.pressed.connect(func(): style_picked.emit(ScreenMode.FullStyle.FULLSCREEN))
 	windowed_button.pressed.connect(func(): style_picked.emit(ScreenMode.FullStyle.WINDOWED))
-	_label("창 모드는 창 크기를 마음대로 바꿀 수 있어요.", Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
+	_label(tr("SETTINGS_WINDOWED_NOTE"), Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
 
-	close_button = _button(_box, "닫기")
+	close_button = _button(_box, tr("SETTINGS_CLOSE"))
 	close_button.pressed.connect(func(): close_pressed.emit())
 	set_ui_scale(_scale)
 

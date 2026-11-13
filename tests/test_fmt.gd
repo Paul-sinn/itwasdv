@@ -1,19 +1,32 @@
-## fmt.gd: 화면에 보여줄 숫자 글자
+## fmt.gd: 화면에 보여줄 숫자 글자. 말이 드는 것은 언어를 정해 놓고 본다 (번역 파일)
 extends "res://tests/test_base.gd"
 
 const Fmt = preload("res://scripts/ui/fmt.gd")
 
 
-func test_money() -> void:
-	check_eq(Fmt.money(0.0), "0", "0")
-	check_eq(Fmt.money(999.9), "999", "999.9 (소수점 버림)")
-	check_eq(Fmt.money(1000.0), "1,000", "1000")
-	check_eq(Fmt.money(1234567.8), "1,234,567", "1234567.8")
-	check_eq(Fmt.money(-1234.0), "-1,234", "-1234")
+## 돈 표기 (지시서 v3 "돈 표기"): 1만 미만 쉼표, 위는 만/억/조. 단위로 나눈 값 100 미만은 소수 첫째 자리 버림
+func test_money_ko() -> void:
+	TranslationServer.set_locale("ko")
+	for c in [[0, "0"], [999, "999"], [9999, "9,999"], [10000, "1만"], [12000, "1.2만"], [19999, "1.9만"],
+			[999999, "99.9만"], [1000000, "100만"], [99999999, "9,999만"], [123456789, "1.2억"],
+			[340000000, "3.4억"], [1200000000000, "1.2조"], [12345000000000000, "12,345조"],
+			[9000000000000000000, "9,000,000조"], [-12000, "-1.2만"]]:
+		check_eq(Fmt.money(c[0]), c[1], "ko %d" % c[0])
+
+
+## en: 1000 미만 그대로, 위는 K/M/B/T. OS가 ko·en이 아니면(ja 등) en과 같음
+func test_money_en() -> void:
+	for locale in ["en", "ja"]:
+		TranslationServer.set_locale(locale)
+		for c in [[0, "0"], [999, "999"], [1000, "1K"], [9999, "9.9K"], [12000, "12K"], [123456789, "123M"],
+				[340000000, "340M"], [1200000000, "1.2B"], [1200000000000, "1.2T"], [-1500, "-1.5K"]]:
+			check_eq(Fmt.money(c[0]), c[1], "%s %d" % [locale, c[0]])
+	TranslationServer.set_locale("ko")
 
 
 ## "+금액": 10원 미만은 소수 첫째 자리까지 (버림)
 func test_payout() -> void:
+	TranslationServer.set_locale("ko")
 	check_eq(Fmt.payout(0.97), "0.9", "0.97")
 	check_eq(Fmt.payout(0.3), "0.3", "0.3 (실수 찌꺼기로 0.2가 되면 안 됨)")
 	check_eq(Fmt.payout(2.0), "2.0", "2")
@@ -40,6 +53,7 @@ func test_percent() -> void:
 
 
 func test_wait_text() -> void:
+	TranslationServer.set_locale("ko")
 	check_eq(Fmt.wait_text(1.0), "약 1분 뒤 가능", "1초 → 1분")
 	check_eq(Fmt.wait_text(61.0), "약 2분 뒤 가능", "61초 → 2분 (올림)")
 	check_eq(Fmt.wait_text(3600.0), "약 1시간 0분 뒤 가능", "1시간")
@@ -48,6 +62,7 @@ func test_wait_text() -> void:
 
 
 func test_away() -> void:
+	TranslationServer.set_locale("ko")
 	check_eq(Fmt.away(30.0), "1분 미만", "30초")
 	check_eq(Fmt.away(900.0), "15분", "900초")
 	check_eq(Fmt.away(10800.0), "3시간", "3시간")

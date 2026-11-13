@@ -42,6 +42,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	await process_frame
+	TranslationServer.set_locale("ko")   # 아래에서 한국어 글자를 비교함 (OS 언어와 상관없이)
 	root.size = Feel.SMALL_SIZE
 	(ScreenMode as Object).set("settings_path", TEST_SETTINGS)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SETTINGS))
@@ -281,7 +282,7 @@ func _run() -> void:
 		_check(_covered(rects, r.get_center()), "'%s' 글자가 보이는 곳 밖" % l.text)
 		if l.text.begins_with("대박"):
 			jp_labels += 1
-			_check(l.text == "대박! ×5 +1,234,567원", "대박 글자가 이상함: '%s'" % l.text)
+			_check(l.text == "대박! ×5 +123만원", "대박 글자가 이상함: '%s'" % l.text)
 			_check(l.get_theme_color("font_color") == Feel.COLOR_JACKPOT, "대박 글자가 금색이 아님")
 			_check(l.get_theme_font_size("font_size") > Feel.PAYOUT_FONT_SIZE, "대박 글자가 보통 '+금액'보다 안 큼")
 	_check(jp_labels == Feel.TOWN_HOUSES, "대박 글자 %d개 (기대 %d개)" % [jp_labels, Feel.TOWN_HOUSES])

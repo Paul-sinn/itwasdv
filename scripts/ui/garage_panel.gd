@@ -65,8 +65,8 @@ func _ready() -> void:
 	_tabs = HBoxContainer.new()
 	box.add_child(_tabs)
 	var group := ButtonGroup.new()
-	engine_tab_button = _button(_tabs, "엔진 강화", Feel.TUNE_TAB_SIZE)
-	tune_tab_button = _button(_tabs, "튜닝", Feel.TUNE_TAB_SIZE)
+	engine_tab_button = _button(_tabs, tr("GARAGE_TAB_ENGINE"), Feel.TUNE_TAB_SIZE)
+	tune_tab_button = _button(_tabs, tr("GARAGE_TAB_TUNE"), Feel.TUNE_TAB_SIZE)
 	for t in [engine_tab_button, tune_tab_button]:
 		t.toggle_mode = true
 		t.button_group = group
@@ -82,7 +82,7 @@ func _ready() -> void:
 	_title = _label(e, Feel.PANEL_TITLE_SIZE, Feel.COLOR_STAR)
 	_title.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN   # 글자 폭만큼만 (커질 때 기준점이 글자에 맞게)
 	_broken_label = _label(e, Feel.PANEL_DANGER_SIZE, Feel.COLOR_DANGER)
-	_broken_label.text = "엔진 고장 - 운행 정지"
+	_broken_label.text = tr("GARAGE_BROKEN")
 	_income = _label(e, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
 	_chances = _label(e, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
 	_danger = _label(e, Feel.PANEL_DANGER_SIZE, Feel.COLOR_DANGER)
@@ -91,7 +91,7 @@ func _ready() -> void:
 	_reserve = _label(e, Feel.PANEL_TEXT_SIZE, Feel.COLOR_DIM)
 	_wait = _label(e, Feel.PANEL_TEXT_SIZE, Feel.COLOR_DIM)
 
-	_enhance_button = _button(e, "강화")
+	_enhance_button = _button(e, tr("GARAGE_ENHANCE"))
 	_enhance_button.pressed.connect(func(): enhance_pressed.emit())
 	_spare_button = _button(e, "")
 	_spare_button.pressed.connect(func(): spare_pressed.emit())
@@ -163,16 +163,16 @@ func is_busy() -> bool:
 func begin_suspense() -> void:
 	_busy = true
 	_enhance_button.disabled = true
-	_enhance_button.text = "강화 중…"
+	_enhance_button.text = tr("GARAGE_ENHANCING")
 	clear_result()
 
 
 func end_suspense() -> void:
 	_busy = false
-	_enhance_button.text = "강화"
+	_enhance_button.text = tr("GARAGE_ENHANCE")
 
 
-## 성공: 번쩍 + 제목 ★ 숫자 커졌다 돌아옴
+## 성공: 번쩍 + 제목 "+N" 커졌다 돌아옴
 func celebrate() -> void:
 	flash(Color(1, 1, 1, Feel.FLASH_ALPHA), Feel.FLASH_DURATION)
 	Town.pop(_title, Vector2(0.0, 0.5))   # 왼쪽 끝 기준 → 패널 밖으로 안 삐져나감
@@ -199,21 +199,21 @@ func refresh(b: Balance, s: GameState) -> void:
 	var at_max := s.star >= b.max_star
 	var danger := false
 
-	_title.text = "엔진 ★%d%s" % [s.star, " (최대)" if at_max else ""]
+	_title.text = tr("GARAGE_TITLE_MAX" if at_max else "GARAGE_TITLE") % s.star
 	_broken_label.visible = s.broken
 
 	if s.broken:
 		# 고장: "엔진 고장 - 운행 정지" + 스페어 버튼만
 		var price := s.spare_price(b)
-		_spare_button.text = "스페어 엔진 구매 (%s원)" % Fmt.money(price)
+		_spare_button.text = tr("GARAGE_BUY_SPARE") % Fmt.money(int(price))
 		_spare_button.disabled = not s.can_buy_spare(b)
 		_wait.text = "" if s.can_buy_spare(b) else \
-				"%s원 모자람 · 고장 중에는 수익 0" % Fmt.money(price - s.money)
+				tr("GARAGE_SPARE_SHORT") % Fmt.money(int(price - s.money))
 		_set_visible([_spare_button, _wait], [_income, _chances, _danger, _danger_note, _cost, _reserve, _enhance_button])
 		_wait.visible = not s.can_buy_spare(b)
 		danger = true
 	elif at_max:
-		_income.text = "시간당 %s원" % Fmt.money(s.current_hourly(b))
+		_income.text = tr("GARAGE_HOURLY") % Fmt.money(int(s.current_hourly(b)))
 		_set_visible([_income], [_chances, _danger, _danger_note, _cost, _reserve, _wait, _enhance_button, _spare_button])
 	else:
 		var now := s.current_hourly(b)
@@ -223,19 +223,19 @@ func refresh(b: Balance, s: GameState) -> void:
 		var need := s.enhance_need(b)
 		var reserve := need - cost
 		var can := Enhance.block_reason(s, b) == Enhance.Block.NONE
-		_income.text = "시간당 %s원 → 성공하면 %s원" % [Fmt.money(now), Fmt.money(next)]
-		_chances.text = "성공 %s · 실패(유지) %s · 퍼짐 %s" % [
+		_income.text = tr("GARAGE_HOURLY_NEXT") % [Fmt.money(int(now)), Fmt.money(int(next))]
+		_chances.text = tr("GARAGE_CHANCES") % [
 			Fmt.percent(c["success"]), Fmt.percent(c["fail"]), Fmt.percent(c["destroy"])]
 		danger = c["destroy"] > 0.0
-		_danger.text = "퍼질 확률 %s" % Fmt.percent(c["destroy"])
+		_danger.text = tr("GARAGE_DANGER") % Fmt.percent(c["destroy"])
 		# 튜닝이 깎아 준 만큼 작게 표시
 		var susp := Tune.effect(b, "suspension", s.grade("suspension"))
-		_danger_note.text = "서스펜션 덕분에 퍼짐 −%s (줄어든 만큼은 실패)" % Fmt.percent(susp)
+		_danger_note.text = tr("GARAGE_DANGER_NOTE") % Fmt.percent(susp)
 		var oil := Tune.effect(b, "engine_oil", s.grade("engine_oil"))
-		_cost.text = "비용 %s원%s" % [Fmt.money(cost), " (엔진오일 −%s)" % Fmt.percent(oil) if oil > 0.0 else ""]
-		_reserve.text = "스페어값 %s원은 남겨둬야 누를 수 있음" % Fmt.money(reserve)
+		_cost.text = tr("GARAGE_COST_OIL") % [Fmt.money(int(cost)), Fmt.percent(oil)] if oil > 0.0 else tr("GARAGE_COST") % Fmt.money(int(cost))
+		_reserve.text = tr("GARAGE_RESERVE") % Fmt.money(int(reserve))
 		var wait := Fmt.wait_text(Economy.seconds_to_afford(need, s.money, s.current_hourly(b)))
-		_wait.text = ("강화 비용 부족 · " + wait) if reserve > 0.0 else wait
+		_wait.text = tr("GARAGE_SHORT_WAIT") % wait if reserve > 0.0 else wait
 		_enhance_button.disabled = not can or is_busy()
 		_set_visible([_income, _chances, _cost, _enhance_button], [_spare_button])
 		_danger.visible = danger
@@ -248,7 +248,7 @@ func refresh(b: Balance, s: GameState) -> void:
 	_style.border_color = Feel.COLOR_DANGER if danger else Feel.COLOR_PANEL_BORDER
 	_style.set_border_width_all(_px(Feel.PANEL_BORDER_DANGER if danger else Feel.PANEL_BORDER))
 
-	_stats.text = "누른 횟수 %d · 성공 %d / 실패 %d / 퍼짐 %d" % [
+	_stats.text = tr("GARAGE_STATS") % [
 		s.press_count(), s.success_count, s.fail_count, s.destroy_count]
 
 	if tune.visible:

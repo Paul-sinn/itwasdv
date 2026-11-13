@@ -105,13 +105,13 @@ func _ready() -> void:
 	panel.tune_pressed.connect(_on_tune_pressed)
 
 	small_button = Button.new()
-	small_button.text = "작게 (Esc)"
+	small_button.text = tr("SMALL_ESC")
 	small_button.focus_mode = Control.FOCUS_NONE
 	small_button.pressed.connect(func(): screen.enter_small())
 	add_child(small_button)
 
 	settings_button = Button.new()
-	settings_button.text = "설정"
+	settings_button.text = tr("SETTINGS")
 	settings_button.focus_mode = Control.FOCUS_NONE
 	settings_button.pressed.connect(func(): close_settings() if settings.visible else open_settings())
 	add_child(settings_button)
@@ -259,7 +259,7 @@ func _load_save() -> String:
 			offline_report = { "away_seconds": away, "earned": earned }
 		Save.Status.BROKEN:
 			push_warning("저장 파일이 깨져서 새로 시작: " + r["error"])
-			return "저장 파일이 깨져서 새로 시작합니다.\n(깨진 파일은 %s 로 남겨 둠)" % (save_path.get_file() + ".broken")
+			return tr("LOAD_BROKEN") % (save_path.get_file() + ".broken")
 	return ""
 
 
@@ -268,17 +268,16 @@ func _open_return_popup() -> void:
 	var earned: float = offline_report["earned"]
 	if away >= 0.0 and away < RETURN_POPUP_MIN_AWAY:
 		return
-	var note := "꺼둔 동안은 %s만, 최대 %s시간치까지 쌓입니다." % [
+	var tuned := state.grade("fuel_tank") > 0 or state.grade("navigation") > 0
+	var note := tr("RETURN_NOTE_TUNED" if tuned else "RETURN_NOTE") % [
 		Fmt.percent(state.offline_rate(balance)), Fmt.num(state.offline_cap_hours(balance))]
-	if state.grade("fuel_tank") > 0 or state.grade("navigation") > 0:
-		note += " (연료 탱크·내비 포함)"
 	if away < 0.0:
-		note = "컴퓨터 시계가 저장했을 때보다 %s 이전이라 0원입니다." % Fmt.away(away)
+		note = tr("RETURN_CLOCK_BACK") % Fmt.away(away)
 	elif state.broken:
-		note = "엔진 고장 중이라 꺼둔 동안 번 돈이 없습니다."
-	var main_text := "자리 비운 %s 동안 +%s원" % [Fmt.away(maxf(away, 0.0)), Fmt.money(earned)]
+		note = tr("RETURN_BROKEN")
+	var main_text := tr("RETURN_MAIN") % [Fmt.away(maxf(away, 0.0)), Fmt.money(int(earned))]
 	if away < 0.0:
-		main_text = "자리 비운 동안 +0원"
+		main_text = tr("RETURN_MAIN_ZERO")
 	popup.open(main_text, note)
 
 
@@ -360,16 +359,16 @@ func _on_enhance_pressed() -> void:
 	var fx := panel.ui_scale()   # 흔들림 세기: 차고 크기에 맞춰
 	match result:
 		Enhance.Result.SUCCESS:
-			panel.show_result("성공!  ★%d → ★%d" % [star_before, state.star], Feel.COLOR_SUCCESS)
+			panel.show_result(tr("RESULT_SUCCESS") % [star_before, state.star], Feel.COLOR_SUCCESS)
 			panel.celebrate()
 			town.pop_star()
 			town.truck.flash(Feel.FLASH_DURATION)
 			town.truck.boost(Feel.BOOST_MULT, Feel.BOOST_DURATION)
 		Enhance.Result.FAIL:
-			panel.show_result("실패", Feel.COLOR_FAIL)
+			panel.show_result(tr("RESULT_FAIL"), Feel.COLOR_FAIL)
 			_shake(func(o): _panel_shake = o, Feel.FAIL_SHAKE_PX * fx, Feel.FAIL_SHAKE_DURATION)
 		Enhance.Result.DESTROY:
-			panel.show_result("엔진 퍼짐!", Feel.COLOR_DANGER, Feel.DESTROY_TEXT_SIZE)
+			panel.show_result(tr("RESULT_DESTROY"), Feel.COLOR_DANGER, Feel.DESTROY_TEXT_SIZE)
 			town.truck.running = false
 			town.truck.smoke_burst(Feel.DESTROY_SMOKE_BURST)
 			_shake(func(o): position = o, Feel.DESTROY_SHAKE_PX * fx, Feel.DESTROY_SHAKE_DURATION)
@@ -388,7 +387,7 @@ func _shake(setter: Callable, px: float, seconds: float) -> void:
 
 func _on_spare_pressed() -> void:
 	if state.buy_spare(balance):
-		panel.show_result("스페어 엔진 장착. 다시 출발!", Feel.COLOR_SUCCESS)
+		panel.show_result(tr("RESULT_SPARE"), Feel.COLOR_SUCCESS)
 	panel.refresh(balance, state)
 
 
@@ -410,11 +409,11 @@ func _on_tune_pressed(part: String) -> void:
 	match result:
 		Tune.Result.UP:
 			var after := state.grade(part)
-			panel.tune.show_result("%s 등급업!  %s → %s" % [part_name, Tune.grade_name(balance, before),
+			panel.tune.show_result(tr("TUNE_RESULT_UP") % [part_name, Tune.grade_name(balance, before),
 					Tune.grade_name(balance, after)], TuneTab.grade_color(after))
 			panel.celebrate_tune(part, after)
 		Tune.Result.SAME:
-			panel.tune.show_result("%s 그대로 (%s)" % [part_name, Tune.grade_name(balance, before)], Feel.COLOR_FAIL)
+			panel.tune.show_result(tr("TUNE_RESULT_SAME") % [part_name, Tune.grade_name(balance, before)], Feel.COLOR_FAIL)
 		Tune.Result.BLOCKED:
 			panel.tune.clear_result()
 	panel.refresh(balance, state)
@@ -464,7 +463,7 @@ func _on_click(_pos: Vector2) -> void:
 func _cheat_money() -> void:
 	var amount := Economy.hourly_income(balance, state.star)
 	state.money += amount
-	_last_cheat = "F1 돈 +%s원" % Fmt.money(amount)
+	_last_cheat = tr("CHEAT_MONEY") % Fmt.money(int(amount))
 
 
 ## F2: 시간 60배속 켜기/끄기. 켜는 순간부터 "측정"을 새로 시작한다.
@@ -480,7 +479,7 @@ func _toggle_fast_time() -> void:
 		_measuring = false   # 측정 결과는 화면에 그대로 남겨 둔다
 
 
-## F3: 저장 초기화 → 처음부터 (돈 0, 0강, 통계 0)
+## F3: 저장 초기화 → 처음부터 (돈 0, +0, 통계 0)
 func _cheat_reset() -> void:
 	Save.delete_file(save_path)
 	state = GameState.new()
@@ -489,38 +488,38 @@ func _cheat_reset() -> void:
 	panel.tune.clear_result()
 	popup.visible = false
 	_save()
-	_last_cheat = "F3 저장 초기화"
+	_last_cheat = tr("CHEAT_RESET")
 
 
-## F4: 강수 +1 (최대 강수까지)
+## F4: 강화 단계 +1 (최대 단계까지)
 func _cheat_star_up() -> void:
 	state.star = mini(state.star + 1, balance.max_star)
-	_last_cheat = "F4 ★%d" % state.star
+	_last_cheat = "F4 +%d" % state.star
 
 
 ## F5: 강제로 퍼지게 하기 (통계에는 안 셈)
 func _cheat_break() -> void:
 	Enhance.break_engine(state, balance)
-	_last_cheat = "F5 강제 퍼짐 → ★%d 고장" % state.star
+	_last_cheat = tr("CHEAT_BREAK") % state.star
 
 
 ## F6: 튜닝 7부위 전부 등급 +1 (최고 등급까지. 통계에는 안 셈)
 func _cheat_tune_up() -> void:
 	for part in Tune.PARTS:
 		state.set_grade(balance, part, state.grade(part) + 1)
-	_last_cheat = "F6 튜닝 전부 +1 (가장 높은 등급 %s)" % Tune.grade_name(balance, state.best_grade())
+	_last_cheat = tr("CHEAT_TUNE") % Tune.grade_name(balance, state.best_grade())
 
 
 func _update_debug_label() -> void:
-	var text := "[디버그] F1 돈 · F2 %s배속(%s) · F3 처음부터 · F4 ★+1 · F5 퍼짐 · F6 튜닝 +1" % [
-		Fmt.money(Feel.CHEAT_TIME_SCALE), "켜짐" if Engine.time_scale != 1.0 else "꺼짐"]
+	var text := tr("DEBUG_KEYS") % [
+		Fmt.num(Feel.CHEAT_TIME_SCALE), tr("DEBUG_ON") if Engine.time_scale != 1.0 else tr("DEBUG_OFF")]
 	if _last_cheat != "":
 		text += "   ▶ " + _last_cheat
 	if _measure_seconds > 0.0:
 		var expected := _measure_hourly * _measure_seconds / 3600.0
 		var ratio := _measure_earned / expected * 100.0 if expected > 0.0 else 0.0
-		text += "   측정: 게임 시간 %s · 번 돈 %s원 · 시간당 수익으로 계산한 값 %s원 (%.1f%%)" % [
-			Fmt.duration(_measure_seconds), Fmt.money(_measure_earned), Fmt.money(expected), ratio]
+		text += "   " + tr("DEBUG_MEASURE") % [
+			Fmt.duration(_measure_seconds), Fmt.money(int(_measure_earned)), Fmt.money(int(expected)), ratio]
 	_debug_label.text = text
 
 
@@ -536,6 +535,6 @@ func _show_fatal(errors: PackedStringArray) -> void:
 	label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	label.add_theme_color_override("font_color", Feel.COLOR_ERROR)
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.text = "게임 숫자 파일에 문제가 있어서 시작하지 않았습니다. 고친 뒤 다시 실행하세요.\n" + "\n".join(errors)
+	label.text = tr("FATAL_BALANCE") + "\n" + "\n".join(errors)
 	add_child(label)
 	set_process(false)
