@@ -125,6 +125,35 @@ func _run() -> void:
 		await _wait(0.2)
 		await _shot("full_settings_1280x720")
 
+	# 7) v4 세팅 돌리기: [세팅] 칸 (적재함 레이싱) → 돌리기 연출 → 고르는 화면 (1600x900, 1280x720)
+	if m.has_method("close_settings"):
+		m.close_settings()
+	vp.size = FULL_SIZES[1]
+	m.state.money = 1000000000
+	t.star = 12
+	var cargo: Dictionary = t.part("cargo_box")
+	cargo["grade"] = 3
+	cargo["lines"] = ["speed", "junk_cupholder", "cargo"]
+	m.panel.show_tab(m.panel.Tab.SETTING)
+	await _wait(0.3)
+	await _shot("full_setting_1600x900")
+	m.panel.setting.roll_pressed.emit("cargo_box")
+	await _wait(Feel.SETTING_SUSPENSE * 0.5)
+	await _shot("full_setting_suspense")
+	await _until(func(): return not m.rolling, 3.0)
+	await _wait(0.1)
+	await _shot("full_setting_choose")
+	vp.size = FULL_SIZES[0]
+	await _wait(0.3)
+	await _shot("full_setting_choose_1280x720")
+	# 작은 화면: 오버부스트 바퀴 (트럭 뒤 불꽃 + "오버부스트!")
+	m.screen.enter_small()
+	t.boost_lap = true   # main이 매 프레임 이걸 보고 트럭 불꽃을 켬 (사진용)
+	m.town.show_boost()
+	await _wait(0.3)
+	await _shot("small_overboost")
+	await _shot_rects("small_overboost_visible")
+
 	Save.delete_file(TEST_SAVE)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SETTINGS))
 	print("사진 저장: ", out_dir)

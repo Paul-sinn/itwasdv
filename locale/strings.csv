@@ -65,3 +65,43 @@ LOAD_OLD_KEPT,"예전 버전 저장 파일은 이번 버전과 맞지 않아 새
 CHEAT_BREAK,F5 강제 퍼짐 → +%d (스페어 %d개),F5 forced blow-up → +%d (%d spares)
 CHEAT_SPARE,F6 스페어 엔진 +1 (%d개),F6 spare engine +1 (%d)
 DEBUG_KEYS,[디버그] F1 돈 · F2 %s배속(%s) · F3 처음부터 · F4 단계 +1 · F5 퍼짐 · F6 스페어 +1,[debug] F1 money · F2 ×%s speed (%s) · F3 restart · F4 +1 · F5 blow-up · F6 spare +1
+GARAGE_TAB_ENGINE,엔진 강화,Engine
+GARAGE_TAB_SETTING,세팅 돌리기,Setups
+SETTING_ROLL,돌리기,Roll
+SETTING_ROLLING,돌리는 중…,Rolling…
+SETTING_PART_CARGO_BOX,적재함,Cargo box
+SETTING_PART_ECU,ECU,ECU
+SETTING_GRADE_0,순정,Stock
+SETTING_GRADE_1,스트리트,Street
+SETTING_GRADE_2,스포츠,Sport
+SETTING_GRADE_3,레이싱,Racing
+SETTING_GRADE_4,프로토타입,Prototype
+SETTING_OPT_SPEED,이동 속도,Speed
+SETTING_OPT_FUEL_CUT,기름값 절감,Fuel saving
+SETTING_OPT_CARGO,적재량,Cargo
+SETTING_OPT_ENGINE_GUARD,엔진 보호,Engine guard
+SETTING_OPT_OVERBOOST,오버부스트,Overboost
+SETTING_OPT_JUNK_RIDE,승차감 향상,Smoother ride
+SETTING_OPT_JUNK_SCENT,실내 방향제 향 개선,Nicer air freshener
+SETTING_OPT_JUNK_CUPHOLDER,컵홀더 추가,Extra cupholder
+SETTING_OPT_JUNK_RADIO,라디오 수신 감도,Better radio reception
+SETTING_OPT_JUNK_GLOSS,외관 광택,Shiny paint
+SETTING_LOCKED,%s · 엔진 +%d에 열림,%s · opens at engine +%d
+SETTING_UP_CHANCE,등급업 확률 %s,Grade-up chance %s
+SETTING_CEILING,천장 %d/%d,Pity %d/%d
+SETTING_MAX_GRADE,최고 등급 (등급업 없음),Top grade (no more grade-ups)
+SETTING_CHANCES,한 줄에 나올 확률: %s,Chance per line: %s
+SETTING_SHORT,%s원 모자람 · %s,₩%s short · %s
+SETTING_PENDING,예전 것 / 새 것을 골라야 다시 돌릴 수 있음,Pick old or new before rolling again
+SETTING_OLD,지금 쓰는 것,Current
+SETTING_NEW,새로 나온 것,New
+SETTING_GRADE_UP,등급업!,Grade up!
+SETTING_KEEP,예전 것 쓰기,Keep old
+SETTING_TAKE,새 것 쓰기,Use new
+SETTING_NO_LINES,줄 없음 (처음),No lines yet
+SETTING_RESULT_UP,등급업! %s → %s,Grade up! %s → %s
+SETTING_RESULT_PITY,천장 도달! 등급업 %s → %s,Pity reached! Grade up %s → %s
+SETTING_RESULT_SAME,새 줄이 나왔어요. 둘 중 하나를 고르세요,New lines rolled. Pick one of the two
+SETTING_TOOK_NEW,새 것으로 바꿨어요,Switched to the new one
+SETTING_KEPT_OLD,예전 것을 그대로 써요,Kept the old one
+TOWN_BOOST,오버부스트!,Overboost!
