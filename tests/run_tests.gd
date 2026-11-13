@@ -8,6 +8,7 @@ const TEST_FILES := [
 	"res://tests/test_economy.gd",
 	"res://tests/test_enhance.gd",
 	"res://tests/test_trip.gd",
+	"res://tests/test_setting.gd",
 	"res://tests/test_fmt.gd",
 	"res://tests/test_save.gd",
 	"res://tests/test_click_region.gd",
@@ -23,8 +24,9 @@ func _init() -> void:
 	for path in TEST_FILES:
 		print("\n== %s" % path.get_file())
 		var script: GDScript = load(path)
-		if script == null:
-			print("  [실패] 파일을 불러올 수 없음")
+		# 문법 오류가 있는 파일도 load는 null이 아닌 걸 돌려줘서, 테스트가 하나도 안 돌고 통과로 보였음
+		if script == null or not script.can_instantiate():
+			print("  [실패] 파일을 불러올 수 없음 (위에 문법 오류가 있는지 볼 것)")
 			failed += 1
 			continue
 		for m in script.get_script_method_list():

@@ -20,27 +20,27 @@ func test_real_file_is_ok() -> void:
 	check_eq(b.power_gain, gain, "power_gain (5×10, 10×5, 20×5, 35×5, 60×5)")
 	# 지시서 "임시 시작값"
 	check_eq([b.unit_price, b.base_cargo, b.road_length, b.load_seconds, b.stop_seconds],
-			[100, 5, 12000.0, 10.0, 2.0], "trip 숫자")
+			[2500, 20, 12000.0, 10.0, 0.5], "trip 숫자 (v4에서 고침)")
 	check_eq([b.fuel_rate, b.maint_rate], [0.1, 0.05], "기름값·정비비 비율")
-	check_eq([b.cost_base, b.cost_mult, b.spare_drop_chance], [350.0, 1.5, 0.0002], "강화 비용·스페어 드랍")
+	check_eq([b.cost_base, b.cost_mult, b.spare_drop_chance], [35000.0, 1.5, 0.0002], "강화 비용(v4에서 고침)·스페어 드랍")
+	check_eq(b.spare_price, 5000000, "spare_price (v4에서 고침)")
 	# 원래 json에 있던 값 그대로
-	check_eq(b.spare_price, 50000, "spare_price")
 	check_eq([b.offline_cap_hours, b.offline_rate], [8.0, 0.5], "꺼둔 동안 8시간·0.5")
 	check_eq(typeof(b.spare_price), TYPE_INT, "spare_price는 정수")
 
 
-## 지운 묶음(income, tune 등)이 다시 생기지 않게: v3 json은 trip / engine / offline + version
+## 지운 묶음(income, tune 등)이 다시 생기지 않게: v4 json은 trip / engine / offline / setting + version
 func test_real_file_shape() -> void:
 	var d := real_balance_dict()
 	var keys := d.keys()
 	keys.sort()
-	check_eq(keys, ["engine", "offline", "trip", "version"], "json 묶음")
-	check_eq(d["version"], "0.6", "version")
+	check_eq(keys, ["engine", "offline", "setting", "trip", "version"], "json 묶음")
+	check_eq(d["version"], "0.7", "version")
 	check(not d["engine"].has("cost_hours"), "engine.cost_hours 가 남아 있음")
 
 
 func test_missing_section_is_reported() -> void:
-	for section in ["trip", "engine", "offline"]:
+	for section in ["trip", "engine", "offline", "setting"]:
 		var d := real_balance_dict()
 		d.erase(section)
 		var b: Balance = Balance.from_dict(d)
@@ -91,7 +91,7 @@ func test_negative_parcel_pay_is_reported() -> void:
 	d["trip"]["fuel_rate"] = 0.7
 	d["trip"]["maint_rate"] = 0.4
 	var b: Balance = Balance.from_dict(d)
-	check(_has_error(b, "배송 1건 돈 = -10"), "마이너스 배송 돈을 못 찾음: %s" % ", ".join(b.errors))
+	check(_has_error(b, "배송 1건 돈 = -250"), "마이너스 배송 돈을 못 찾음: %s" % ", ".join(b.errors))
 	# 비율 합이 1 이하여도 반올림으로 넘칠 수 있음: 단가 1, 0.5 + 0.5 → 1 − 1 − 1 = −1
 	var d2 := real_balance_dict()
 	d2["trip"]["unit_price"] = 1

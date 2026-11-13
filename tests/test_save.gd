@@ -1,4 +1,4 @@
-## save.gd: 저장 형식 3 쓰고 읽기, 깨진 파일, 백업 3개, 옛 형식 남기기
+## save.gd: 저장 형식 4 쓰고 읽기(세팅), 형식 3 읽기, 깨진 파일, 백업 3개, 옛 형식 남기기
 extends "res://tests/test_base.gd"
 
 const Balance = preload("res://scripts/core/balance.gd")
@@ -55,6 +55,15 @@ func _sample_state() -> GameState:
 	t.success_count = 40
 	t.fail_count = 77
 	t.destroy_count = 3
+	t.boost_lap = true
+	var box := t.part("cargo_box")
+	box["grade"] = 2
+	box["lines"] = ["speed", "cargo", "junk_ride"]
+	box["counters"] = [0, 3, 12, 0, 0]
+	box["pending"] = { "grade": 3, "lines": ["cargo", "cargo", "fuel_cut"] }
+	var ecu := t.part("ecu")
+	ecu["lines"] = ["overboost"]
+	ecu["counters"] = [4, 0, 0, 0, 0]
 	var t2 := TruckState.new()
 	t2.star = 5
 	t2.lap_clock = 0.1
@@ -80,20 +89,81 @@ func test_write_then_read_same() -> void:
 	check_eq([t.star, t.lap_clock, t.lap_delivered], [22, 37.25, 3], "트럭 0 단계·바퀴")
 	check_eq([t.success_count, t.fail_count, t.destroy_count], [40, 77, 3], "트럭 0 통계")
 	check_eq([got.truck(1).star, got.truck(1).lap_clock], [5, 0.1], "트럭 1")
+	check_eq(t.boost_lap, true, "오버부스트 바퀴")
+	check_eq(t.settings, s.truck(0).settings, "세팅 (pending 포함)")
+	check_eq(t.part("cargo_box")["pending"], { "grade": 3, "lines": ["cargo", "cargo", "fuel_cut"] }, "고르는 중인 새 상태")
+	check_eq(t.part("ecu")["pending"], null, "ECU pending 없음")
+	check_eq(got.truck(1).settings, {}, "트럭 1 세팅 없음")
 	check_eq([r["recovered"], r["old_kept"]], [false, ""], "보통 읽기: 복구·옛 형식 아님")
 	check(not FileAccess.file_exists(PATH + ".tmp"), "임시 파일이 남음")
 	_clean()
 
 
-func test_format_3_dict() -> void:
+func test_format_4_dict() -> void:
 	var d := Save.to_dict(_sample_state(), 1794000000)
-	check_eq(d["version"], 3, "저장 형식")
+	check_eq(d["version"], 4, "저장 형식")
 	var keys := d.keys()
 	keys.sort()
 	check_eq(keys, ["money", "saved_at_utc", "spare_drop_carry", "spares", "trucks", "version"], "저장 칸")
 	var tk: Array = d["trucks"][0].keys()
 	tk.sort()
-	check_eq(tk, ["destroy_count", "fail_count", "lap_clock", "lap_delivered", "star", "success_count"], "트럭 칸")
+	check_eq(tk, ["boost_lap", "destroy_count", "fail_count", "lap_clock", "lap_delivered", "settings", "star", "success_count"], "트럭 칸")
+
+
+## v4 C1 ⑪: 형식 3 파일(v3, 세팅 칸 없음)도 그대로 읽힘 (옮겨 두지 않음)
+func test_format_3_file_reads() -> void:
+	_clean()
+	var v3 := {
+		"version": 3, "saved_at_utc": "2026-11-13T09:30:00", "money": "5000000", "spares": 1, "spare_drop_carry": 0.25,
+		"trucks": [{ "star": 18, "lap_clock": 12.5, "lap_delivered": 2, "success_count": 30, "fail_count": 40, "destroy_count": 1 }],
+	}
+	_write_text(PATH, JSON.stringify(v3))
+	var r := Save.read_file(PATH, b)
+	check_eq(r["status"], Save.Status.OK, "형식 3 읽기 (%s)" % r["error"])
+	check_eq(r["old_kept"], "", "형식 3을 옮겨 둠")
+	check(not FileAccess.file_exists(OLD_KEPT), "형식 3인데 save.v2.json이 생김")
+	if r["state"] != null:
+		var t: TruckState = r["state"].truck(0)
+		check_eq([r["state"].money, t.star, t.lap_delivered], [5000000, 18, 2], "형식 3 값")
+		check_eq([t.settings, t.boost_lap], [{}, false], "형식 3: 세팅 없음, 오버부스트 아님")
+	_clean()
+
+
+## v4 C1 ⑪: 세팅의 이상한 값 — 모르는 부품·옵션은 버리고, 등급·카운터는 범위로, 줄은 그 등급 줄 수까지
+func test_settings_clamped() -> void:
+	var d := Save.to_dict(_sample_state(), 1794000000)
+	d["trucks"][0]["settings"] = {
+		"wing": { "grade": 1, "lines": ["speed"], "counters": [0, 0, 0, 0, 0], "pending": null },
+		"cargo_box": { "grade": 0, "lines": ["nitro", "engine_guard", "cargo", "speed", 5], "counters": [99, -5, 1000, 9999, 7, 5],
+				"pending": { "grade": 7, "lines": ["speed", "speed", "speed", "speed"] } },
+		"ecu": { "grade": -1, "lines": [], "counters": [2.7] },
+	}
+	var r := Save.from_dict(d, b)
+	check_eq(r["status"], Save.Status.OK, "읽기 (%s)" % r["error"])
+	if r["state"] == null:
+		return
+	var st: Dictionary = r["state"].truck(0).settings
+	check(not st.has("wing"), "모르는 부품(wing)을 안 버림")
+	var box: Dictionary = st["cargo_box"]
+	check_eq(box["lines"], ["cargo"], "모르는 옵션·그 부품에 없는 옵션은 버리고 순정 줄 수 1까지 (앞에서부터)")
+	check_eq(box["counters"], [4, 0, 79, 499, 0], "카운터는 0 ~ 천장−1, 길이 5")
+	check_eq(box["pending"], { "grade": 4, "lines": ["speed", "speed", "speed"] }, "pending 등급 7 → 4, 줄 3까지")
+	check_eq([st["ecu"]["grade"], st["ecu"]["counters"], st["ecu"]["pending"]], [0, [2, 0, 0, 0, 0], null], "ECU 등급 −1 → 0, 빠진 pending → null")
+	# 모양이 틀리면 깨진 저장
+	var bad_cases := [
+		["boost_lap", "yes"],
+		["settings", "전부 전설"],
+		["settings", { "cargo_box": 3 }],
+		["settings", { "cargo_box": { "grade": "높음", "lines": [] } }],
+		["settings", { "cargo_box": { "grade": 1, "lines": "speed" } }],
+		["settings", { "cargo_box": { "grade": 1, "lines": [], "counters": 5 } }],
+		["settings", { "cargo_box": { "grade": 1, "lines": [], "counters": ["a"] } }],
+		["settings", { "cargo_box": { "grade": 1, "lines": [], "pending": { "grade": 1 } } }],
+	]
+	for c in bad_cases:
+		var d2 := Save.to_dict(_sample_state(), 1794000000)
+		d2["trucks"][0][c[0]] = c[1]
+		check_eq(Save.from_dict(d2, b)["status"], Save.Status.BROKEN, "trucks[0].%s = %s 를 못 걸러냄" % [c[0], c[1]])
 
 
 func test_no_file_is_new_game() -> void:

@@ -1,5 +1,5 @@
 ## 게임 숫자(data/balance.json)를 읽고 검사한다.
-## 묶음은 "trip"(한 바퀴), "engine"(강화·스페어), "offline"(꺼둔 동안) 세 개.
+## 묶음은 "trip"(한 바퀴), "engine"(강화·스페어), "offline"(꺼둔 동안), "setting"(세팅 돌리기) 네 개.
 ##
 ## 쓰는 법:
 ##   var b := Balance.load_file()
@@ -10,6 +10,10 @@ const DEFAULT_PATH := "res://data/balance.json"
 
 # 실수 계산 찌꺼기(0.1 + 0.2 = 0.30000000000000004 같은 것) 때문에 틀렸다고 하지 않게 두는 여유
 const SUM_EPSILON := 1e-9
+
+## 세팅 등급 수 (순정·스트리트·스포츠·레이싱·프로토타입). 이름은 번역 파일에 5개라 고정. 줄 수·확률 목록 길이를 이걸로 검사
+const SETTING_GRADES := 5
+const OPTION_KINDS := ["common", "own", "junk"]
 
 ## 읽기/검사에서 나온 문제들. 비어 있으면 정상.
 var errors: PackedStringArray = PackedStringArray()
@@ -38,6 +42,18 @@ var spare_drop_chance: float    ## 배송 1건마다 스페어 엔진 +1 확률
 # --- offline (꺼둔 동안) ---
 var offline_cap_hours: float    ## 최대 몇 시간치까지 쌓이나
 var offline_rate: float         ## 켜둔 때의 몇 % (0.5 = 절반)
+
+# --- setting (세팅 돌리기). [등급]은 0 순정 ~ 4 프로토타입 ---
+var lines_by_grade: PackedInt64Array    ## [등급] = 줄 수
+var up_chance: PackedFloat64Array       ## [등급] = 한 등급 오를 확률 (최고 등급 칸은 없음)
+var ceiling: PackedInt64Array           ## [등급] = 천장. 이 횟수째 돌리기는 무조건 등급업 (최고 등급 칸은 없음)
+var roll_cost: PackedInt64Array         ## [등급] = 돌리기 1번 비용 (원)
+var cost_cut_cap: float                 ## 기름값 + 정비비 절감 합의 상한
+var engine_guard_cap: float             ## 엔진 보호 합의 상한
+var overboost_seconds: float            ## 오버부스트: 몇 초 동안
+var overboost_mult: float               ## 오버부스트: 속도 몇 배
+var setting_parts: Dictionary = {}      ## 부품 id → { "unlock_star": int, "options": PackedStringArray } (json 순서)
+var setting_options: Dictionary = {}    ## 옵션 id → { "kind": String, "weight": float, "values": PackedFloat64Array (잡옵은 전부 0) }
 
 
 func is_ok() -> bool:
@@ -103,6 +119,25 @@ static func from_dict(d: Dictionary) -> RefCounted:
 	b.spare_drop_chance = float(engine["spare_drop_chance"])
 	b.offline_cap_hours = float(offline["cap_hours"])
 	b.offline_rate = float(offline["rate"])
+	var setting: Dictionary = d["setting"]
+	b.lines_by_grade = PackedInt64Array(setting["lines_by_grade"])
+	b.up_chance = PackedFloat64Array(setting["up_chance"])
+	b.ceiling = PackedInt64Array(setting["ceiling"])
+	b.roll_cost = PackedInt64Array(setting["roll_cost"])
+	b.cost_cut_cap = float(setting["cost_cut_cap"])
+	b.engine_guard_cap = float(setting["engine_guard_cap"])
+	b.overboost_seconds = float(setting["overboost_seconds"])
+	b.overboost_mult = float(setting["overboost_mult"])
+	for id in setting["options"]:
+		var o: Dictionary = setting["options"][id]
+		var values := PackedFloat64Array()
+		values.resize(SETTING_GRADES)   # 잡옵은 0
+		if o["kind"] != "junk":
+			values = PackedFloat64Array(o["values"])
+		b.setting_options[id] = { "kind": o["kind"], "weight": float(o["weight"]), "values": values }
+	for id in setting["parts"]:
+		var pt: Dictionary = setting["parts"][id]
+		b.setting_parts[id] = { "unlock_star": int(pt["unlock_star"]), "options": PackedStringArray(pt["options"]) }
 	return b
 
 
@@ -113,7 +148,8 @@ static func validate(d: Dictionary) -> PackedStringArray:
 	var trip = d.get("trip")
 	var engine = d.get("engine")
 	var offline = d.get("offline")
-	for pair in [["trip", trip], ["engine", engine], ["offline", offline]]:
+	var setting = d.get("setting")
+	for pair in [["trip", trip], ["engine", engine], ["offline", offline], ["setting", setting]]:
 		if typeof(pair[1]) != TYPE_DICTIONARY:
 			errs.append("\"%s\" 묶음이 없음" % pair[0])
 	if not errs.is_empty():
@@ -167,7 +203,94 @@ static func validate(d: Dictionary) -> PackedStringArray:
 			var sum: float = engine["success"][s] + engine["destroy"][s]
 			if sum > 1.0 + SUM_EPSILON:
 				errs.append("engine.success[%d] + engine.destroy[%d] = %s (1 이하여야 함)" % [s, s, sum])
+
+	_validate_setting(setting, max_star, errs)
 	return errs
+
+
+## "setting" 묶음 검사 (세팅 돌리기 v4)
+static func _validate_setting(setting: Dictionary, max_star: int, errs: PackedStringArray) -> void:
+	var g := SETTING_GRADES
+	var whole := func(v): return v >= 0.0 and v == floorf(v)
+	var rate := func(v): return v >= 0.0 and v <= 1.0
+	var per_grade := "등급 %d개와 같아야 함" % g
+	var per_step := "등급 %d개 − 1 = %d개여야 함. 최고 등급에서는 안 오름" % [g, g - 1]
+	if _check_list(setting, "setting", "lines_by_grade", g, per_grade, errs, "1 이상의 정수여야 함",
+			func(v): return v >= 1.0 and v == floorf(v)):
+		_check_not_decreasing(setting["lines_by_grade"], "setting.lines_by_grade", errs)
+	_check_list(setting, "setting", "up_chance", g - 1, per_step, errs, "0~1 사이여야 함", rate)
+	_check_list(setting, "setting", "ceiling", g - 1, per_step, errs, "1 이상의 정수여야 함",
+			func(v): return v >= 1.0 and v == floorf(v))
+	if _check_list(setting, "setting", "roll_cost", g, per_grade, errs, "0 이상의 정수여야 함", whole):
+		_check_not_decreasing(setting["roll_cost"], "setting.roll_cost", errs)
+	_check_number(setting, "setting", "cost_cut_cap", errs, "0~1 사이여야 함", rate)
+	_check_number(setting, "setting", "engine_guard_cap", errs, "0~1 사이여야 함", rate)
+	_check_number(setting, "setting", "overboost_seconds", errs, "0 이상이어야 함", func(v): return v >= 0.0)
+	_check_number(setting, "setting", "overboost_mult", errs, "1 이상이어야 함", func(v): return v >= 1.0)
+
+	var options = setting.get("options")
+	if typeof(options) != TYPE_DICTIONARY or options.is_empty():
+		errs.append("setting.options 가 없거나 { } 묶음이 아님")
+		return
+	var options_ok := true
+	for id in options:
+		var o = options[id]
+		var where := "setting.options.%s" % id
+		if typeof(o) != TYPE_DICTIONARY:
+			errs.append("%s 가 { } 묶음이 아님" % where)
+			options_ok = false
+			continue
+		if not OPTION_KINDS.has(o.get("kind")):
+			errs.append("%s.kind = %s (%s 중 하나여야 함)" % [where, o.get("kind"), "/".join(OPTION_KINDS)])
+			options_ok = false
+			continue
+		if not _check_number(o, where, "weight", errs, "0 이상이어야 함", func(v): return v >= 0.0):
+			options_ok = false
+		if o["kind"] != "junk":
+			if _check_list(o, where, "values", g, per_grade, errs, "0 이상이어야 함", func(v): return v >= 0.0):
+				_check_not_decreasing(o["values"], where + ".values", errs)
+			else:
+				options_ok = false
+
+	var parts = setting.get("parts")
+	if typeof(parts) != TYPE_DICTIONARY or parts.is_empty():
+		errs.append("setting.parts 가 없거나 { } 묶음이 아님")
+		return
+	for id in parts:
+		var pt = parts[id]
+		var where := "setting.parts.%s" % id
+		if typeof(pt) != TYPE_DICTIONARY:
+			errs.append("%s 가 { } 묶음이 아님" % where)
+			continue
+		_check_number(pt, where, "unlock_star", errs, "0~%d 정수여야 함" % max_star,
+				func(v): return v >= 0.0 and v <= max_star and v == floorf(v))
+		var list = pt.get("options")
+		if typeof(list) != TYPE_ARRAY or list.is_empty():
+			errs.append("%s.options 가 없거나 빈 목록" % where)
+			continue
+		var known := true
+		for op in list:
+			if typeof(op) != TYPE_STRING or not options.has(op):
+				errs.append("%s.options 에 모르는 옵션: %s" % [where, op])
+				known = false
+		if not (known and options_ok):
+			continue
+		# 등급마다 뽑을 옵션이 하나는 있어야 함 (수치 0인 옵션은 그 등급에서 안 뽑힘, 잡옵은 늘 포함)
+		for grade in g:
+			var weight := 0.0
+			for op in list:
+				var o: Dictionary = options[op]
+				if o["kind"] == "junk" or float(o["values"][grade]) != 0.0:
+					weight += float(o["weight"])
+			if weight <= 0.0:
+				errs.append("%s: 등급 %d에서 뽑을 수 있는 옵션이 없음 (가중치 합 0)" % [where, grade])
+
+
+## 등급이 오를수록 줄면 안 되는 목록
+static func _check_not_decreasing(list: Array, where: String, errs: PackedStringArray) -> void:
+	for i in range(1, list.size()):
+		if float(list[i]) < float(list[i - 1]):
+			errs.append("%s[%d] = %s (앞 등급 %s보다 작음. 등급이 오를수록 줄면 안 됨)" % [where, i, list[i], list[i - 1]])
 
 
 ## 숫자 하나 검사. 맞으면 true.

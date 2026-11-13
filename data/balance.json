@@ -1,12 +1,12 @@
 {
-  "version": "0.6",
+  "version": "0.7",
   "trip": {
-    "unit_price": 100,
-    "base_cargo": 5,
+    "unit_price": 2500,
+    "base_cargo": 20,
     "road_length": 12000,
     "load_seconds": 10,
-    "stop_seconds": 2,
-    "fuel_rate": 0.10,
+    "stop_seconds": 0.5,
+    "fuel_rate": 0.1,
     "maint_rate": 0.05
   },
   "engine": {
@@ -16,13 +16,65 @@
     "success": [0.9975, 0.945, 0.8925, 0.8925, 0.84, 0.7875, 0.735, 0.6825, 0.63, 0.5775, 0.525, 0.4725, 0.42, 0.3675, 0.315, 0.315, 0.315, 0.25, 0.2, 0.2, 0.3, 0.15, 0.15, 0.1, 0.1, 0.1, 0.07, 0.05, 0.03, 0.01],
     "destroy": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.05, 0.06, 0.07, 0.08, 0.1, 0.12, 0.12, 0.12, 0.14, 0.15, 0.16, 0.17],
     "broken_drop_to": 15,
-    "cost_base": 350,
+    "cost_base": 35000,
     "cost_mult": 1.5,
-    "spare_price": 50000,
+    "spare_price": 5000000,
     "spare_drop_chance": 0.0002
   },
   "offline": {
     "cap_hours": 8,
     "rate": 0.5
+  },
+  "setting": {
+    "lines_by_grade": [1, 2, 3, 3, 3],
+    "up_chance": [0.3, 0.08, 0.02, 0.003],
+    "ceiling": [5, 20, 80, 500],
+    "roll_cost": [20000, 80000, 400000, 2000000, 10000000],
+    "cost_cut_cap": 0.6,
+    "engine_guard_cap": 0.3,
+    "overboost_seconds": 10,
+    "overboost_mult": 2,
+    "parts": {
+      "cargo_box": {
+        "unlock_star": 0,
+        "options": ["speed", "fuel_cut", "cargo", "junk_ride", "junk_scent", "junk_cupholder", "junk_radio", "junk_gloss"]
+      },
+      "ecu": {
+        "unlock_star": 5,
+        "options": ["speed", "fuel_cut", "engine_guard", "overboost", "junk_ride", "junk_scent", "junk_cupholder", "junk_radio", "junk_gloss"]
+      }
+    },
+    "options": {
+      "speed": {
+        "kind": "common",
+        "weight": 6,
+        "values": [0.03, 0.05, 0.08, 0.13, 0.2]
+      },
+      "fuel_cut": {
+        "kind": "common",
+        "weight": 10,
+        "values": [0.02, 0.04, 0.06, 0.09, 0.12]
+      },
+      "cargo": {
+        "kind": "own",
+        "weight": 10,
+        "values": [0.05, 0.08, 0.12, 0.2, 0.3]
+      },
+      "engine_guard": {
+        "kind": "own",
+        "weight": 10,
+        "values": [0, 0, 0.04, 0.06, 0.1]
+      },
+      "overboost": {
+        "kind": "own",
+        "weight": 10,
+        "values": [0.01, 0.02, 0.03, 0.05, 0.08]
+      },
+      "junk_ride": { "kind": "junk", "weight": 12 },
+      "junk_scent": { "kind": "junk", "weight": 12 },
+      "junk_cupholder": { "kind": "junk", "weight": 12 },
+      "junk_radio": { "kind": "junk", "weight": 12 },
+      "junk_gloss": { "kind": "junk", "weight": 12 }
+    }
   }
 }

@@ -174,13 +174,13 @@ func test_each_press_updates_state() -> void:
 
 func test_blocked_when_no_money_or_max() -> void:
 	var rng := RandomNumberGenerator.new()
-	var s := _game(0, 349)   # +0 비용 350
-	check_eq(Enhance.block_reason(s, b, 0), Enhance.Block.NO_MONEY, "349원으로 강화 가능으로 나옴")
+	var s := _game(0, 34999)   # +0 비용 35000
+	check_eq(Enhance.block_reason(s, b, 0), Enhance.Block.NO_MONEY, "34999원으로 강화 가능으로 나옴")
 	check_eq(Enhance.try_enhance(s, b, 0, rng), Enhance.Result.BLOCKED, "돈이 모자란데 강화가 됨")
-	check_eq(s.money, 349, "막혔는데 돈이 빠짐")
+	check_eq(s.money, 34999, "막혔는데 돈이 빠짐")
 	check_eq(s.truck(0).fail_count + s.truck(0).success_count, 0, "막혔는데 횟수가 셈")
-	s.money = 350
-	check_eq(Enhance.block_reason(s, b, 0), Enhance.Block.NONE, "350원 딱 맞는데 강화 불가로 나옴")
+	s.money = 35000
+	check_eq(Enhance.block_reason(s, b, 0), Enhance.Block.NONE, "35000원 딱 맞는데 강화 불가로 나옴")
 
 	s.truck(0).star = b.max_star
 	s.money = 10 ** 15

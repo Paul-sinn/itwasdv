@@ -6,8 +6,11 @@
 ##   money         글자("123456789"). JSON 숫자는 2^53(약 9007조)을 넘으면 끝자리가 틀려져서 글자로 쓴다.
 ##                 읽을 때는 숫자(손으로 고친 파일)도 받는다
 ##   spares, spare_drop_carry
-##   trucks [ { star, lap_clock, lap_delivered, success_count, fail_count, destroy_count } ]
+##   trucks [ { star, lap_clock, lap_delivered, boost_lap, success_count, fail_count, destroy_count,
+##              settings { 부품 id: { grade, lines, counters, pending: null 또는 { grade, lines } } } } ]
 ## 모르는 키는 버리고 범위 밖 값은 자른다. 음수 돈·스페어, 빠진 칸, 틀린 모양은 깨진 저장.
+## 세팅: 모르는 부품·그 부품에 없는 옵션 id는 버리고, 등급·카운터는 범위로 자르고, 줄은 그 등급 줄 수까지 (앞에서부터).
+## 형식 3 파일(v3)은 그대로 읽는다 (세팅 없음, 오버부스트 안 걸린 바퀴).
 ##
 ## 백업: 쓸 때마다 지금 파일을 path.bak1(가장 최근) → bak2 → bak3 으로 돌린다.
 ## 본 파일이 깨졌으면 path.broken 으로 옮기고 bak1 → bak2 → bak3 중 읽히는 첫 파일로 살린다.
@@ -16,10 +19,12 @@ extends RefCounted
 
 const Balance = preload("res://scripts/core/balance.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
+const Setting = preload("res://scripts/core/setting.gd")
 const TruckState = preload("res://scripts/core/truck_state.gd")
 
 const DEFAULT_PATH := "user://save.json"
-const FORMAT_VERSION := 3   ## 1: v0·v1 / 2: 튜닝(v2) / 3: 한 바퀴 경제·트럭 여러 대(v3)
+const FORMAT_VERSION := 4   ## 1: v0·v1 / 2: 튜닝(v2) / 3: 한 바퀴 경제·트럭 여러 대(v3) / 4: 세팅 돌리기(v4)
+const OLDEST_READABLE := 3  ## 이보다 옛 형식은 변환하지 않고 옮겨 둔다
 
 enum Status { OK, NONE, BROKEN }   ## 읽음 / 저장 파일 없음(새 게임) / 깨짐(새 게임)
 
@@ -39,9 +44,11 @@ static func to_dict(s: GameState, saved_at_unix: int) -> Dictionary:
 			"star": t.star,
 			"lap_clock": t.lap_clock,
 			"lap_delivered": t.lap_delivered,
+			"boost_lap": t.boost_lap,
 			"success_count": t.success_count,
 			"fail_count": t.fail_count,
 			"destroy_count": t.destroy_count,
+			"settings": t.settings.duplicate(true),
 		})
 	return {
 		"version": FORMAT_VERSION,
@@ -95,6 +102,14 @@ static func from_dict(d, b: Balance) -> Dictionary:
 		t.lap_delivered = clampi(floori(td["lap_delivered"]), 0, 1 << 30)
 		for key in TRUCK_COUNTS:
 			t.set(key, clampi(floori(td[key]), 0, MAX_WHOLE))
+		var boost = td.get("boost_lap", false)   # 형식 3에는 없음
+		if typeof(boost) != TYPE_BOOL:
+			return _broken("trucks[%d].boost_lap 이 true/false가 아님: %s" % [k, boost])
+		t.boost_lap = boost
+		var settings = _settings_from(td.get("settings", {}), b)   # 형식 3에는 없음
+		if settings == null:
+			return _broken("trucks[%d].settings 모양이 틀림" % k)
+		t.settings = settings
 		s.trucks.append(t)
 
 	return _result(Status.OK, s, saved_at)
@@ -172,7 +187,7 @@ static func _read_one(p: String, b: Balance) -> Dictionary:
 	if json.parse(text) != OK:
 		return _broken("JSON 형식이 깨짐 (%d번째 줄: %s)" % [json.get_error_line() + 1, json.get_error_message()])
 	var d = json.data
-	if typeof(d) == TYPE_DICTIONARY and _is_number(d.get("version")) and float(d["version"]) < FORMAT_VERSION:
+	if typeof(d) == TYPE_DICTIONARY and _is_number(d.get("version")) and float(d["version"]) < OLDEST_READABLE:
 		var r := _result(Status.NONE)
 		r["old"] = true
 		return r
@@ -224,6 +239,49 @@ static func _is_number(v) -> bool:
 
 static func _is_finite_number(v) -> bool:
 	return _is_number(v) and is_finite(float(v))
+
+
+## 저장된 세팅 → 깨끗한 세팅 (TruckState.settings 모양). 모양이 틀리면 null
+static func _settings_from(v, b: Balance):
+	if typeof(v) != TYPE_DICTIONARY:
+		return null
+	var out := {}
+	for part in v:
+		if not b.setting_parts.has(part):
+			continue   # 모르는 부품은 버림
+		var pd = v[part]
+		var now = _grade_lines_from(pd, b, part)
+		if now == null:
+			return null
+		var saved = pd.get("counters", [])
+		if typeof(saved) != TYPE_ARRAY:
+			return null
+		var counters := []
+		for g in Balance.SETTING_GRADES:
+			var x = saved[g] if g < saved.size() else 0
+			if not _is_finite_number(x):
+				return null
+			counters.append(clampi(floori(x), 0, maxi(0, Setting.ceiling(b, g) - 1)))
+		var pending = pd.get("pending")
+		if pending != null:
+			pending = _grade_lines_from(pending, b, part)
+			if pending == null:
+				return null
+		out[part] = { "grade": now["grade"], "lines": now["lines"], "counters": counters, "pending": pending }
+	return out
+
+
+## { grade, lines } → 등급은 0~최고로 자르고, 그 부품에 없는 옵션은 버리고, 줄은 그 등급 줄 수까지 (앞에서부터). 틀리면 null
+static func _grade_lines_from(v, b: Balance, part: String):
+	if typeof(v) != TYPE_DICTIONARY or not _is_finite_number(v.get("grade")) or typeof(v.get("lines")) != TYPE_ARRAY:
+		return null
+	var grade := clampi(floori(v["grade"]), 0, Setting.max_grade(b))
+	var allowed: PackedStringArray = b.setting_parts[part]["options"]
+	var lines := []
+	for op in v["lines"]:
+		if typeof(op) == TYPE_STRING and allowed.has(op):
+			lines.append(op)
+	return { "grade": grade, "lines": lines.slice(0, Setting.line_count(b, grade)) }
 
 
 ## 돈: 글자("123", 쓸 때 모양)나 숫자(손으로 고친 파일). 0 이상 정수가 아니면 null. MAX_MONEY 넘으면 자름
