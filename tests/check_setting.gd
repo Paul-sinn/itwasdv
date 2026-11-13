@@ -8,6 +8,7 @@
 ## ⑦ 고르는 화면에서 껐다 켜도 고르는 화면이 다시 뜸   ⑧ 돌린 직후·고른 직후 저장
 ## ⑨ 강화 칸의 퍼짐 확률 = Enhance.chances_for, 시간당 수입 = 세팅 반영 값
 ## ⑩ en에서도 탭이 뜨고 키·한글이 안 보임   ⑪ 잡옵 줄은 수치 없이 이름만, 회색
+## v6-bal U1 ① ECU 오버부스트 설명에 "10" 없음 (ko·en)   ③ 적재함 한 바퀴 적재량: 21.6 → "21.6", 20 → "20"
 ## 돌리는 동안 배송이 나면 돈이 바뀌어서, 확인하는 동안 게임 시간을 멈춘다 (뜸은 진짜 시간이라 그대로 지나감).
 ## 진짜 저장·설정 파일은 건드리지 않는다.
 ##
@@ -87,6 +88,37 @@ func _run() -> void:
 		prob_ok = prob_ok and not st._chances.text.contains(st.option_name("engine_guard"))   # 순정에서는 안 뽑힘
 		print("    %s: %s / %s" % [part, st._up.text, st._chances.text])
 	_report(prob_ok, "⑤ 등급업 확률·옵션별 확률 글자 = Setting.up_chance·option_chances (적재함·ECU 순정, 엔진 보호는 순정에서 안 보임)")
+
+	# v6-bal U1 ① ECU: 오버부스트 설명 (줄 3개일 때 큰 화면 여러 크기에서 차고가 창 안)
+	var ecu_was: Dictionary = t.part("ecu").duplicate(true)
+	_click(ecu_btn.get_global_rect().get_center())
+	await _frames(3)
+	var boost_note: String = st._effect.text
+	_report(st._effect.is_visible_in_tree() and boost_note == "오버부스트: 걸리면 그 바퀴 내내 운전 속도 %s배" % Fmt.num(b.overboost_mult)
+			and not boost_note.contains("10"),
+			"v6-bal U1 ① ECU 오버부스트 설명 '%s' (\"10\" 없음)" % boost_note)
+	t.part("ecu")["grade"] = 4
+	t.part("ecu")["lines"] = ["overboost", "engine_guard", "junk_scent"]
+	await _check_fits(m, "v6-bal ECU 오버부스트 설명 + 줄 3개")
+	t.part("ecu").merge(ecu_was, true)
+
+	# v6-bal U1 ③ 적재함: 한 바퀴 적재량 (소수점 있으면 한 자리, 없으면 정수)
+	var cargo_was: Dictionary = t.part("cargo_box").duplicate(true)
+	_click(cargo_btn.get_global_rect().get_center())
+	await _frames(3)
+	var cargo_texts := []
+	var cargo_avgs := []
+	for setup in [[0, []], [1, ["cargo"]]]:   # 줄 없음 = 20건, 스트리트 적재량 +8% = 21.6건
+		t.part("cargo_box")["grade"] = setup[0]
+		t.part("cargo_box")["lines"] = setup[1]
+		await _frames(2)
+		cargo_texts.append(st._effect.text)
+		cargo_avgs.append(Trip.cargo(b, t))
+	t.part("cargo_box").merge(cargo_was, true)
+	await _frames(2)
+	_report(st._effect.is_visible_in_tree() and cargo_texts == ["한 바퀴 적재량 20건", "한 바퀴 적재량 21.6건"]
+			and is_equal_approx(cargo_avgs[0], 20.0) and is_equal_approx(cargo_avgs[1], 21.6),
+			"v6-bal U1 ③ 적재함 평균 적재량 %s → %s" % [cargo_avgs, cargo_texts])
 	_click(cargo_btn.get_global_rect().get_center())
 	await _frames(3)
 
@@ -245,6 +277,16 @@ func _run() -> void:
 	_report(st.visible and st._choose.visible and bad.is_empty() and p.setting_tab_button.text == "Setups",
 			"⑩ en에서도 [%s] 칸이 뜨고 돌린 뒤 보이는 글자 %d개에 한글·키 없음 %s" % [p.setting_tab_button.text, texts.size(), bad])
 	print("    en 보이는 글자: %s" % [texts])
+	# v6-bal U1 ① en ECU 오버부스트 설명 (ECU는 +5에 열림)
+	m.state.truck(0).star = 5
+	await _frames(2)
+	_click(st.part_buttons["ecu"].get_global_rect().get_center())
+	await _frames(3)
+	var en_note: String = st._effect.text
+	_report(st._effect.is_visible_in_tree() and en_note.begins_with("Overboost") and _hangul.search(en_note) == null and not en_note.contains("10"),
+			"v6-bal U1 ① en ECU 오버부스트 설명 '%s' (\"10\"·한글 없음)" % en_note)
+	_click(st.part_buttons["cargo_box"].get_global_rect().get_center())
+	await _frames(2)
 	var c3: Dictionary = m.state.truck(0).part("cargo_box")
 	c3["grade"] = 3
 	c3["lines"] = ["junk_scent", "junk_radio", "fuel_cut"]

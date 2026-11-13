@@ -224,3 +224,14 @@ const NPC_FACE_SIZE := 34.0
 const NPC_FACE_COLORS := {
 	"tuning": Color(0.85, 0.62, 0.45), "depot": Color(0.55, 0.70, 0.90), "car_center": Color(0.75, 0.80, 0.55),
 }
+
+# --- v6-bal: 처음 켰을 때 말풍선 "건물을 눌러보세요" (작은 화면에서만, 건물·작은 버튼을 한 번 누를 때까지) ---
+## 튜닝숍·카센터 아래, 가운데 길 밑 빈자리 (왼쪽 물류센터·오른쪽 집 사이). 꼬리는 위로 튜닝숍을 가리킴
+const HINT_POS := Vector2(124, 143)        ## 말풍선 위쪽 가운데 (동네 설계 좌표)
+const HINT_TAIL_TIP := Vector2(92, 130)    ## 꼬리 끝 (튜닝숍 아래 가운데)
+const HINT_TAIL_HALF := 5.0                ## 꼬리 밑변 반 폭
+const HINT_FONT_SIZE := 11
+const HINT_PAD := Vector2(6, 2)            ## 말풍선 안 여백 (좌우, 위아래)
+const HINT_RADIUS := 5
+const COLOR_HINT_BG := Color(1.0, 0.96, 0.82)
+const COLOR_HINT_TEXT := Color(0.15, 0.13, 0.10)

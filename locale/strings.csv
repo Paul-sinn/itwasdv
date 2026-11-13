@@ -91,6 +91,8 @@ SETTING_UP_CHANCE,등급업 확률 %s,Grade-up chance %s
 SETTING_CEILING,천장 %d/%d,Pity %d/%d
 SETTING_MAX_GRADE,최고 등급 (등급업 없음),Top grade (no more grade-ups)
 SETTING_CHANCES,한 줄에 나올 확률: %s,Chance per line: %s
+SETTING_CARGO_NOW,한 바퀴 적재량 %s건,Cargo per lap: %s
+SETTING_OVERBOOST_NOTE,오버부스트: 걸리면 그 바퀴 내내 운전 속도 %s배,"Overboost: when it triggers, driving speed is ×%s for that whole lap"
 SETTING_SHORT,%s원 모자람 · %s,₩%s short · %s
 SETTING_PENDING,예전 것 / 새 것을 골라야 다시 돌릴 수 있음,Pick old or new before rolling again
 SETTING_OLD,지금 쓰는 것,Current
@@ -177,6 +179,7 @@ QUEST_STAR_18_DESC,엔진을 +18까지 강화하기,Upgrade the engine to +18
 BUILDING_TUNING,튜닝숍,Tuning Shop
 BUILDING_CAR_CENTER,카센터,Car Center
 TOWN_TUNING_BUTTON,강화,Upgrade
+TOWN_HINT_BUILDING,건물을 눌러보세요,Click a building
 GARAGE_TO_CAR,카센터로,To Car Center
 CAR_NOTE,+%d부터 강화하려면 1개가 있어야 해요. 퍼지면 자동으로 써요,From +%d you need one to upgrade. It's used automatically if the engine blows up
 CAR_SHORT,%s원 모자람 · %s,₩%s short · %s
