@@ -163,10 +163,10 @@ func _run() -> void:
 	var tire: Button = st.part_buttons["tire"]
 	var lock_text: String = st._lock_note.text
 	var locked_ok: bool = tire.disabled and tire.text == "타이어·휠" and st._lock_note.is_visible_in_tree() \
-			and lock_text == "타이어·휠 · 대리점을 차리면 열려요"
+			and lock_text == "타이어·휠 · 대리점을 차리면 열려요\n터보 · 대리점 + 엔진 +10에 열려요"   # v7b: 터보 줄도
 	Company.found(b, m.state)   # 준비 (창업 클릭은 ①)
 	await _frames(2)
-	var open_ok: bool = not tire.disabled and not st._lock_note.visible
+	var open_ok: bool = not tire.disabled and st._lock_note.text == "터보 · 대리점 + 엔진 +10에 열려요"   # 타이어 줄만 사라짐
 	_click(tire.get_global_rect().get_center())
 	await _frames(1)
 	var tire_grade: String = st._grade.text

@@ -7,7 +7,7 @@
 ## 라이벌 이름은 번역 파일 RIVAL_<번호> (번호 = balance rivals 순서, 0이 가장 작음), 단계 이름은 STAGE_<단계 id>
 ## v7b: [트럭] 칸에 트럭마다 (내 트럭부터) 줄 + [시내 · 시간당 N원] [장거리 · 시간당 N원] 스위치 (지금 고른 쪽 눌림) + 한 줄 안내:
 ##      바꾼 뒤 이번 바퀴가 끝나기 전이면 "다음 바퀴부터 장거리", 장거리가 잠겼으면 "장거리는 엔진 +10부터".
-##      스위치 → route_pressed → main.gd → set_route. 노선 값은 C1 전이라 RouteStub (Trip과 같은 이름의 껍데기)
+##      스위치 → route_pressed → main.gd → Trip.set_route. 값은 Trip.route_choice / can_long / route_id / hourly_income_on, 잠금 단계는 balance routes.long.unlock_star
 extends VBoxContainer
 
 const Balance = preload("res://scripts/core/balance.gd")
@@ -18,7 +18,6 @@ const Trip = preload("res://scripts/core/trip.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const Town = preload("res://scripts/ui/town.gd")
-const RouteStub = preload("res://scripts/ui/route_stub.gd")   ## shortcut: C1 전 임시. C1을 합치면 Trip으로 바꿈 (route_stub.gd 맨 위)
 
 ## 스위치 순서와 노선 이름 번역 키
 const ROUTES := ["city", "long"]
@@ -176,19 +175,19 @@ func _refresh_trucks(b: Balance, s: GameState) -> void:
 
 ## 트럭 i의 스위치: 고른 쪽 눌림, 두 노선 시간당, 장거리 잠김이면 꺼짐 + 안내, 바꾼 노선이 다음 바퀴부터면 안내
 func _refresh_route(b: Balance, s: GameState, i: int) -> void:
-	var choice := RouteStub.route_choice(s, i)
+	var choice := Trip.route_choice(s, i)
 	for id: String in ROUTES:
 		var btn: Button = route_buttons[i][id]
-		btn.text = tr("OFFICE_ROUTE_BUTTON") % [tr(ROUTE_NAMES[id]), Fmt.money(int(RouteStub.hourly_income_on(b, s, i, id)))]
+		btn.text = tr("OFFICE_ROUTE_BUTTON") % [tr(ROUTE_NAMES[id]), Fmt.money(int(Trip.hourly_income_on(b, s, i, id)))]
 		btn.set_pressed_no_signal(id == choice)
-	var open := RouteStub.can_long(b, s, i)
+	var open := Trip.can_long(b, s, i)
 	route_buttons[i]["long"].disabled = not open
 	var note := route_notes[i]
-	var pending := choice != RouteStub.route_id(s, i)   # 바꿨는데 이번 바퀴는 아직 예전 노선
+	var pending := choice != Trip.route_id(s, i)   # 바꿨는데 이번 바퀴는 아직 예전 노선
 	if pending:
 		note.text = tr("OFFICE_ROUTE_NEXT") % tr(ROUTE_NAMES[choice])
 	elif not open:
-		note.text = tr("OFFICE_ROUTE_LOCKED") % RouteStub.long_star(b)
+		note.text = tr("OFFICE_ROUTE_LOCKED") % b.routes["long"].get("unlock_star", 0)
 	note.visible = pending or not open
 
 

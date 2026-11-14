@@ -364,3 +364,4 @@ SETTING_PART_TURBO,터보,Turbo
 SETTING_OPT_LONG_SPEED,장거리 속도,Long-haul speed
 SETTING_LOCKED_AGENCY_STAR,%s · 대리점 + 엔진 +%d에 열려요,%s · opens with an agency + engine +%d
 SETTING_LONG_SPEED_NOTE,장거리 속도: 장거리 노선에서만 빨라져요,Long-haul speed: only works on the long-haul route
+NOTICE_LONG_UNLOCKED,장거리 노선이 열렸어요,The long-haul route is open

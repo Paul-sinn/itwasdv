@@ -6,7 +6,7 @@
 ##   고르는 중(pending)이면: 지금 쓰는 것 / 새로 나온 것을 나란히 + 버튼 두 개
 ## 확률·비용은 scripts/core/setting.gd 값을 그대로 보여 준다. 버튼은 신호만 → main.gd → Setting.try_roll / choose
 ## 부품·옵션·등급 이름은 번역 파일 키 SETTING_PART_<ID>, SETTING_OPT_<ID>, SETTING_GRADE_<등급> (id는 balance.json)
-## v7b: 네 번째 부품 터보 (json에서 옴). 대리점 + 엔진 단계 둘 다 걸린 부품은 창업 전 "터보 · 대리점 + 엔진 +10에 열려요",
+## v7b: 네 번째 부품 터보. 대리점 + 엔진 단계 둘 다 걸린 부품은 잠긴 동안(창업 전·창업 뒤 +10 전 모두) 버튼은 이름만 + 아래 줄 "터보 · 대리점 + 엔진 +10에 열려요",
 ##      장거리 속도 옵션이 나오는 부품이면 "장거리 노선에서만" 설명. 부품 버튼은 넘치면 다음 줄로 (HFlowContainer: 잠긴 버튼 글이 길어도 차고 폭 안)
 extends VBoxContainer
 
@@ -193,13 +193,13 @@ func refresh(b: Balance, s: GameState, locked: bool) -> void:
 		_build_part_buttons(b)
 	if selected == "" or not Setting.unlocked(b, s, truck, selected):
 		selected = Setting.part_ids(b)[0]
-	var locks := PackedStringArray()   # 대리점 전이라 잠긴 부품 줄
+	var locks := PackedStringArray()   # 대리점이 걸린 부품의 잠김 줄
 	for id: String in part_buttons:
 		var btn: Button = part_buttons[id]
 		var open := Setting.unlocked(b, s, truck, id)
 		if open:
 			btn.text = part_name(id)
-		elif Setting.unlock_stage(b, id) > Company.stage(s):   # 타이어·휠·터보: 창업 전 (터보는 엔진 단계도)
+		elif Setting.unlock_stage(b, id) > 0:   # 타이어·휠·터보: 버튼은 이름만, 아래 줄에 안내 (터보는 창업 뒤 +10 전에도 같은 글)
 			btn.text = part_name(id)
 			var star := Setting.unlock_star(b, id)
 			locks.append(tr("SETTING_LOCKED_AGENCY_STAR") % [part_name(id), star] if star > 0 else tr("SETTING_LOCKED_AGENCY") % part_name(id))
