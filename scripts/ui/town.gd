@@ -10,6 +10,8 @@
 ## v7a: 보조 트럭도 같은 길을 같은 그림(짐칸 색만 다르게)으로 달림 (trucks, set_truck_count. 0 = 내 트럭 = truck)
 ##      U2: 창업하면 네 번째 건물 사무실 (set_office. 창업 전에는 그리지도, building_rects에 넣지도 않음),
 ##      구석 줄 "시내 N위" (set_rank. 누르면 아무 일 없음)
+## v7-bal: 오른쪽 위 아이콘 (town_icon.gd): 편지봉투 + 느낌표 (NPC가 온 날, set_letter → letter_pressed),
+##      급송 전화는 말풍선 대신 전화 아이콘 (누르면 rush_accept_pressed. 아래 남은 시간 막대). 알림은 아이콘 왼쪽에
 ## 동네 설계 좌표(feel.gd TOWN_SIZE = 작은 화면 크기)로 만들고, 전체 화면에서는 같은 동네를 통째로 확대한다.
 ## 길·집·트럭은 확대해서 그리고(선명함), 글자는 확대 배수에 맞춘 글자 크기로 따로 놓는다.
 ## 그리기만 한다. 돈·배송은 main.gd → scripts/core/trip.gd (배송 이벤트가 오면 show_payout)
@@ -19,6 +21,7 @@ const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const Truck = preload("res://scripts/ui/truck.gd")
 const Route = preload("res://scripts/ui/route.gd")
+const TownIcon = preload("res://scripts/ui/town_icon.gd")
 
 ## 건물 id (큰 화면 위쪽 줄 순서)와 이름 번역 키. 사무실(OFFICE)은 창업 뒤에만 있어서 BUILDINGS에 안 넣음
 const BUILDINGS := ["tuning", "depot", "car_center"]
@@ -29,7 +32,8 @@ const BUILDING_SPOTS := { "tuning": Feel.TOWN_TUNING_RECT, "depot": Feel.TOWN_DE
 const BUILDING_COLORS := { "tuning": Feel.COLOR_TUNING, "depot": Feel.COLOR_DEPOT, "car_center": Feel.COLOR_CAR_CENTER, "office": Feel.COLOR_OFFICE }
 
 signal tuning_pressed   ## 구석 작은 버튼 [강화]
-signal rush_accept_pressed   ## 급송 전화 말풍선 [받기]
+signal rush_accept_pressed   ## 급송 전화 아이콘
+signal letter_pressed        ## 편지봉투 아이콘
 
 ## 대형·VIP "+금액" 앞 글자 번역 키와 색 (배송 이벤트의 kind. "normal"은 글자 없음)
 const PAY_KEYS := { "large": "TOWN_PAY_LARGE", "vip": "TOWN_PAY_VIP" }
@@ -48,8 +52,8 @@ var boosts_shown := 0        ## 지금까지 띄운 "오버부스트!" 수 (확�
 var tips_shown: Array[String] = []   ## 지금까지 띄운 "팁! +금액" 글자 (확인용)
 var payout_log: Array = []   ## 지금까지 띄운 "+금액"마다 [트럭 번호, 금액] (확인용)
 var point_dot: Panel         ## 구석 줄 레벨 옆 점: 찍을 능력치 포인트가 남음 (set_point_dot)
-var rush_bubble: PanelContainer   ## 급송 전화 말풍선 "급송 요청! [받기]" + 남은 시간 막대 (벨이 울리는 동안)
-var rush_button: Button           ## 그 안 [받기]
+var rush_button: TownIcon     ## 급송 전화 아이콘 + 남은 시간 막대 (벨이 울리는 동안. 누르면 받음)
+var letter_button: TownIcon   ## 편지봉투 + 느낌표 (NPC가 온 날. set_letter)
 var notices_shown: Array[String] = []   ## 지금까지 띄운 알림 글자, 띄운 순서대로 (확인용)
 var hovered := ""            ## 마우스가 올라가 있는 건물 id ("" = 없음)
 var tuning_button: Button    ## 구석 줄 끝 작은 버튼 [강화]
@@ -71,9 +75,6 @@ var _name_tag: Label      ## 마우스 올린 건물 위 이름표
 var _payouts: Array[Label] = []   ## 떠오르는 중인 "+금액"·"스페어 엔진 +1"들
 var _last_payout: Label   ## 마지막 "+금액" (팁이 오면 그 옆에 "팁!"을 붙임)
 var _dot_style: StyleBoxFlat
-var _rush_text: Label
-var _rush_bar: ProgressBar
-var _rush_style: StyleBoxFlat
 var _rush_left: Label     ## 구석 줄 끝 "급송 N건 남음" (받은 급송이 남아 있을 때)
 var _rank_label: Label    ## 구석 줄 "시내 N위" (창업 뒤)
 
@@ -144,50 +145,13 @@ func _ready() -> void:
 	hint.add_theme_color_override("font_color", Feel.COLOR_HINT_TEXT)
 	hint.visible = false
 	add_child(hint)
-	_build_rush_bubble()
-	layout(Vector2.ZERO, 1.0, 1.0)
-
-
-## 급송 전화 말풍선: [글자 "급송 요청!" + [받기]] 위, 남은 시간 막대 아래. 처음엔 숨김
-func _build_rush_bubble() -> void:
-	rush_bubble = PanelContainer.new()
-	rush_bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE   # [받기]만 클릭을 받음
-	_rush_style = StyleBoxFlat.new()
-	_rush_style.bg_color = Feel.COLOR_RUSH_BG
-	rush_bubble.add_theme_stylebox_override("panel", _rush_style)
-	var box := VBoxContainer.new()
-	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	rush_bubble.add_child(box)
-	var row := HBoxContainer.new()
-	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.add_child(row)
-	_rush_text = Label.new()
-	_rush_text.text = tr("TOWN_RUSH_CALL")
-	_rush_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_rush_text.add_theme_color_override("font_color", Feel.COLOR_RUSH_TEXT)
-	row.add_child(_rush_text)
-	rush_button = Button.new()
-	rush_button.text = tr("TOWN_RUSH_ACCEPT")
-	rush_button.focus_mode = Control.FOCUS_NONE
-	for c in ["font_color", "font_hover_color", "font_pressed_color"]:
-		rush_button.add_theme_color_override(c, Feel.COLOR_TEXT)
+	rush_button = TownIcon.new("phone")
 	rush_button.pressed.connect(func(): rush_accept_pressed.emit())
-	row.add_child(rush_button)
-	_rush_bar = ProgressBar.new()
-	_rush_bar.show_percentage = false
-	_rush_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_rush_bar.max_value = 1.0
-	_rush_bar.step = 0.0
-	var bg := StyleBoxFlat.new()
-	bg.bg_color = Feel.COLOR_RUSH_BAR_BG
-	var fill := StyleBoxFlat.new()
-	fill.bg_color = Feel.COLOR_RUSH_BUTTON
-	_rush_bar.add_theme_stylebox_override("background", bg)
-	_rush_bar.add_theme_stylebox_override("fill", fill)
-	box.add_child(_rush_bar)
-	rush_bubble.visible = false
-	add_child(rush_bubble)
+	add_child(rush_button)
+	letter_button = TownIcon.new("letter")
+	letter_button.pressed.connect(func(): letter_pressed.emit())
+	add_child(letter_button)
+	layout(Vector2.ZERO, 1.0, 1.0)
 
 
 ## 동네를 어디에 얼마나 크게 놓을지. top_left = 동네 왼쪽 위 (이 노드 좌표), z = 확대 배수
@@ -211,7 +175,7 @@ func layout(top_left: Vector2, z: float, text_k: float) -> void:
 	_quest_label.reset_size()
 	_quest_label.position = to_view(Feel.TOWN_QUEST_POS)
 	_set_font(_notice, Feel.NOTICE_FONT_SIZE)
-	_place_notice()
+	_place_icons()
 
 	# 간판: 건물 위쪽 가운데 (사무실은 창업 전에도 자리만 잡아 둠)
 	for id: String in _signs:
@@ -223,7 +187,6 @@ func layout(top_left: Vector2, z: float, text_k: float) -> void:
 	_set_font(_name_tag, Feel.NAME_TAG_FONT_SIZE)
 	_place_name_tag()
 	_place_hint()
-	_place_rush()
 
 	# 떠오르던 "+금액"은 자리가 안 맞게 되니 지운다
 	for p in _payouts:
@@ -359,10 +322,9 @@ func _hint_tail() -> PackedVector2Array:
 	return PackedVector2Array([Vector2(tip.x - Feel.HINT_TAIL_HALF, base_y), tip, Vector2(tip.x + Feel.HINT_TAIL_HALF, base_y)])
 
 
-## 작은 버튼 [강화]·[받기]: 글자 크기·여백을 동네 글자 배수에 맞춤 (평소 / 올림 두 색)
+## 작은 버튼 [강화]: 글자 크기·여백을 동네 글자 배수에 맞춤 (평소 / 올림 두 색)
 func _style_button() -> void:
 	_flat_button(tuning_button, Feel.COLOR_TUNING, Feel.TOWN_BUTTON_FONT_SIZE)
-	_flat_button(rush_button, Feel.COLOR_RUSH_BUTTON, Feel.RUSH_BUTTON_FONT_SIZE)
 
 
 func _flat_button(btn: Button, color: Color, font_size: int) -> void:
@@ -378,30 +340,46 @@ func _flat_button(btn: Button, color: Color, font_size: int) -> void:
 		btn.add_theme_stylebox_override(state, sb)
 
 
-## 급송 전화: ringing이면 말풍선 (ratio = 벨 남은 시간 비율 1 → 0, 막대), left > 0이면 구석 줄 "급송 N건 남음"
+## 급송 전화: ringing이면 전화 아이콘 (ratio = 벨 남은 시간 비율 1 → 0, 막대), left > 0이면 구석 줄 "급송 N건 남음"
 func set_rush(ringing: bool, ratio: float, left: int) -> void:
-	if rush_bubble.visible != ringing:
-		rush_bubble.visible = ringing
-		_place_rush()
-	_rush_bar.value = clampf(ratio, 0.0, 1.0)
+	if rush_button.visible != ringing:
+		rush_button.visible = ringing
+		_place_icons()
+	rush_button.set_ratio(ratio)
 	_rush_left.visible = left > 0
 	if left > 0:
 		_rush_left.text = tr("TOWN_RUSH_LEFT") % left
 
 
-## 말풍선: 글자·여백을 동네 글자 배수에, 폭은 RUSH_BUBBLE_RECT(양옆 집 사이)를 꽉 채우게
-func _place_rush() -> void:
-	_rush_text.add_theme_font_size_override("font_size", maxi(1, int(roundf(Feel.RUSH_FONT_SIZE * text_scale))))
-	_rush_style.set_corner_radius_all(int(roundf(Feel.RUSH_RADIUS * text_scale)))
-	_rush_style.content_margin_left = Feel.RUSH_PAD.x * text_scale
-	_rush_style.content_margin_right = Feel.RUSH_PAD.x * text_scale
-	_rush_style.content_margin_top = Feel.RUSH_PAD.y * text_scale
-	_rush_style.content_margin_bottom = Feel.RUSH_PAD.y * text_scale
-	_rush_bar.custom_minimum_size.y = Feel.RUSH_BAR_HEIGHT * text_scale
-	var r := view_rect(Feel.RUSH_BUBBLE_RECT)
-	rush_bubble.custom_minimum_size.x = r.size.x
-	rush_bubble.reset_size()
-	rush_bubble.position = Vector2(r.get_center().x - rush_bubble.size.x / 2.0, r.position.y)
+## 편지봉투: on = NPC가 와 있음, alert = 느낌표 (아직 안 열어 봄). 언제 켜나는 main.gd
+func set_letter(on: bool, alert: bool) -> void:
+	letter_button.set_alert(alert)
+	if letter_button.visible != on:
+		letter_button.visible = on
+		_place_icons()
+
+
+## 오른쪽 위 아이콘: 오른쪽 끝부터 편지봉투 → 전화 (보이는 것만, 크기는 동네 글자 배수). 알림은 그 왼쪽에
+func _place_icons() -> void:
+	var right_top := to_view(Feel.TOWN_ICON_RIGHT_TOP)
+	var x := right_top.x
+	for icon: TownIcon in [letter_button, rush_button]:
+		icon.size = Feel.TOWN_ICON_SIZE * text_scale
+		if icon.visible:
+			x -= icon.size.x
+			icon.position = Vector2(x, right_top.y)
+			x -= Feel.TOWN_ICON_GAP * text_scale
+		icon.queue_redraw()
+	_place_notice()
+
+
+## 아이콘 줄의 왼쪽 끝 (아이콘과 띄울 간격 포함. 보이는 아이콘이 없으면 아이콘 줄 오른쪽 끝)
+func _icons_left() -> float:
+	var x := to_view(Feel.TOWN_ICON_RIGHT_TOP).x
+	for icon: TownIcon in [letter_button, rush_button]:
+		if icon.visible:
+			x = minf(x, icon.position.x - Feel.TOWN_ICON_GAP * text_scale)
+	return x
 
 
 func set_hud(money: int, star: int, level: int) -> void:
@@ -447,11 +425,12 @@ func _next_notice() -> void:
 	tw.tween_callback(_next_notice)
 
 
-## 알림: 오른쪽 맞춤, 동네 왼쪽 밖으로는 안 나감
+## 알림: 오른쪽 맞춤 (오른쪽 위 아이콘이 있으면 그 왼쪽), 동네 왼쪽 밖으로는 안 나감
 func _place_notice() -> void:
 	_notice.reset_size()
 	var right_top := to_view(Feel.NOTICE_RIGHT_TOP)
-	_notice.position = Vector2(maxf(area().position.x, right_top.x - _notice.size.x), right_top.y)
+	var right := minf(right_top.x, _icons_left())
+	_notice.position = Vector2(maxf(area().position.x, right - _notice.size.x), right_top.y)
 
 
 
@@ -572,16 +551,16 @@ func visible_rects(truck_pad: float) -> Array:
 	out.append_array(_join(pieces))
 	if _name_tag.visible:
 		out.append(Rect2(_name_tag.position, _name_tag.size).grow(o))
-	# 급송 말풍선: 양옆 집과 한 사각형으로 (사각형 수를 늘리지 않게. 말풍선이 두 집 사이를 꽉 채움)
-	var bubble := Rect2(rush_bubble.position, rush_bubble.size).grow(1.0) if rush_bubble.visible else Rect2()
 	for spot in _houses:
-		var h := view_rect(_house_rect(spot)).grow(1.0)
-		if bubble.has_area() and h.intersects(bubble.grow(Feel.RUSH_JOIN_PX * zoom)):
-			bubble = bubble.merge(h)
-		else:
-			out.append(h)
-	if bubble.has_area():
-		out.append(bubble)
+		out.append(view_rect(_house_rect(spot)).grow(1.0))
+	# 오른쪽 위 아이콘 (편지봉투·전화): 나란히 붙어 있어서 한 사각형으로
+	var icons := Rect2()
+	for icon: TownIcon in [letter_button, rush_button]:
+		if icon.visible:
+			var r := Rect2(icon.position, icon.size).grow(1.0)
+			icons = icons.merge(r) if icons.has_area() else r
+	if icons.has_area():
+		out.append(icons)
 	# "+N" 숫자가 커졌다 돌아올 때 잘리지 않게 넉넉하게
 	var pop_room := Feel.HUD_FONT_SIZE * text_scale * (Feel.STAR_POP_SCALE - 1.0)
 	# 바로 아래 "다음 할 일" 줄과 한 사각형으로 (사각형 수를 늘리지 않게. 둘 다 왼쪽 맞춤이라 빈 곳이 거의 안 생김)

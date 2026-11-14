@@ -3,10 +3,10 @@
 ## 진짜 게임 화면(main.tscn)에 진짜 클릭을 넣어서 확인한다. 단계·벨 시계·주간 진행을 미리 넣는 것은 준비로만 하고,
 ## 확인하는 동작은 진짜 클릭이나 진짜 프레임(main이 Rush.tick → Trip.advance → take_events)으로 한다.
 ## ① 대형·VIP·급송 "+금액"의 색·글자가 보통과 다름
-## ② 벨 → 말풍선이 작은 화면 visible_rects() 안, [받기] 클릭 → 사라지고 구석 줄 "급송 N건 남음", 건수가 줄다 0이면 사라짐
-## ③ 안 받으면 벨 시간(30초) 뒤 사라짐 (남은 시간 막대가 줄어듦, 급송 0건)   ④ [설정]에서 끄면 저장되고 다시 켜도 꺼져 있음 (벨 안 울림)
+## ② 벨 → 전화 아이콘(v7-bal: 말풍선 대신)이 작은 화면 visible_rects() 안, 아이콘 클릭 → 사라지고 구석 줄 "급송 N건 남음", 건수가 줄다 0이면 사라짐
+## ③ 안 받으면 벨 시간 뒤 사라짐 (아이콘 아래 남은 시간 막대가 줄어듦, 급송 0건)   ④ [설정]에서 끄면 저장되고 다시 켜도 꺼져 있음 (벨 안 울림)
 ## ⑤ 물류센터 [창고·할 일] 주간 목표 줄이 진행·달성을 보여 줌, 달성 알림, 주가 바뀌면 0   ⑥ en에 한글·키 없음
-## ⑦ 창 크기: 작은 화면 3가지에서 말풍선·"급송 N건 남음"이 동네 안·보이는 곳 안·건물·집과 안 겹침 (글자 10개 떠도 사각형 30개 이하),
+## ⑦ 창 크기: 작은 화면 3가지에서 전화 아이콘·"급송 N건 남음"이 동네 안·보이는 곳 안·건물·집과 안 겹침 (글자 10개 떠도 사각형 30개 이하),
 ##    큰 화면 5가지에서 물류센터 화면·[설정]이 창 안
 ## U2 ① [명장] 칸 잠김 글 → +10 뒤 요일 고르기 창   ② 요일 클릭 → 저장, 바꾸면 "다음 주부터"   ③ 예고·방문 알림
 ##    ④ 방문 중 강화 칸에 보너스 줄, [보험] 켜면 비용·확률 글이 바뀌고 실제 빠지는 돈 = 비용 + 보험 요금
@@ -88,20 +88,18 @@ func _run() -> void:
 			seen.get("normal", ["없음"])[0], seen.get("large", ["없음"])[0], seen.get("vip", ["없음"])[0], seen.get("rush", ["없음"])[0], colors.size()])
 	await _close(m)
 
-	# ② 벨 → 말풍선 (작은 화면 보이는 곳 안) → [받기] → "급송 20건 남음" → 줄어 0이면 사라짐
+	# ② 벨 → 전화 아이콘 (작은 화면 보이는 곳 안) → 아이콘 클릭 → "급송 N건 남음" → 줄어 0이면 사라짐
 	Save.delete_file(TEST_SAVE)
 	m = await _launch()
 	town = m.town
 	m.state.quest_index = Quest.count(b)
 	await _ring(m)
-	var bubble: Rect2 = town.rush_bubble.get_global_rect()
-	var ring_ok: bool = town.rush_bubble.is_visible_in_tree() and _enclosed(m.visible_rects(), bubble) \
-			and bubble.encloses(town.rush_button.get_global_rect()) and town._rush_text.text == "급송 요청!" and town.rush_button.text == "받기"
+	var ring_ok: bool = town.rush_button.is_visible_in_tree() and _enclosed(m.visible_rects(), town.rush_button.get_global_rect())
 	_click(town.rush_button.get_global_rect().get_center())
 	var saved = _saved_state(b)
 	await _frames(2)
 	var left_rect: Rect2 = town._rush_left.get_global_rect()
-	var accept_ok: bool = not town.rush_bubble.visible and Rush.parcels_left(m.state) == b.rush_parcels \
+	var accept_ok: bool = not town.rush_button.visible and Rush.parcels_left(m.state) == b.rush_parcels \
 			and town._rush_left.is_visible_in_tree() and town._rush_left.text == "급송 %d건 남음" % b.rush_parcels \
 			and _enclosed(m.visible_rects(), left_rect) and saved != null and saved.rush_left == b.rush_parcels and not m.is_full()
 	var first_text: String = town._rush_left.text
@@ -119,12 +117,12 @@ func _run() -> void:
 	await _frames(2)
 	Engine.time_scale = 0.0
 	_report(ring_ok and accept_ok and count_ok and counts.size() > 2 and Rush.parcels_left(m.state) == 0 and not town._rush_left.visible,
-			"② 벨 → 말풍선 '%s [%s]' (작은 화면 보이는 곳 안), [받기] → 말풍선 사라짐·'%s'·저장, 남은 건수 %s… → 0이면 사라짐" % [
-			town._rush_text.text, town.rush_button.text, first_text, counts.slice(0, 5)])
+			"② 벨 → 전화 아이콘 (작은 화면 보이는 곳 안), 아이콘 클릭 → 아이콘 사라짐·'%s'·저장, 남은 건수 %s… → 0이면 사라짐" % [
+			first_text, counts.slice(0, 5)])
 
-	# ③ 안 받으면: 남은 시간 막대가 줄고, 벨 시간이 끝나면 말풍선 사라짐, 급송 0건
+	# ③ 안 받으면: 남은 시간 막대가 줄고, 벨 시간이 끝나면 전화 아이콘 사라짐, 급송 0건
 	await _ring(m)
-	var bar0: float = town._rush_bar.value
+	var bar0: float = town.rush_button.ratio
 	var ring0: float = m.state.rush_ring
 	Engine.time_scale = 10.0
 	var bar_mid := -1.0
@@ -133,14 +131,14 @@ func _run() -> void:
 	while Rush.is_ringing(m.state) and Time.get_ticks_msec() - t0 < 20000:
 		await process_frame
 		if Rush.is_ringing(m.state):
-			shown_while = shown_while and town.rush_bubble.visible
+			shown_while = shown_while and town.rush_button.visible
 			if bar_mid < 0.0 and m.state.rush_ring < b.rush_ring_seconds / 2.0:
-				bar_mid = town._rush_bar.value
+				bar_mid = town.rush_button.ratio
 	await _frames(2)
 	Engine.time_scale = 0.0
 	_report(ring0 > b.rush_ring_seconds - 1.0 and ring0 <= b.rush_ring_seconds and bar0 > 0.95 and bar_mid > 0.0 and bar_mid < 0.55 and shown_while and not Rush.is_ringing(m.state)
-			and not town.rush_bubble.visible and Rush.parcels_left(m.state) == 0 and not town._rush_left.visible,
-			"③ 안 받으면: 벨 %s초 동안 말풍선, 막대 %.2f → %.2f → 끝나면 사라짐, 급송 0건" % [Fmt.num(ring0), bar0, bar_mid])
+			and not town.rush_button.visible and Rush.parcels_left(m.state) == 0 and not town._rush_left.visible,
+			"③ 안 받으면: 벨 %s초 동안 전화 아이콘, 막대 %.2f → %.2f → 끝나면 사라짐, 급송 0건" % [Fmt.num(ring0), bar0, bar_mid])
 	await _close(m)
 
 	# ④ [설정] 급송 요청 전화 끄기 → 저장 → 다시 켜도 꺼짐, 벨 안 울림
@@ -163,7 +161,7 @@ func _run() -> void:
 	await _frames(30)
 	await _wait(0.5)
 	Engine.time_scale = 0.0
-	var quiet: bool = not m.state.rush_enabled and not Rush.is_ringing(m.state) and not m.town.rush_bubble.visible
+	var quiet: bool = not m.state.rush_enabled and not Rush.is_ringing(m.state) and not m.town.rush_button.visible
 	_click(m.town.building_rects()["tuning"].get_center())
 	await _frames(3)
 	_click(m.settings_button.get_global_rect().get_center())
@@ -211,14 +209,14 @@ func _run() -> void:
 	var fit_ko: Array = await _check_fits(m, b)
 	await _close(m)
 
-	# ⑥ en: "+금액" 앞 글자, 말풍선, "급송 N건 남음", [설정] 한 줄, 주간 목표 줄·알림에 한글·키 없음  ⑦ en도 창 크기
+	# ⑥ en: "+금액" 앞 글자, "급송 N건 남음", [설정] 한 줄, 주간 목표 줄·알림에 한글·키 없음  ⑦ en도 창 크기
 	TranslationServer.set_locale("en")
 	Save.delete_file(TEST_SAVE)
 	m = await _launch()
 	town = m.town
 	m.state.quest_index = Quest.count(b)
 	await _ring(m)
-	var texts := [town._rush_text.text, town.rush_button.text]
+	var texts := []
 	_click(town.rush_button.get_global_rect().get_center())
 	await _frames(2)
 	texts.append(town._rush_left.text)
@@ -235,7 +233,7 @@ func _run() -> void:
 	await _frames(2)
 	texts.append_array(_visible_texts(m.settings))
 	var bad := texts.filter(func(x): return _untranslated(String(x)))
-	_report(bad.is_empty() and town.rush_button.text == "Accept",
+	_report(bad.is_empty(),
 			"⑥ en 급송·대형·VIP·[설정]·주간 목표 글자 %d개에 한글·키 없음 %s" % [texts.size(), bad])
 	print("    en: %s" % [texts])
 	await _close(m)
@@ -246,7 +244,7 @@ func _run() -> void:
 	var fit_en: Array = await _check_fits(m, b)
 	await _close(m)
 	_report(fit_ko.is_empty() and fit_en.is_empty(),
-			"⑦ ko·en 작은 화면 %d가지: 말풍선·'급송 N건 남음'이 동네 안·보이는 곳 안, 건물·집·할 일 줄과 안 겹침, 글자 10개 + 말풍선 + 처음 말풍선에도 사각형 30개 이하 / 큰 화면 %d가지: 물류센터 [창고·할 일]·[설정]이 창 안, [작게]·[설정] 버튼과 안 겹침 %s %s" % [
+			"⑦ ko·en 작은 화면 %d가지: 전화 아이콘·'급송 N건 남음'이 동네 안·보이는 곳 안, 건물·집·할 일 줄과 안 겹침, 글자 10개 + 전화 아이콘 + 처음 말풍선에도 사각형 30개 이하 / 큰 화면 %d가지: 물류센터 [창고·할 일]·[설정]이 창 안, [작게]·[설정] 버튼과 안 겹침 %s %s" % [
 			SMALL_SIZES.size(), FIT_SIZES.size(), fit_ko, fit_en])
 
 	await _u2(b)
@@ -278,7 +276,7 @@ func _kind_of(text: String) -> String:
 func _ring(m: Node) -> void:
 	m.state.rush_next = 0.2
 	Engine.time_scale = 1.0
-	await _until(func(): return Rush.is_ringing(m.state) and m.town.rush_bubble.visible, 5.0)
+	await _until(func(): return Rush.is_ringing(m.state) and m.town.rush_button.visible, 5.0)
 	Engine.time_scale = 0.0
 	await _frames(2)
 
@@ -295,7 +293,7 @@ func _check_fits(m: Node, b: Balance) -> Array:
 		m.screen.enter_small()
 		root.size = size
 		await _frames(3)
-		var r := Rect2(town.rush_bubble.position, town.rush_bubble.size)
+		var r := Rect2(town.rush_button.position, town.rush_button.size)
 		var others: Array = [["할 일 줄", Rect2(town._quest_label.position, town._quest_label.size)], ["구석 줄", Rect2(town._hud.position, town._hud.size)]]
 		for id: String in Town.BUILDINGS:
 			others.append([id, town.building_rects()[id]])
@@ -303,16 +301,16 @@ func _check_fits(m: Node, b: Balance) -> Array:
 			others.append(["집", town.view_rect(town._house_rect(spot))])
 		if not town.hint.visible:
 			bad.append("%s 처음 말풍선이 안 떠 있음 (확인 준비)" % size)
-		if not town.rush_bubble.visible or not town.area().encloses(r) or not _enclosed(m.visible_rects(), Rect2(r.position + town.global_position, r.size)):
-			bad.append("%s 말풍선 %s 동네 밖이거나 보이는 곳 밖" % [size, r])
+		if not town.rush_button.visible or not town.area().encloses(r) or not _enclosed(m.visible_rects(), Rect2(r.position + town.global_position, r.size)):
+			bad.append("%s 전화 아이콘 %s 동네 밖이거나 보이는 곳 밖" % [size, r])
 		for o in others:
 			if r.intersects(o[1]):
-				bad.append("%s 말풍선 ↔ %s" % [size, o[0]])
+				bad.append("%s 전화 아이콘 ↔ %s" % [size, o[0]])
 		for i in 10:   # 글자가 가장 많이 떴을 때도 사각형 30개 이하
 			town.show_payout(i % Feel.TOWN_HOUSES, 1875 * (i + 1), ["normal", "large", "vip"][i % 3], i % 2 == 0)
 		await _frames(1)
 		if m.visible_rects().size() > 30:
-			bad.append("%s 말풍선 + 글자 10개: 보이는 곳 사각형 %d개 (30개 이하)" % [size, m.visible_rects().size()])
+			bad.append("%s 전화 아이콘 + 글자 10개: 보이는 곳 사각형 %d개 (30개 이하)" % [size, m.visible_rects().size()])
 	_click(town.rush_button.get_global_rect().get_center())
 	await _frames(2)
 	for size: Vector2i in SMALL_SIZES:

@@ -24,6 +24,9 @@
 ##      물류센터 [창업] 두 번째 누름 → Company.found → 알림·저장. 꺼둔 동안 요약에 대리점이면 직원 몫·세금 줄
 ##      U2: 대리점이면 띠에 사무실 건물·구석 줄 "시내 N위"(Company.rank), 사무실 [보조 트럭 사기] → Company.buy_helper → 저장,
 ##      처음 1위(rank_first 이벤트) → 알림
+## v7-bal: NPC가 온 날(명장·보험사·마술사·부품상) 띠·큰 화면 오른쪽 위 편지봉투 + 느낌표 → 누르면 큰 화면 + NPC 대화 창(npc_dialog.gd).
+##      한 번 열면 그날은 느낌표만 꺼짐. 보험사 [예] → 가입 → 저장. 급송 전화는 전화 아이콘 → 큰 화면 없이 Rush.accept.
+##      누가 왔는지·이벤트·가입은 _visitor_info() 한 곳에서 받음 (특별 NPC 3명은 계산 C1 전이라 임시 칸 visitor_stub)
 extends Control
 
 const Ability = preload("res://scripts/core/ability.gd")
@@ -46,6 +49,7 @@ const GaragePanel = preload("res://scripts/ui/garage_panel.gd")
 const ReturnPopup = preload("res://scripts/ui/return_popup.gd")
 const SettingsPanel = preload("res://scripts/ui/settings_panel.gd")
 const DayPicker = preload("res://scripts/ui/day_picker.gd")
+const NpcDialog = preload("res://scripts/ui/npc_dialog.gd")
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
 
 const AUTOSAVE_SECONDS := 30.0        ## 30초마다 저장 (배속과 상관없이 진짜 30초)
@@ -69,6 +73,12 @@ var small_button: Button     ## 큰 화면 [작게]
 var settings_button: Button  ## 큰 화면 [설정]
 var settings: SettingsPanel  ## [설정]을 누르면 가운데 뜨는 "화면: 전체 화면 / 창 모드"
 var day_picker: DayPicker    ## 명장 요일 고르기 창 (큰 화면 튜닝숍 가운데)
+var npc_dialog: NpcDialog    ## NPC 대화 창 (편지봉투를 누르면 큰 화면 가운데)
+## shortcut: 특별 NPC 3명(보험사·마술사·부품상)은 계산 C1(Visitor)이 오기 전이라 이 칸에서 받음 (확인 스크립트가 넣음, 게임에서는 늘 빔).
+##   C1 합치면 _visitor_info()를 Visitor.today / insurer_event / is_insured + balance 숫자로 바꾸고 이 칸은 지움
+var visitor_stub := {}
+## 편지봉투를 연 방문 (_letter_key). 같은 방문이면 느낌표를 끔. 저장 안 함 (껐다 켜면 그날 느낌표가 한 번 더 뜸)
+var _letter_read := ""
 var rng := RandomNumberGenerator.new()
 ## 처음 말풍선 "건물을 눌러보세요"를 이미 봤나 (건물·작은 버튼을 한 번 누르면 true. 작은 화면에서 false일 때만 뜸)
 var hint_seen := false
@@ -181,6 +191,14 @@ func _ready() -> void:
 	day_picker.day_picked.connect(_on_day_picked)
 	day_picker.close_pressed.connect(func(): day_picker.visible = false)
 
+	npc_dialog = NpcDialog.new()
+	npc_dialog.visible = false
+	add_child(npc_dialog)
+	npc_dialog.yes_pressed.connect(_on_npc_yes)
+	npc_dialog.no_pressed.connect(func(): npc_dialog.visible = false)
+	npc_dialog.close_pressed.connect(func(): npc_dialog.visible = false)
+	town.letter_pressed.connect(_open_letter)
+
 	popup = ReturnPopup.new()
 	popup.visible = false
 	add_child(popup)
@@ -218,6 +236,7 @@ func _layout() -> void:
 	if not full:
 		settings.visible = false
 		day_picker.visible = false   # 작게 하면 닫힘 (요일은 [명장] 칸에서 언제든)
+		npc_dialog.visible = false   # 작게 하면 닫힘 (편지봉투는 그날 동안 남음)
 	_debug_label.visible = full and OS.is_debug_build()
 	town.show_ground = full
 	town.set_hint(not full and not hint_seen)
@@ -241,6 +260,7 @@ func _layout() -> void:
 	settings_button.position = small_button.position - Vector2(settings_button.size.x + m * 0.5, 0)
 	settings.set_ui_scale(Feel.GARAGE_SCALE * _ui_scale)
 	day_picker.set_ui_scale(Feel.GARAGE_SCALE * _ui_scale)
+	npc_dialog.set_ui_scale(Feel.GARAGE_SCALE * _ui_scale)
 	_debug_label.add_theme_font_size_override("font_size", int(roundf(Feel.DEBUG_FONT_SIZE * _ui_scale)))
 
 	panel.set_ui_scale(Feel.GARAGE_SCALE * _ui_scale)
@@ -282,6 +302,10 @@ func _process(delta: float) -> void:
 	town.set_rush(Rush.is_ringing(state), state.rush_ring / balance.rush_ring_seconds, Rush.parcels_left(state))
 	town.set_quest(_quest_line())
 	town.set_master_visit(Master.is_visiting(state, now))
+	var visitor := _visitor_info()
+	town.set_letter(visitor["who"] != "", _letter_key(visitor) != _letter_read)
+	if npc_dialog.visible and npc_dialog.who != visitor["who"]:
+		npc_dialog.visible = false   # 날이 바뀌어 NPC가 떠남
 	town.set_office(Company.stage(state) >= GameState.AGENCY)
 	town.set_rank(Company.rank(balance, state))
 	panel.now_local = now
@@ -300,6 +324,9 @@ func _process(delta: float) -> void:
 	if day_picker.visible:
 		day_picker.reset_size()
 		day_picker.position = ((get_viewport_rect().size - day_picker.size) / 2.0).max(Vector2.ZERO)
+	if npc_dialog.visible:
+		npc_dialog.reset_size()
+		npc_dialog.position = ((get_viewport_rect().size - npc_dialog.size) / 2.0).max(Vector2.ZERO)
 	if _measuring:
 		_measure_seconds += delta
 	if _debug_label.visible:
@@ -530,6 +557,43 @@ func _on_rush_picked(on: bool) -> void:
 func _on_rush_accept() -> void:
 	if Rush.accept(state, balance):
 		_save()
+
+
+## 오늘 와 있는 NPC: { who: "master" / "insurer" / "magician" / "dealer" / "", event: 보험사 이벤트 id, insured: 오늘 가입했나,
+##   효과 숫자: bonus(명장 보너스 id) / up_mult(마술사) / gift·drop_to(부품상) / fee_mult·discount·recovery_star(보험사) }
+## 명장 날엔 특별 NPC가 안 옴 (계산 쪽 규칙)
+func _visitor_info() -> Dictionary:
+	if Master.is_visiting(state, now_local()):
+		return { "who": "master", "event": "", "insured": false, "bonus": state.active_bonus }
+	var info := { "who": "", "event": "", "insured": false }
+	info.merge(visitor_stub, true)   # shortcut: C1 전 임시 칸 (위 visitor_stub)
+	return info
+
+
+## 이 방문을 가리키는 글자 (NPC + 현지 날짜 번호). 편지봉투를 열었나 비교용
+func _letter_key(info: Dictionary) -> String:
+	return "%s:%d" % [info["who"], floori(float(now_local()) / Master.SECONDS_PER_DAY)]
+
+
+## 편지봉투 → 느낌표 끔 → (작은 화면이면 큰 화면으로) NPC 대화 창
+func _open_letter() -> void:
+	var info := _visitor_info()
+	if info["who"] == "":
+		return
+	_letter_read = _letter_key(info)
+	town.set_letter(true, false)
+	npc_dialog.open(balance, info)
+	if not is_full():
+		screen.enter_full()
+
+
+## 보험사 [예] → 가입 (보험사가 온 날만) → 저장 → 창에 "가입됨"
+func _on_npc_yes() -> void:
+	if _visitor_info()["who"] != "insurer":
+		return
+	visitor_stub["insured"] = true   # shortcut: C1 합치면 Visitor.join_insurance(state, now_local())
+	_save()
+	npc_dialog.open(balance, _visitor_info())
 
 
 ## 지금 현지 시각 = 현지 시각을 1970-01-01 0시(현지)부터 센 초 (Master가 요일·주를 셈). 확인 스크립트는 now_local_override

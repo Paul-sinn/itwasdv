@@ -208,10 +208,10 @@ func _run() -> void:
 	await _wait(0.3)
 	await _shot("small_point_dot")
 
-	# 11) v6b: 작은 화면 급송 전화 말풍선 + 대형·VIP·급송 "+금액"
+	# 11) v6b: 작은 화면 급송 전화 아이콘 (v7-bal: 말풍선 대신) + 대형·VIP·급송 "+금액"
 	m.state.rush_left = 0
 	m.state.rush_next = 0.1   # 곧 벨
-	await _until(func(): return m.town.rush_bubble.visible, 3.0)
+	await _until(func(): return m.town.rush_button.visible, 3.0)
 	m.town.show_payout(0, 5625, "large")
 	m.town.show_payout(1, 9375, "vip")
 	m.town.show_payout(2, 3750, "normal", true)

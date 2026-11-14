@@ -224,6 +224,7 @@ const NPC_FACE_SIZE := 34.0
 const NPC_FACE_COLORS := {
 	"tuning": Color(0.85, 0.62, 0.45), "depot": Color(0.55, 0.70, 0.90), "car_center": Color(0.75, 0.80, 0.55),
 	"office": Color(0.80, 0.70, 0.95),
+	"master": Color(0.40, 0.90, 1.0), "insurer": Color(0.55, 0.85, 1.0), "magician": Color(0.74, 0.45, 1.0), "dealer": Color(0.80, 0.62, 0.35),
 }
 
 # --- v6-bal: 처음 켰을 때 말풍선 "건물을 눌러보세요" (작은 화면에서만, 건물·작은 버튼을 한 번 누를 때까지) ---
@@ -249,18 +250,10 @@ const COLOR_POINT_DOT := Color(1.0, 0.45, 0.35)
 const COLOR_PAYOUT_LARGE := Color(0.45, 0.80, 1.0)   ## "대형 +금액"
 const COLOR_PAYOUT_VIP := Color(0.85, 0.60, 1.0)     ## "VIP +금액"
 const COLOR_PAYOUT_RUSH := Color(1.0, 0.55, 0.30)    ## "급송 +금액" (보통 배송일 때. 대형·VIP면 그 색)
-## 급송 전화 말풍선: 위 길(y 68)과 구석 줄 사이, 위 길의 두 집 사이를 꽉 채움 (양옆 집과 보이는 곳 사각형 하나로 합쳐짐)
-const RUSH_BUBBLE_RECT := Rect2(260, 30, 150, 0)     ## x·폭·위쪽 (동네 설계 좌표). 높이는 글자만큼
-const RUSH_JOIN_PX := 6.0                            ## 말풍선과 이만큼 가까운 집은 같은 사각형으로 (설계 좌표)
-const RUSH_FONT_SIZE := 11
-const RUSH_BUTTON_FONT_SIZE := 11
-const RUSH_PAD := Vector2(6, 2)                      ## 말풍선 안 여백 (좌우, 위아래)
-const RUSH_RADIUS := 5
-const RUSH_BAR_HEIGHT := 3.0                         ## 남은 시간 막대
-const COLOR_RUSH_BG := Color(1.0, 0.93, 0.80)
-const COLOR_RUSH_TEXT := Color(0.15, 0.13, 0.10)
-const COLOR_RUSH_BUTTON := Color(0.90, 0.42, 0.20)
-const COLOR_RUSH_BAR_BG := Color(0.80, 0.72, 0.60)
+## 급송 전화 아이콘 (v7-bal: 말풍선 대신. 자리·크기는 아래 v7-bal 칸 TOWN_ICON_*)
+const COLOR_RUSH_BG := Color(1.0, 0.93, 0.80)        ## 남은 시간 막대 (남은 쪽)
+const COLOR_RUSH_BUTTON := Color(0.90, 0.42, 0.20)   ## 전화 아이콘 바탕
+const COLOR_RUSH_BAR_BG := Color(0.55, 0.25, 0.12)   ## 남은 시간 막대 (지나간 쪽)
 const COLOR_RUSH_LEFT := Color(1.0, 0.65, 0.40)      ## 구석 줄 "급송 N건 남음"
 
 # --- v6b: 명장 방문일·보험 (튜닝숍 [명장] 칸, 요일 고르기 창, 강화 칸 [보험], 띠의 튜닝숍 표시) ---
@@ -283,3 +276,13 @@ const COLOR_RANK := Color(1.0, 0.72, 0.45)            ## 구석 줄 "시내 N위
 const COLOR_RANK_FIRST := Color(1.0, 0.55, 0.20)      ## 순위표 내 줄이 1위일 때 (보통 내 줄은 COLOR_STAR)
 const COLOR_LOCKED := Color(0.45, 0.47, 0.50)         ## 잠긴 순위표 줄 (지역·전국·세계)
 const OFFICE_ROW_SIZE := 12                           ## 순위표·세율표 한 줄 글자 (v0 패널 기준. 11줄이 1280x720에 들어가게)
+
+# --- v7-bal: 띠 오른쪽 위 아이콘 (편지봉투 = NPC가 온 날, 전화 = 급송 벨), NPC 대화 창 ---
+## 오른쪽 끝부터 편지봉투 → 전화 순으로 붙여 놓음 (보이는 것만). 알림은 그 왼쪽에 오른쪽 맞춤
+const TOWN_ICON_RIGHT_TOP := Vector2(472, 4)   ## 아이콘 줄 오른쪽 위 끝 (동네 설계 좌표)
+const TOWN_ICON_SIZE := Vector2(24, 18)        ## 아이콘 하나 (작은 화면 기준. 큰 화면은 동네 글자 배수만큼)
+const TOWN_ICON_GAP := 4.0                     ## 아이콘 사이·아이콘과 알림 사이
+const TOWN_ICON_BAR := 0.14                    ## 전화 아이콘 아래 남은 시간 막대 높이 (아이콘 높이의 몇 배)
+const COLOR_LETTER := Color(0.97, 0.93, 0.82)       ## 편지봉투 종이
+const COLOR_LETTER_LINE := Color(0.45, 0.36, 0.25)  ## 봉투 테두리·덮개 선
+const COLOR_ALERT := Color(0.92, 0.22, 0.20)        ## 느낌표 동그라미

@@ -738,14 +738,14 @@ func _u2(b: Balance) -> void:
 func _office_overlaps(m: Node) -> Array:
 	var town = m.town
 	var bad := []
-	town.set_rush(true, 1.0, 0)   # 준비: 급송 말풍선·처음 말풍선을 띄운 채로 (자리만 봄)
+	town.set_rush(true, 1.0, 0)   # 준비: 급송 전화 아이콘·처음 말풍선을 띄운 채로 (자리만 봄)
 	town.set_hint(true)
 	for size: Vector2i in SMALL_SIZES:
 		root.size = size
 		await _frames(3)
 		var sign: Label = town._signs[Town.OFFICE]
 		var r: Rect2 = town.building_rects()[Town.OFFICE].grow(Feel.BUILDING_GLOW_PX * town.zoom).merge(Rect2(sign.position, sign.size))
-		var others := [["말풍선", Rect2(town.rush_bubble.position, town.rush_bubble.size)], ["처음 말풍선", Rect2(town.hint.position, town.hint.size)],
+		var others := [["전화 아이콘", Rect2(town.rush_button.position, town.rush_button.size)], ["처음 말풍선", Rect2(town.hint.position, town.hint.size)],
 				["구석 줄", Rect2(town._hud.position, town._hud.size).merge(Rect2(town._quest_label.position, town._quest_label.size))]]
 		for id: String in Town.BUILDINGS:
 			others.append([id, town.building_rects()[id].grow(Feel.BUILDING_GLOW_PX * town.zoom)])

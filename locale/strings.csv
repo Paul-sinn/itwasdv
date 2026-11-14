@@ -217,8 +217,6 @@ NPC_CAR_CENTER_HELLO,스페어 엔진 하나쯤은 챙겨 두는 게 좋아요.,
 TOWN_PAY_LARGE,대형,Large
 TOWN_PAY_VIP,VIP,VIP
 TOWN_PAY_RUSH,급송,Rush
-TOWN_RUSH_CALL,급송 요청!,Rush order!
-TOWN_RUSH_ACCEPT,받기,Accept
 TOWN_RUSH_LEFT,급송 %d건 남음,Rush: %d left
 SETTINGS_RUSH,급송 요청 전화,Rush order calls
 SETTINGS_ON,켜기,On
@@ -332,3 +330,20 @@ STAGE_NATIONAL,전국 택배사,National courier
 STAGE_GLOBAL,글로벌,Global
 TOWN_RANK,시내 %d위,City #%d
 NOTICE_RANK_FIRST,시내 1위 대리점이 됐어요! 다음 업데이트에서 지역 진출,You're the #1 agency in the city! Regional expansion comes in a future update
+NPC_MASTER,명장,Master Mechanic
+NPC_MASTER_HELLO,"오늘 하루, 엔진은 내가 봐 주지.","Today, I'll look after your engine."
+NPC_INSURER,보험사 직원,Insurance agent
+NPC_INSURER_HELLO,오늘 보험 가입하시겠어요?,Would you like insurance today?
+NPC_MAGICIAN,마술사,Magician
+NPC_MAGICIAN_HELLO,"오늘 하루, 세팅에 마법을 걸어 드리죠.","For today only, I'll cast a spell on your setups."
+NPC_DEALER,중고 부품상,Used parts dealer
+NPC_DEALER_HELLO,"좋은 물건 하나 들고 왔어. 선물이야.","Brought you something good. It's a gift."
+NPC_EFFECT_MASTER,오늘 효과: %s,Today: %s
+NPC_EFFECT_MAGICIAN,오늘 효과: 세팅 돌리기 등급업 확률 ×%s,Today: setup roll grade-up chance ×%s
+NPC_EFFECT_DEALER,"선물: 고급 스페어 엔진 %d개 (퍼지면 +%d 대신 +%d에서 다시, 보관 가능)","Gift: %d premium spare engine (a blow-up restarts you not at +%d but at +%d; keep it for later)"
+NPC_EVENT_PARTNER_DISCOUNT,오늘 이벤트 · 제휴 할인: 가입하면 오늘 강화 비용 %s 할인,Today's event · Partner discount: join and today's upgrades cost %s less
+NPC_EVENT_RECOVERY,"오늘 이벤트 · 복구 보험: 가입 안 해도 오늘 퍼지면 +%d 대신 +%d에서 다시","Today's event · Recovery cover: even without insurance, a blow-up today restarts you not at +%d but at +%d"
+NPC_INSURER_RULE,"보험료 = 강화 비용 × 퍼짐 확률 × %s. 오늘 퍼질 수 있는 강화마다 같이 나가고, 퍼짐이 나와도 단계 유지","Fee = upgrade cost × blow-up chance × %s, paid with every risky upgrade today. A blow-up keeps your level"
+NPC_INSURED,가입됨 · 오늘 퍼질 수 있는 강화마다 보험료가 같이 나가요,Insured · the fee is paid with every risky upgrade today
+NPC_YES,예,Yes
+NPC_NO,아니오,No
