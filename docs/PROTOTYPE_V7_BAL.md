@@ -120,6 +120,16 @@ static func route_id(s: GameState, i: int) -> String                   ## "town"
 ## Trip._stop 과 싣는 시간 둘 다 상하차 %로 줄임
 ## 기름값 절감 합은 fuel_cut_cap, 정비비 감소 합은 maint_cut_cap 에서 각각 자름
 
+## (2026-11-14 C1 뒤 약속에 넣음. C1이 만든 것)
+## Economy.insured_at(b, star: int, s: GameState) -> bool      ## 이 단계 강화를 보험이 덮나 (가입 + 표의 퍼짐 확률 > 0)
+## Economy.insure_fee(b, star: int, s: GameState) -> int       ## 보험료 식 본체 (Enhance.insure_fee가 부름)
+## GameState.usable_spares() -> int                            ## 보통 + (켜져 있으면) 고급
+## Visitor.INSURER_EVENTS := ["partner_discount", "recovery"]
+## Enhance.force_destroy(state, b, i) -> { "drop_to": int, "premium": bool }
+## Enhance.chances_for: 가입한 날 +18 이상이면 퍼짐을 실패에 합친 확률 (실제로 나올 결과)
+## Visitor.tick은 Master.tick 끝에서 불림 (화면이 따로 안 불러도 됨)
+## 화면이 효과 줄에 쓰는 balance 칸: b.magician_up_mult, b.dealer_premium_spares, b.premium_drop_to, b.insure_fee_mult, b.partner_discount, b.recovery_star (이름은 balance.gd 기준)
+## 첫 방문: 열린 날 + 1~max_days(28)일 사이 (그 뒤는 21~28일). 형식 3~10 저장은 그대로 읽음 (쿠폰만 버림)
 ## Save: 형식 11. 새 칸 저장, coupons 지움. 출시 전이라 옛 파일은 지금 규칙대로(이름 바꿔 남기고 새로 시작)
 ```
 
