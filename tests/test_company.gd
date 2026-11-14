@@ -77,7 +77,7 @@ func test_json_matches_spec() -> void:
 	check_eq([b.setting_options["maint_cut"]["kind"], b.setting_options["maint_cut"]["weight"], b.setting_options["maint_cut"]["values"]],
 			["own", 10.0, PackedFloat64Array([0.18, 0.30, 0.45, 0.55, 0.60])], "정비비 감소 (v7-bal C4 시뮬)")
 	var tail := []
-	for q in b.quests.slice(-3):
+	for q in b.quests.slice(-6, -3):   # v7b 3개 앞
 		tail.append([q["id"], q["kind"], q["target"], q["part"], q["xp"], q["money"]])
 	check_eq(tail, [["found_agency", "agency", 1, "", 1000, 5000000], ["first_helper", "helpers", 1, "", 800, 3000000],
 			["tire_first", "part_rolled", 1, "tire", 600, 2000000]], "퀘스트 끝 3개")
@@ -306,7 +306,7 @@ func test_today() -> void:
 	var s := _game([9, 9], true)
 	var rng := _rng(9)
 	Master.tick(s, b, MON_1116 + 3600, rng)
-	check_eq(Company.today(s), { "sales": 0, "staff": 0, "tax": 0, "profit": 0 }, "처음 0")
+	check_eq(Company.today(s), { "sales": 0, "staff": 0, "tax": 0, "profit": 0, "contract": 0 }, "처음 0")
 	var ev := _run(s, 0, 1, rng) + _run(s, 1, 1, rng)
 	var gross := 0
 	for e in ev:
@@ -323,7 +323,7 @@ func test_today() -> void:
 	Master.tick(s, b, MON_1116 + DAY - 1, rng)
 	check_eq(Company.today(s), t2, "같은 날 23:59:59: 그대로")
 	Master.tick(s, b, MON_1116 + DAY, rng)
-	check_eq(Company.today(s), { "sales": 0, "staff": 0, "tax": 0, "profit": 0 }, "다음 날 0시: 0")
+	check_eq(Company.today(s), { "sales": 0, "staff": 0, "tax": 0, "profit": 0, "contract": 0 }, "다음 날 0시: 0")
 	# 새 게임·옛 저장(날짜 모름): 첫 tick 전에 번 것은 그날 것으로 남음
 	var fresh := _game([0], false)
 	_run(fresh, 0, 1, rng)
@@ -467,7 +467,7 @@ func test_helper_enhance_setting_insure_kinds() -> void:
 ## ⑭ 퀘스트 3개: 대리점 창업, 보조 트럭 1대 사기, 타이어·휠 처음 돌리기
 func test_quests() -> void:
 	var s := GameState.new_game()
-	s.quest_index = Quest.count(b) - 3
+	s.quest_index = Quest.count(b) - 6   # v7b 3개 앞
 	s.money = b.agency_price
 	check_eq([Quest.current(b, s)["id"], Quest.progress(b, s)], ["found_agency", [0, 1]], "창업 전")
 	check(not Quest.check(s, b), "창업 전에 끝남")
@@ -484,7 +484,7 @@ func test_quests() -> void:
 	check(not Quest.check(s, b), "적재함 돌렸는데 타이어 퀘스트가 끝남")
 	check(Setting.try_roll(s, b, 0, "tire", _rng(14))["ok"], "타이어 안 돌려짐")
 	check(Quest.check(s, b), "타이어 돌렸는데 안 끝남")
-	check_eq(Quest.current(b, s), {}, "다 끝남")
+	check_eq(Quest.current(b, s)["id"], "long_first", "다음은 v7b 장거리 퀘스트")
 	var done := _events(s, "quest_done").map(func(e): return [e["id"], e["xp"], e["money"]])
 	check_eq(done, [["found_agency", 1000, 5000000], ["first_helper", 800, 3000000], ["tire_first", 600, 2000000]], "알림")
 

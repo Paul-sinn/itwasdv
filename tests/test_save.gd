@@ -134,11 +134,11 @@ func test_format_12_dict() -> void:
 	check_eq(d["version"], 12, "저장 형식")
 	var keys := d.keys()
 	keys.sort()
-	check_eq(keys, ["abilities", "ability_points", "company_stage", "driver_level", "driver_xp", "insured_day", "insurer_event", "long_laps", "long_unlocked", "master_bonus",
+	check_eq(keys, ["abilities", "ability_points", "company_stage", "contract_carry", "contracts", "driver_level", "driver_xp", "insured_day", "insurer_event", "long_laps", "long_unlocked", "master_bonus",
 			"master_bonus_week", "master_day", "master_next_bonus", "master_next_day", "master_notice_week", "master_unlocked", "master_visit_week",
 			"master_week", "milestones_done", "money", "night_level", "parcels_total", "parts_rolled", "premium_spares", "quest_index",
 			"rank_first_done", "reputation", "rush_enabled", "rush_left", "rush_next", "rush_ring", "saved_at_utc", "setting_rolls",
-			"spare_drop_carry", "spares", "spares_bought", "today_day", "today_sales", "today_staff", "today_tax", "trucks", "use_premium", "version",
+			"spare_drop_carry", "spares", "spares_bought", "today_contract", "today_day", "today_sales", "today_staff", "today_tax", "trucks", "use_premium", "version",
 			"visitor_day", "visitor_next", "warehouse_level", "weekly_done", "weekly_parcels", "weekly_week"],
 			"저장 칸 (active_bonus·visitor_today는 저장 안 함, coupons 지움)")
 	var tk: Array = d["trucks"][0].keys()

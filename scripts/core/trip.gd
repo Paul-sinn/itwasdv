@@ -26,6 +26,7 @@
 extends RefCounted
 
 const Company = preload("res://scripts/core/company.gd")
+const Contract = preload("res://scripts/core/contract.gd")
 
 const Ability = preload("res://scripts/core/ability.gd")
 const Weekly = preload("res://scripts/core/weekly.gd")
@@ -271,8 +272,9 @@ static func _drive(state: GameState, b: Balance, i: int, dt: float, rng: RandomN
 			break
 
 
-## 꺼둔 동안을 상태에 반영(모든 트럭)하고 돌려준다:
-##   { "money": int, "staff": int, "tax": int, "parcels": int, "spares": int, "hours": float, "xp": int, "full": bool, "ignored": bool }
+## 꺼둔 동안을 상태에 반영(모든 트럭 + 기업 계약)하고 돌려준다:
+##   { "money": int, "staff": int, "tax": int, "parcels": int, "spares": int, "hours": float, "xp": int, "full": bool, "ignored": bool,
+##     "contract": int }
 ##   꺼둔 초 < offline.ignore_under_seconds(3분)면 아무것도 안 함: ignored = true, 나머지 0 (시계가 거꾸로 간 음수도)
 ##   시간 = min(꺼둔 초 ÷ 3600, 창고 시간). full = 창고 시간에 닿음
 ##   번 돈 = 트럭마다 floor(시간당 수입 × 시간 × 야간팀 비율) (시간당 수입은 오버부스트·팁·대형·VIP 평균, 능력치 포함. 급송 없음)
@@ -280,12 +282,14 @@ static func _drive(state: GameState, b: Balance, i: int, dt: float, rng: RandomN
 ##   배송 = 트럭마다 floor(평균 적재량 × 3600 ÷ 평균 한 바퀴 초 × 시간 × 야간팀 비율)의 합 → parcels_total에도 더함
 ##   스페어 = 트럭마다 배송 × 그 트럭 드랍 확률(spare_chance)을 spare_drop_carry에 더하고 정수 부분만큼 (나머지는 다음에 이어짐)
 ##   경험치 = floor(트럭 0 배송 × 배송 1건 경험치(노선 경험치) × 노하우) → Driver.add_xp (만렙이면 평판으로). 노하우 0이면 0
+##   기업 계약 (v7b) = floor(Contract.hourly × 시간 × 야간팀 비율) = "contract" (번 돈). 세금을 떼고 money에, 뗀 세금은 tax에 (Contract.offline)
 ##   주간 배송 목표에 배송 합을 더함 (Weekly.add_parcels. 주가 바뀐 뒤 켰으면 Master.tick을 먼저 불러 새 주에)
 ##   노선은 트럭마다 스위치 노선 (v7b: 장거리로 바꿔 두고 껐으면 장거리 숫자로. 이번 바퀴가 무엇이었든)
 ## 트럭의 바퀴 진행(lap_clock·이번 바퀴 노선)은 그대로 둔다.
 static func apply_offline(state: GameState, b: Balance, seconds_away: float) -> Dictionary:
 	if seconds_away < b.offline_ignore_under_seconds:
-		return { "money": 0, "staff": 0, "tax": 0, "parcels": 0, "spares": 0, "hours": 0.0, "xp": 0, "full": false, "ignored": true }
+		return { "money": 0, "staff": 0, "tax": 0, "parcels": 0, "spares": 0, "hours": 0.0, "xp": 0, "full": false, "ignored": true,
+				"contract": 0 }
 	var cap := Depot.cap_hours(b, state)
 	var rate := Depot.rate(b, state)
 	var hours := minf(seconds_away / Economy.SECONDS_PER_HOUR, cap)
@@ -308,6 +312,9 @@ static func apply_offline(state: GameState, b: Balance, seconds_away: float) -> 
 		state.spare_drop_carry += n * spare_chance(b, state, i)
 		if i == 0:   # 1e-9: 1080 × 10 × 0.175처럼 딱 떨어져야 할 곱이 1889.999…로 1 모자라지 않게 (실수 찌꺼기만 막음)
 			xp = floori(n * v[2] * Ability.value(b, state, "knowhow") + 1e-9)
+	var con := Contract.offline(b, state, hours, rate)
+	tax += con[1]
+	money += con[0] - con[1]
 	var spares := floori(state.spare_drop_carry)
 	state.spare_drop_carry -= spares
 	state.spares += spares
@@ -315,7 +322,7 @@ static func apply_offline(state: GameState, b: Balance, seconds_away: float) -> 
 	Driver.add_xp(state, b, xp)
 	Weekly.add_parcels(state, b, parcels)
 	return { "money": money, "staff": staff, "tax": tax, "parcels": parcels, "spares": spares, "hours": hours, "xp": xp,
-			"full": hours >= cap, "ignored": false }
+			"full": hours >= cap, "ignored": false, "contract": con[0] }
 
 
 ## 속도 = 출력 × (1 + 이동 속도 % [+ 장거리 속도 %: 장거리 바퀴만]). %끼리 더함

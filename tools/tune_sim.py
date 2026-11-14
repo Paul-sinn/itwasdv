@@ -814,6 +814,8 @@ class Player:
             return 1 if self.stage >= 1 else 0
         if k == "helpers":
             return len(self.trucks) - 1
+        if k in ("long_laps", "contracts"):   # v7b: 장거리·기업 계약은 아직 시뮬에 없음 (C3에서) → 이 퀘스트에서 멈춤
+            return 0
         raise ValueError(f"모르는 퀘스트 종류: {k}")
 
     def _quests(self):

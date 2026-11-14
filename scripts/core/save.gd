@@ -17,7 +17,7 @@
 ##   (형식 10) company_stage, today_day, today_sales, today_staff, today_tax, rank_first_done
 ##   (형식 11) premium_spares, use_premium, visitor_next { NPC id: 날짜 번호 }, visitor_day, insurer_event, insured_day
 ##            (visitor_today는 저장 안 함: Visitor.tick이 채움)
-##   (형식 12) trucks[].route, trucks[].lap_route (""/"long"), long_laps, long_unlocked
+##   (형식 12) trucks[].route, trucks[].lap_route (""/"long"), long_laps, long_unlocked, contracts [ 시간당 금액 ], contract_carry, today_contract
 ## 모르는 키는 버리고 범위 밖 값은 자른다. 음수 돈·스페어, 빠진 칸, 틀린 모양은 깨진 저장.
 ## 세팅: 모르는 부품·그 부품에 없는 옵션 id는 버리고, 등급·카운터는 범위로 자르고, 줄은 그 등급 줄 수까지 (앞에서부터).
 ## 형식 5 칸: 숫자가 아니면 깨진 저장, 숫자는 범위로 자름 (레벨 1~만렙, 경험치 0~다음 레벨 필요량−1, 창고·야간팀 1~표 끝,
@@ -31,11 +31,11 @@
 ## 형식 11 칸: 숫자·참거짓·글자·{ } 묶음이 아니면 깨진 저장. 고급 스페어 0 이상, 모르는 NPC id는 버리고, 모르는 보험사 이벤트는 "".
 ##   날짜 번호는 정수면 그대로 (시계 조작 허용: 너무 먼 다음 방문은 Visitor.tick이 다시 굴림).
 ## 형식 12 칸: 글자·숫자·참거짓이 아니면 깨진 저장. 노선은 "long" 말고는 "" (기본), 장거리를 못 가는 트럭(대리점 전·+10 아래)은 ""로.
-##   장거리 바퀴 수 0 이상으로 자름.
+##   장거리 바퀴 수 0 이상으로 자름. 계약은 contracts.reputation 수까지 (뒤를 버림), 금액은 0 이상 정수로, 이월은 0~1 미만, 오늘 계약 몫 0 이상.
 ## 형식 3~9 파일은 그대로 읽는다 (없는 칸은 처음 값: 세팅 없음, 오버부스트 안 걸린 바퀴, 레벨 1, 창고·야간팀 Lv1, 퀘스트 처음부터,
 ##   lap_cargo 0 = 지금 바퀴 건수를 다음 진행 때 굴림, 능력치 없음, 쿠폰 0, 주간 진행 0·주 모름, 급송 켜짐·벨 시계 새로,
 ##   명장 안 열림 → 이미 +10을 넘었으면 다음 Master.tick에서 열림, 개인 기사·오늘 집계 0·날짜 모름·1위 알림 안 보냄,
-##   고급 스페어 0·특별 NPC 다음 방문은 첫 tick에서 굴림, 노선 기본·장거리 0바퀴·장거리 알림 안 보냄). 형식 10까지의 coupons(보험 쿠폰)는 버림 (출시 전이라 바꿔 주지 않음).
+##   고급 스페어 0·특별 NPC 다음 방문은 첫 tick에서 굴림, 노선 기본·장거리 0바퀴·장거리 알림 안 보냄, 기업 계약 없음). 형식 10까지의 coupons(보험 쿠폰)는 버림 (출시 전이라 바꿔 주지 않음).
 ##
 ## 백업: 쓸 때마다 지금 파일을 path.bak1(가장 최근) → bak2 → bak3 으로 돌린다.
 ## 본 파일이 깨졌으면 path.broken 으로 옮기고 bak1 → bak2 → bak3 중 읽히는 첫 파일로 살린다.
@@ -118,6 +118,9 @@ static func to_dict(s: GameState, saved_at_unix: int) -> Dictionary:
 		"rush_left": s.rush_left,
 		"long_laps": s.long_laps,
 		"long_unlocked": s.long_unlocked,
+		"contracts": s.contracts.duplicate(),
+		"contract_carry": s.contract_carry,
+		"today_contract": s.today_contract,
 	}
 	for key in MASTER_FIELDS + COMPANY_FIELDS + VISITOR_FIELDS:
 		d[key] = s.get(key)
@@ -448,6 +451,18 @@ static func _v12_from(d: Dictionary, b: Balance, s: GameState) -> String:
 	if typeof(shown) != TYPE_BOOL:
 		return "long_unlocked 가 true/false가 아님: %s" % [shown]
 	s.long_unlocked = shown
+	var cons = d.get("contracts", [])
+	if typeof(cons) != TYPE_ARRAY:
+		return "contracts 가 [ ] 목록이 아님: %s" % [cons]
+	for k in mini(cons.size(), b.contract_reputation.size()):
+		if not _is_finite_number(cons[k]):
+			return "contracts[%d] 가 숫자가 아님: %s" % [k, cons[k]]
+		s.contracts.append(clampi(floori(cons[k]), 0, MAX_WHOLE))
+	for key in ["contract_carry", "today_contract"]:
+		if not _is_finite_number(d.get(key, 0)):
+			return "%s 가 숫자가 아님: %s" % [key, d.get(key)]
+	s.contract_carry = clampf(float(d.get("contract_carry", 0.0)), 0.0, 0.999999)
+	s.today_contract = clampi(floori(d.get("today_contract", 0)), 0, MAX_WHOLE)
 	for i in s.trucks.size():
 		if not Trip.can_long(b, s, i):
 			s.truck(i).route = ""

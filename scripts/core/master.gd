@@ -173,6 +173,7 @@ static func _roll_today(state: GameState, day: int) -> void:
 		state.today_sales = 0
 		state.today_staff = 0
 		state.today_tax = 0
+		state.today_contract = 0
 	state.today_day = day
 
 

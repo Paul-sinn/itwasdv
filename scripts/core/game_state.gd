@@ -31,6 +31,11 @@ var rank_first_done: bool = false ## 시내 1위 알림을 보냈나 (한 번만
 var long_laps: int = 0            ## 장거리로 출발한 바퀴 수 (모든 트럭, 켜 둔 동안만. 퀘스트용)
 var long_unlocked: bool = false   ## 장거리 열림 알림을 보냈나 (한 번만)
 
+# --- v7b 기업 계약 (contract.gd). 전부 저장 ---
+var contracts: Array = []         ## 맺은 계약마다 시간당 금액 (int, 맺을 때 정해져 그대로). 길이 = 계약 수
+var contract_carry: float = 0.0   ## 켜 둔 동안 계약 수입의 소수 나머지 (0 이상 1 미만)
+var today_contract: int = 0       ## 오늘 매출(today_sales) 중 기업 계약 몫
+
 # --- 기사 레벨 (driver.gd) ---
 var driver_level: int = 1
 var driver_xp: int = 0            ## 지금 레벨에서 쌓은 경험치
@@ -124,6 +129,7 @@ func add_event(event: Dictionary) -> void:
 ##   { "type": "master_unlocked" } / { "type": "master_notice", "bonus": String } / { "type": "master_visit", "bonus": String } (v6b)
 ##   { "type": "agency_founded" } / { "type": "helper_bought", "truck": int } / { "type": "rank_first" } (v7a)
 ##   { "type": "long_unlocked" } (v7b: 대리점 + 어느 트럭이 처음 +10 → 장거리·터보 열림. 한 번만)
+##   { "type": "contract", "index": int, "hourly": int } (v7b: 기업 계약 체결. Contract.tick)
 ##   { "type": "visitor", "who": String, "event": String(보험사 이벤트 id 또는 ""), "gift": int(부품상만) } (v7-bal)
 func take_events() -> Array:
 	var out := _events

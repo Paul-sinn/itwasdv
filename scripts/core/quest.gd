@@ -72,4 +72,8 @@ static func _value(state: GameState, q: Dictionary) -> int:
 			return 1 if state.company_stage >= GameState.AGENCY else 0
 		"helpers":   # 보조 트럭 수
 			return state.trucks.size() - 1
+		"long_laps":   # 장거리로 출발한 바퀴 수 (v7b)
+			return state.long_laps
+		"contracts":   # 맺은 기업 계약 수 (v7b)
+			return state.contracts.size()
 	return 0   # balance.gd가 모르는 kind를 막으므로 여기 안 옴

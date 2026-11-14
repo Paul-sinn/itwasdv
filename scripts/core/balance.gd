@@ -3,7 +3,7 @@
 ## "driver"(기사 레벨), "abilities"(기사 능력치), "depot"(창고·야간팀), "quests"(다음 할 일 목록),
 ## "special"(대형·VIP), "rush"(급송 전화), "weekly"(주간 배송 목표), "master"(명장 방문일·보너스),
 ## "company"(회사 단계·세금·대리점·보조 트럭·순위 v7a), "visitors"(특별 NPC: 보험사·마술사·중고 부품상 v7-bal),
-## "routes"(노선: 동네·시내 v7-bal C2, 장거리 v7b).
+## "routes"(노선: 동네·시내 v7-bal C2, 장거리 v7b), "contracts"(기업 계약 v7b).
 ##
 ## 쓰는 법:
 ##   var b := Balance.load_file()
@@ -19,7 +19,7 @@ const SUM_EPSILON := 1e-9
 const SETTING_GRADES := 5
 const OPTION_KINDS := ["common", "own", "junk"]
 const QUEST_KINDS := ["parcels", "star", "setting_rolls", "setting_grade", "part_rolled", "spares_bought", "warehouse", "night", "level",
-		"agency", "helpers"]
+		"agency", "helpers", "long_laps", "contracts"]
 ## 회사 단계 앞 두 개 (코드가 번호로 씀: GameState.company_stage 0 = 개인 기사, 1 = 대리점). 그 뒤 단계는 세율표 공개용
 const STAGES_START := ["solo", "agency"]
 ## 기사 능력치 id (v5b). trip.gd가 이 id로 효과를 읽어서 json에 다 있어야 하고, 모르는 id는 막는다 (효과 없이 포인트만 먹지 않게)
@@ -107,6 +107,10 @@ var premium_drop_to: int                ## 고급 스페어를 쓰고 퍼지면 
 ## 노선 id → { "price_mult": 단가 ×, "road_mult": 도로 길이 ×, "stops_mult": 한 바퀴 싣는 수(집 수)·싣는 시간 × } (모두 > 0)
 ## json에 있을 때만 (v7b): "xp_per_parcel" 내 트럭 배송 1건 경험치 (없으면 동네·시내 규칙), "unlock_star" 그 트럭이 이 단계부터 (없으면 0)
 var routes: Dictionary = {}
+
+# --- contracts (기업 계약 v7b: contract.gd). [k] = k번째 계약 (길이 = 맺을 수 있는 계약 수) ---
+var contract_reputation: PackedInt64Array   ## 그 계약이 맺어지는 회사 평판 (오름차순)
+var contract_shares: PackedFloat64Array     ## 맺는 순간 순위 매출(Company.hourly_sales) × 이 비율 = 그 계약 시간당 금액
 
 # --- company (회사 단계 v7a). [단계] 0 개인 기사 / 1 대리점 / 2~ 업데이트용 (세율표 공개만) ---
 var company_stages: PackedStringArray     ## 단계 id ("solo", "agency", …)
@@ -251,6 +255,8 @@ static func from_dict(d: Dictionary) -> RefCounted:
 		for k in ["xp_per_parcel", "unlock_star"]:
 			if r.has(k):
 				b.routes[id][k] = int(r[k])
+	b.contract_reputation = PackedInt64Array(d["contracts"]["reputation"])
+	b.contract_shares = PackedFloat64Array(d["contracts"]["sales_share"])
 	var company: Dictionary = d["company"]
 	b.company_stages = PackedStringArray(company["stages"])
 	b.tax_rates = PackedFloat64Array(company["tax_rates"])
@@ -304,7 +310,8 @@ static func validate(d: Dictionary) -> PackedStringArray:
 	var abilities = d.get("abilities")
 	for pair in [["trip", trip], ["engine", engine], ["offline", offline], ["setting", setting], ["driver", driver], ["depot", depot],
 			["abilities", abilities], ["special", d.get("special")], ["rush", d.get("rush")], ["weekly", d.get("weekly")],
-			["master", d.get("master")], ["company", d.get("company")], ["visitors", d.get("visitors")], ["routes", d.get("routes")]]:
+			["master", d.get("master")], ["company", d.get("company")], ["visitors", d.get("visitors")], ["routes", d.get("routes")],
+			["contracts", d.get("contracts")]]:
 		if typeof(pair[1]) != TYPE_DICTIONARY:
 			errs.append("\"%s\" 묶음이 없음" % pair[0])
 	if typeof(d.get("quests")) != TYPE_ARRAY or d["quests"].is_empty():
@@ -379,9 +386,24 @@ static func validate(d: Dictionary) -> PackedStringArray:
 		if d["routes"][id].has("unlock_star"):
 			_check_number(d["routes"][id], "routes." + id, "unlock_star", errs, "0~%d 정수여야 함" % max_star,
 					func(x): return x >= 0.0 and x <= max_star and x == floorf(x))
+	var contract_count := _validate_contracts(d["contracts"], errs)
 	var max_level := _validate_driver(driver, max_star, errs)
-	_validate_quests(d["quests"], max_star, max_level, setting, depot, d["company"], errs)
+	_validate_quests(d["quests"], max_star, max_level, setting, depot, d["company"], contract_count, errs)
 	return errs
+
+
+## "contracts" 묶음 검사 (기업 계약 v7b): 평판 기준은 1 이상 정수·오름차순(같아도 됨), 비율은 같은 길이 0~1. 계약 수를 돌려준다 (틀렸으면 0)
+static func _validate_contracts(c: Dictionary, errs: PackedStringArray) -> int:
+	var rep = c.get("reputation")
+	if typeof(rep) != TYPE_ARRAY or rep.is_empty():
+		errs.append("contracts.reputation 이 없거나 빈 목록")
+		return 0
+	var n: int = rep.size()
+	if _check_list(c, "contracts", "reputation", n, "", errs, "1 이상의 정수여야 함", func(v): return v >= 1.0 and v == floorf(v)):
+		_check_not_decreasing(rep, "contracts.reputation", errs)
+	_check_list(c, "contracts", "sales_share", n, "contracts.reputation %d개와 같아야 함" % n, errs, "0~1 사이여야 함",
+			func(v): return v >= 0.0 and v <= 1.0)
+	return n
 
 
 ## "driver" 묶음 검사 (기사 레벨 v5). 만렙을 돌려준다 (틀렸으면 0)
@@ -550,7 +572,7 @@ static func _validate_depot(depot: Dictionary, errs: PackedStringArray) -> void:
 
 ## "quests" 목록 검사 (다음 할 일 v5). 끝낼 수 없는 퀘스트가 있으면 그 뒤가 영영 막히므로 target이 닿을 수 있는 값인지도 본다
 static func _validate_quests(list: Array, max_star: int, max_level: int, setting: Dictionary, depot: Dictionary, company: Dictionary,
-		errs: PackedStringArray) -> void:
+		contract_count: int, errs: PackedStringArray) -> void:
 	var whole := func(v): return v >= 0.0 and v == floorf(v)
 	var parts = setting.get("parts")
 	var nights = depot.get("night_rates")
@@ -562,6 +584,8 @@ static func _validate_quests(list: Array, max_star: int, max_level: int, setting
 		"night": nights.size() if typeof(nights) == TYPE_ARRAY else 0,
 		"agency": 1,
 		"helpers": company["helper_prices"].size() if typeof(company.get("helper_prices")) == TYPE_ARRAY else 0,
+		"long_laps": -1,
+		"contracts": contract_count,
 	}
 	var seen := {}
 	for i in list.size():
