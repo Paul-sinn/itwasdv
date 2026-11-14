@@ -69,8 +69,8 @@ func test_json_matches_spec() -> void:
 	check_eq(b.tax_rates, PackedFloat64Array([0.0, 0.03, 0.05, 0.07, 0.10]), "세율표")
 	check_eq([b.agency_price, b.staff_share, b.city_xp_per_parcel], [300000000, 0.3, 15], "창업 3억 (v7-bal), 직원 몫 30%, 시내 경험치 15")
 	check_eq(b.helper_prices, PackedInt64Array([5000000, 8000000]), "보조 트럭 500만·800만 (v7-bal)")
-	check_eq(b.rivals, PackedFloat64Array([23000000, 24200000, 25400000, 26700000, 28100000, 29500000, 31000000, 32600000, 34300000, 36000000]),
-			"라이벌 10곳 (v7-bal C4 시뮬: 2,300만 ~ 3,600만)")
+	check_eq(b.rivals, PackedFloat64Array([23000000, 24500000, 26000000, 27700000, 29400000, 31300000, 33300000, 35400000, 37600000, 40000000]),
+			"라이벌 10곳 (v7b C4 시뮬: 2,300만 ~ 4,000만)")
 	check_eq([Setting.unlock_star(b, "tire"), Setting.unlock_stage(b, "tire"), Setting.unlock_stage(b, "ecu")], [0, 1, 0], "타이어 = 대리점에 열림")
 	check_eq(b.setting_parts["tire"]["options"], PackedStringArray(["speed", "fuel_cut", "maint_cut", "junk_ride", "junk_scent",
 			"junk_cupholder", "junk_radio", "junk_gloss"]), "타이어 옵션")

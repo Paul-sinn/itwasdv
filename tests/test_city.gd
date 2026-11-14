@@ -58,8 +58,8 @@ func test_json_routes() -> void:
 	check(b.is_ok(), "진짜 balance.json에 문제가 있음: %s" % ", ".join(b.errors))
 	check_eq(b.routes, { "town": { "price_mult": 1.0, "road_mult": 1.0, "stops_mult": 1.0 },
 			"city": { "price_mult": 1.2, "road_mult": 0.4, "stops_mult": 2.0 },
-			"long": { "price_mult": 4.0, "road_mult": 5.0, "stops_mult": 1.0, "xp_per_parcel": 30, "unlock_star": 10 } },
-			"동네 1·1·1, 시내 단가 1.2·도로 0.4·집 수 2 (v7-bal C4), 장거리 (v7b, 단가 4는 임시)")
+			"long": { "price_mult": 7.0, "road_mult": 5.0, "stops_mult": 1.0, "xp_per_parcel": 30, "unlock_star": 10 } },
+			"동네 1·1·1, 시내 단가 1.2·도로 0.4·집 수 2 (v7-bal C4), 장거리 (v7b, 단가 7은 C4 시뮬)")
 	for c in [
 		[func(d): d.erase("routes"), "\"routes\" 묶음이 없음"],
 		[func(d): d["routes"].erase("city"), "routes.city 가 없거나"],
