@@ -108,7 +108,8 @@ func _run() -> void:
 	await _frames(3)
 	var cargo_texts := []
 	var cargo_avgs := []
-	for setup in [[0, []], [1, ["cargo"]]]:   # 줄 없음 = 20건, 스트리트 적재량 +8% = 21.6건
+	var want_cargo := 20.0 * (1.0 + Setting.option_value(b, "cargo", 1))   # 스트리트 적재량 한 줄 (v7-bal: 5.5% → 21.1건)
+	for setup in [[0, []], [1, ["cargo"]]]:   # 줄 없음 = 20건, 스트리트 적재량 한 줄
 		t.part("cargo_box")["grade"] = setup[0]
 		t.part("cargo_box")["lines"] = setup[1]
 		await _frames(2)
@@ -116,8 +117,8 @@ func _run() -> void:
 		cargo_avgs.append(Trip.cargo(b, t))
 	t.part("cargo_box").merge(cargo_was, true)
 	await _frames(2)
-	_report(st._effect.is_visible_in_tree() and cargo_texts == ["한 바퀴 적재량 20건", "한 바퀴 적재량 21.6건"]
-			and is_equal_approx(cargo_avgs[0], 20.0) and is_equal_approx(cargo_avgs[1], 21.6),
+	_report(st._effect.is_visible_in_tree() and cargo_texts == ["한 바퀴 적재량 20건", "한 바퀴 적재량 %s건" % Fmt.num(want_cargo, 1)]
+			and is_equal_approx(cargo_avgs[0], 20.0) and is_equal_approx(cargo_avgs[1], want_cargo),
 			"v6-bal U1 ③ 적재함 평균 적재량 %s → %s" % [cargo_avgs, cargo_texts])
 	_click(cargo_btn.get_global_rect().get_center())
 	await _frames(3)

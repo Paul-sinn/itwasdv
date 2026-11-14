@@ -14,6 +14,7 @@ const Economy = preload("res://scripts/core/economy.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Setting = preload("res://scripts/core/setting.gd")
 const Trip = preload("res://scripts/core/trip.gd")
+const Visitor = preload("res://scripts/core/visitor.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const Town = preload("res://scripts/ui/town.gd")
@@ -211,8 +212,10 @@ func refresh(b: Balance, s: GameState, locked: bool) -> void:
 	_grade.add_theme_color_override("font_color", Feel.SETTING_GRADE_COLORS[grade])
 	_show_lines(_lines, b, grade, p["lines"])
 	if grade < Setting.max_grade(b):
-		_up.text = tr("SETTING_UP_CHANCE") % Fmt.percent(Setting.up_chance(b, grade, s)) + " · " \
-				+ tr("SETTING_CEILING") % [p["counters"][grade], Setting.ceiling(b, grade)]
+		var up := tr("SETTING_UP_CHANCE") % Fmt.percent(Setting.up_chance(b, grade, s))
+		if Visitor.today(s) == "magician":   # 마술사 날 (위 확률에 이미 곱해져 있음)
+			up += " " + tr("SETTING_MAGICIAN") % Fmt.num(b.magician_up_mult)
+		_up.text = up + " · " + tr("SETTING_CEILING") % [p["counters"][grade], Setting.ceiling(b, grade)]
 	else:
 		_up.text = tr("SETTING_MAX_GRADE")
 	var parts := PackedStringArray()

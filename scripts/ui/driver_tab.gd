@@ -2,7 +2,7 @@
 ##   위: 기사 레벨, 경험치 막대(driver_xp / xp_need) (만렙이면 회사 평판)
 ##   그 아래 두 칸 고르기 (v5b. 한 화면에 다 넣으면 1280x720에서 창 밖으로 나감):
 ##     [능력치]: 남은 포인트 + [초기화](두 번 눌러야), 능력치 5줄 (이름 n/최대 · 지금 효과 / 한 줄 설명, [+]), 예시 빌드 4줄
-##     [창고·할 일]: 대리점 창업 한 줄 (v7a: "대리점 창업 5억원 · 4.9억원 모자람" [창업] 두 번 눌러야 / 창업 뒤 "대리점 (시내)".
+##     [창고·할 일]: 대리점 창업 한 줄 (v7a: "대리점 창업 3억원 · 2.9억원 모자람" [창업] 두 번 눌러야 / 창업 뒤 "대리점 (시내)".
 ##                   1280x720에 맞게 모자란 금액도 같은 줄, "약 N분 뒤"는 안 붙임: 붙이면 두 줄이 되어 차고가 창 밖),
 ##                   다음 할 일 (끝낸 수 n/25, 이름·설명·진행·보상), 주간 배송 목표 (v6b),
 ##                   창고 확장·야간 배송팀 (지금 값 → 다음 값, 가격, [올리기], 모자란 금액)
@@ -71,8 +71,8 @@ var _depot_box: VBoxContainer
 var _ability_lines := {} ## 능력치 id → "협상  7/20 · 단가 +7%"
 var _ability_descs := {} ## 능력치 id → 한 줄 설명
 var _builds: Label       ## 예시 빌드 4줄
-var _weekly: Label       ## "이번 주 배송 12,340 / 30,000건 → 보험 쿠폰 1장 + 경험치 2,000" / "이번 주 달성!"
-var _agency: Label       ## "대리점 창업 5억원" (+ " · 4.9억원 모자람") / 창업 뒤 "대리점 (시내)"
+var _weekly: Label       ## "이번 주 12,340 / 60,000건 → 지금 1.2억원 + 경험치 2,000" (지금 받으면 얼마) / "이번 주 달성!" (1280x720에 한 줄로)
+var _agency: Label       ## "대리점 창업 3억원" (+ " · 2.9억원 모자람") / 창업 뒤 "대리점 (시내)"
 var _reset_armed_ms := -1   ## [초기화]를 한 번 누른 시각 (진짜 시간 ms). -1 = 안 누름
 var _found_armed_ms := -1   ## [창업]을 한 번 누른 시각 (진짜 시간 ms). -1 = 안 누름
 var _scale := 1.0
@@ -241,11 +241,11 @@ func refresh(b: Balance, s: GameState) -> void:
 	_quest_desc.visible = not q.is_empty()
 	_quest_progress.visible = not q.is_empty()
 
-	# 주간 배송 목표 (보상 숫자는 balance 그대로 보여 줌)
+	# 주간 배송 목표 (보상 돈 = 지금 받으면 얼마인가 Weekly.reward_money, 경험치는 balance 그대로)
 	var done := Weekly.is_done(s)
 	var target := Weekly.target(b)
 	_weekly.text = tr("DEPOT_WEEKLY_DONE") % Fmt.count(Weekly.progress(s)) if done \
-			else tr("DEPOT_WEEKLY") % [Fmt.count(mini(Weekly.progress(s), target)), Fmt.count(target), b.weekly_coupons, Fmt.count(b.weekly_xp)]
+			else tr("DEPOT_WEEKLY") % [Fmt.count(mini(Weekly.progress(s), target)), Fmt.count(target), Fmt.money(Weekly.reward_money(b, s)), Fmt.count(b.weekly_xp)]
 	_weekly.add_theme_color_override("font_color", Feel.COLOR_STAR if done else Feel.COLOR_TEXT)
 
 	for kind: String in KINDS:
@@ -271,7 +271,7 @@ func refresh(b: Balance, s: GameState) -> void:
 			_waits[kind].text = tr("DEPOT_SHORT") % [Fmt.money(price - s.money), Fmt.wait_text(Economy.seconds_to_afford(price, s.money, Company.hourly_net(b, s)))]
 
 
-## 대리점 창업 줄: 창업 전 "대리점 창업 5억원" [창업] (돈이 모자라면 꺼짐 + 같은 줄에 모자란 금액), 창업 뒤 "대리점 (시내)"만.
+## 대리점 창업 줄: 창업 전 "대리점 창업 3억원" [창업] (돈이 모자라면 꺼짐 + 같은 줄에 모자란 금액), 창업 뒤 "대리점 (시내)"만.
 ## [창업]을 한 번 누르고 시간이 지나거나 누를 수 없게 되면 원래 글로
 func _refresh_agency(b: Balance, s: GameState) -> void:
 	var founded := Company.stage(s) >= GameState.AGENCY

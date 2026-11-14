@@ -18,15 +18,17 @@
 ## v6b: 현지 시각(now_local)을 만들어 Master.tick(켤 때는 꺼둔 동안 계산보다 먼저, 그 뒤 프레임마다)·Rush.tick(프레임마다).
 ##      대형·VIP·급송 "+금액", 급송 전화 말풍선 [받기] → Rush.accept, [설정] 급송 전화 켜기/끄기, 주간 목표 달성 알림
 ##      명장: +10 첫 달성(master_unlocked)이면 큰 화면 튜닝숍에서 요일 고르기 창(day_picker.gd), 요일 → Master.set_day,
-##      예고·방문 알림, 방문 중이면 띠의 튜닝숍 테두리. 강화는 [보험]을 켰으면 Enhance.try_enhance(…, insure, now_local)
+##      예고·방문 알림, 방문 중이면 띠의 튜닝숍 테두리
 ## v7a: 매 프레임 모든 트럭을 Trip.advance (보조 트럭도 띠에서 달리고 "+금액" = 내 돈으로 들어온 금액).
-##      강화·세팅·보험은 튜닝숍 트럭 탭에서 고른 트럭(panel.truck). 능력치·급송·구석 줄 "+N"은 늘 내 트럭(트럭 0).
+##      강화·세팅은 튜닝숍 트럭 탭에서 고른 트럭(panel.truck). 능력치·급송·구석 줄 "+N"은 늘 내 트럭(트럭 0).
 ##      물류센터 [창업] 두 번째 누름 → Company.found → 알림·저장. 꺼둔 동안 요약에 대리점이면 직원 몫·세금 줄
 ##      U2: 대리점이면 띠에 사무실 건물·구석 줄 "시내 N위"(Company.rank), 사무실 [보조 트럭 사기] → Company.buy_helper → 저장,
 ##      처음 1위(rank_first 이벤트) → 알림
 ## v7-bal: NPC가 온 날(명장·보험사·마술사·부품상) 띠·큰 화면 오른쪽 위 편지봉투 + 느낌표 → 누르면 큰 화면 + NPC 대화 창(npc_dialog.gd).
 ##      한 번 열면 그날은 느낌표만 꺼짐. 보험사 [예] → 가입 → 저장. 급송 전화는 전화 아이콘 → 큰 화면 없이 Rush.accept.
-##      누가 왔는지·이벤트·가입은 _visitor_info() 한 곳에서 받음 (특별 NPC 3명은 계산 C1 전이라 임시 칸 visitor_stub)
+##      누가 왔는지·이벤트·가입은 _visitor_info() 한 곳 (Master.is_visiting, Visitor.today / insurer_event / is_insured).
+##      U1: 보험은 state가 정함 (Visitor.join_insurance → Enhance가 알아서 보험료·막음). 강화 칸 [고급 스페어 쓰기] → state.use_premium → 저장,
+##      퍼지면 r["drop_to"]·r["premium"]으로 "+17에서 다시"(고급 스페어 / 복구 보험) 구분. 특별 NPC 방문·주간 보상 돈 → 동네 알림
 extends Control
 
 const Ability = preload("res://scripts/core/ability.gd")
@@ -37,6 +39,8 @@ const Driver = preload("res://scripts/core/driver.gd")
 const Master = preload("res://scripts/core/master.gd")
 const Rush = preload("res://scripts/core/rush.gd")
 const Enhance = preload("res://scripts/core/enhance.gd")
+const Economy = preload("res://scripts/core/economy.gd")
+const Visitor = preload("res://scripts/core/visitor.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Quest = preload("res://scripts/core/quest.gd")
 const Save = preload("res://scripts/core/save.gd")
@@ -53,7 +57,7 @@ const NpcDialog = preload("res://scripts/ui/npc_dialog.gd")
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
 
 const AUTOSAVE_SECONDS := 30.0        ## 30초마다 저장 (배속과 상관없이 진짜 30초)
-const TRUCK := 0   ## 내 트럭 번호 (구석 줄 "+N", 치트 키). 강화·세팅·보험은 panel.truck (튜닝숍 트럭 탭)
+const TRUCK := 0   ## 내 트럭 번호 (구석 줄 "+N", 치트 키). 강화·세팅은 panel.truck (튜닝숍 트럭 탭)
 ## 처음 말풍선을 봤는지 (설정 파일 settings.cfg에. 게임 저장 파일 아님)
 const HINT_SECTION := "first_run"
 const HINT_KEY := "building_hint_seen"
@@ -74,9 +78,6 @@ var settings_button: Button  ## 큰 화면 [설정]
 var settings: SettingsPanel  ## [설정]을 누르면 가운데 뜨는 "화면: 전체 화면 / 창 모드"
 var day_picker: DayPicker    ## 명장 요일 고르기 창 (큰 화면 튜닝숍 가운데)
 var npc_dialog: NpcDialog    ## NPC 대화 창 (편지봉투를 누르면 큰 화면 가운데)
-## shortcut: 특별 NPC 3명(보험사·마술사·부품상)은 계산 C1(Visitor)이 오기 전이라 이 칸에서 받음 (확인 스크립트가 넣음, 게임에서는 늘 빔).
-##   C1 합치면 _visitor_info()를 Visitor.today / insurer_event / is_insured + balance 숫자로 바꾸고 이 칸은 지움
-var visitor_stub := {}
 ## 편지봉투를 연 방문 (_letter_key). 같은 방문이면 느낌표를 끔. 저장 안 함 (껐다 켜면 그날 느낌표가 한 번 더 뜸)
 var _letter_read := ""
 var rng := RandomNumberGenerator.new()
@@ -150,6 +151,7 @@ func _ready() -> void:
 	add_child(panel)
 	panel.enhance_pressed.connect(_on_enhance_pressed)
 	panel.spare_pressed.connect(_on_spare_pressed)
+	panel.premium_toggled.connect(_on_premium_toggled)
 	panel.setting.roll_pressed.connect(_on_roll_pressed)
 	panel.setting.choose_pressed.connect(_on_choose_pressed)
 	panel.driver.upgrade_pressed.connect(_on_upgrade_pressed)
@@ -456,7 +458,10 @@ func _show_events(events: Array) -> void:
 				cur["max"] = true
 			"weekly_done":   # 경험치 보상으로 레벨업하면 그 줄이 이 알림에 붙음
 				_notify(cur)
-				cur = { "head": tr("NOTICE_WEEKLY") % [e["coupons"], Fmt.count(e["xp"])] }
+				cur = { "head": tr("NOTICE_WEEKLY") % [Fmt.money(e["money"]), Fmt.count(e["xp"])] }
+			"visitor":   # 특별 NPC가 옴 (그날 한 번. 부품상은 선물이 이미 들어옴)
+				_notify(cur)
+				cur = { "head": _visitor_notice(e) }
 			"master_notice":
 				_notify(cur)
 				cur = { "head": tr("NOTICE_MASTER_TOMORROW") % Fmt.master_bonus(balance.master_bonuses, e["bonus"]) }
@@ -560,14 +565,23 @@ func _on_rush_accept() -> void:
 
 
 ## 오늘 와 있는 NPC: { who: "master" / "insurer" / "magician" / "dealer" / "", event: 보험사 이벤트 id, insured: 오늘 가입했나,
-##   효과 숫자: bonus(명장 보너스 id) / up_mult(마술사) / gift·drop_to(부품상) / fee_mult·discount·recovery_star(보험사) }
-## 명장 날엔 특별 NPC가 안 옴 (계산 쪽 규칙)
+##   bonus: 명장 보너스 id }. 명장 날엔 특별 NPC가 안 옴 (계산 쪽 규칙). 효과 숫자는 대화 창이 balance에서 읽음
 func _visitor_info() -> Dictionary:
 	if Master.is_visiting(state, now_local()):
 		return { "who": "master", "event": "", "insured": false, "bonus": state.active_bonus }
-	var info := { "who": "", "event": "", "insured": false }
-	info.merge(visitor_stub, true)   # shortcut: C1 전 임시 칸 (위 visitor_stub)
-	return info
+	return { "who": Visitor.today(state), "event": Visitor.insurer_event(state), "insured": Visitor.is_insured(state) }
+
+
+## 특별 NPC 방문 알림 한 줄 (계산 쪽 { "type": "visitor", "who", "event", "gift" })
+func _visitor_notice(e: Dictionary) -> String:
+	match e["who"]:
+		"insurer":
+			return tr("NOTICE_VISITOR_INSURER") % tr("NPC_EVENT_NAME_RECOVERY" if e["event"] == "recovery" else "NPC_EVENT_NAME_PARTNER_DISCOUNT")
+		"magician":
+			return tr("NOTICE_VISITOR_MAGICIAN") % Fmt.num(balance.magician_up_mult)
+		"dealer":
+			return tr("NOTICE_VISITOR_DEALER") % e.get("gift", 0)
+	return ""
 
 
 ## 이 방문을 가리키는 글자 (NPC + 현지 날짜 번호). 편지봉투를 열었나 비교용
@@ -589,9 +603,8 @@ func _open_letter() -> void:
 
 ## 보험사 [예] → 가입 (보험사가 온 날만) → 저장 → 창에 "가입됨"
 func _on_npc_yes() -> void:
-	if _visitor_info()["who"] != "insurer":
+	if not Visitor.join_insurance(state, now_local()):
 		return
-	visitor_stub["insured"] = true   # shortcut: C1 합치면 Visitor.join_insurance(state, now_local())
 	_save()
 	npc_dialog.open(balance, _visitor_info())
 
@@ -623,14 +636,14 @@ func _on_style_picked(style: ScreenMode.FullStyle) -> void:
 # ---------------- 강화 · 스페어 ----------------
 
 ## 강화 버튼: 뜸 → 굴리기(enhance.gd) → 결과 연출 → 저장
-## 굴리기는 뜸이 끝난 뒤에 한다 (뜸 동안 꺼도 돈이 안 빠짐). [보험]을 켰으면 보험을 걸고 (요금·쿠폰은 계산 쪽)
+## 굴리기는 뜸이 끝난 뒤에 한다 (뜸 동안 꺼도 돈이 안 빠짐). 오늘 보험에 가입했으면 보험료·막기는 계산 쪽이 알아서
 func _on_enhance_pressed() -> void:
-	var insure := panel.insure
 	var i := panel.truck   # 누른 순간 고른 트럭 (뜸 동안 탭을 바꿔도 이 트럭에)
-	if enhancing or rolling or Enhance.block_reason(state, balance, i, insure, now_local()) != Enhance.Block.NONE:
+	if enhancing or rolling or Enhance.block_reason(state, balance, i) != Enhance.Block.NONE:
 		return
 	enhancing = true
-	var danger := Enhance.needs_spare(balance, state.truck(i).star) and not insure
+	var star := state.truck(i).star
+	var danger := Enhance.needs_spare(balance, star) and not Economy.insured_at(balance, star, state)
 	panel.begin_suspense()
 	var wait := (Feel.SUSPENSE_DANGER if danger else Feel.SUSPENSE_SAFE) * suspense_scale
 	if danger:
@@ -640,7 +653,7 @@ func _on_enhance_pressed() -> void:
 	i = mini(i, state.trucks.size() - 1)   # 뜸 동안 F3(처음부터)이면 트럭이 줄어듦
 	var t := state.truck(i)   # 뜸 동안 F3(처음부터)이면 상태가 바뀌어서 다시 읽음
 	var star_before := t.star
-	var r := Enhance.try_enhance(state, balance, i, rng, insure, now_local())
+	var r := Enhance.try_enhance(state, balance, i, rng)
 	panel.end_suspense()
 	var fx := panel.ui_scale()   # 흔들림 세기: 차고 크기에 맞춰
 	match r["result"]:
@@ -658,9 +671,13 @@ func _on_enhance_pressed() -> void:
 			panel.show_result(tr("RESULT_FAIL"), Feel.COLOR_FAIL)
 			_shake(func(o): _panel_shake = o, Feel.FAIL_SHAKE_PX * fx, Feel.FAIL_SHAKE_DURATION)
 		Enhance.Result.DESTROY:
-			# 스페어 엔진을 자동으로 써서 broken_drop_to로. 트럭은 계속 달림
-			panel.show_result(tr("RESULT_DESTROY"), Feel.COLOR_DANGER, Feel.DESTROY_TEXT_SIZE,
-					tr("RESULT_DESTROY_NOTE") % [t.star, state.spares])
+			# 스페어 엔진을 자동으로 써서 내려감 (보통 +15, 고급 스페어·복구 보험이면 +17). 트럭은 계속 달림
+			var note := tr("RESULT_DESTROY_NOTE") % [r["drop_to"], state.spares]
+			if r["premium"]:
+				note = tr("RESULT_DESTROY_PREMIUM") % [r["drop_to"], state.premium_spares]
+			elif r["drop_to"] > balance.broken_drop_to:   # 복구 보험 날 (보통 스페어를 쓰고도 덜 내려감)
+				note = tr("RESULT_DESTROY_RECOVERY") % [r["drop_to"], state.spares]
+			panel.show_result(tr("RESULT_DESTROY"), Feel.COLOR_DANGER, Feel.DESTROY_TEXT_SIZE, note)
 			town.trucks[i].smoke_burst(Feel.DESTROY_SMOKE_BURST)
 			_shake(func(o): position = o, Feel.DESTROY_SHAKE_PX * fx, Feel.DESTROY_SHAKE_DURATION)
 		Enhance.Result.BLOCKED:
@@ -678,6 +695,12 @@ func _shake(setter: Callable, px: float, seconds: float) -> void:
 	var tw := create_tween().set_ignore_time_scale(true)
 	tw.tween_method(jitter, 0.0, 1.0, seconds)
 	tw.tween_callback(func(): setter.call(Vector2.ZERO))
+
+
+## [고급 스페어 쓰기] 켜기/끄기 → state.use_premium (퍼질 때 고급을 먼저 쓸지는 계산 쪽) → 저장
+func _on_premium_toggled(on: bool) -> void:
+	state.use_premium = on
+	_save()
 
 
 ## 스페어 엔진 구매 (언제든, 돈이 있으면)

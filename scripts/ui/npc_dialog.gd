@@ -1,7 +1,7 @@
 ## NPC 대화 창 (v7-bal): 편지봉투를 누르면 큰 화면 가운데 뜬다. 명장·보험사·마술사·중고 부품상 공용.
 ##   [얼굴(임시 색 사각형) + 이름] / 대사 / 오늘 효과 한 줄 / (보험사) 보험료 규칙 한 줄 / [예] [아니오] 또는 [닫기]
 ##   보험사: 가입 전이면 [예] [아니오], 가입 뒤에는 "가입됨" 줄 + [닫기]
-## 누가 왔는지·이벤트·가입 여부·효과 숫자는 main.gd가 묶음(info)으로 줌. 누르면 신호만 → main.gd
+## 누가 왔는지·이벤트·가입 여부는 main.gd가 묶음(info)으로 줌, 효과 숫자는 balance. 누르면 신호만 → main.gd
 extends PanelContainer
 
 const Balance = preload("res://scripts/core/balance.gd")
@@ -65,7 +65,7 @@ func _ready() -> void:
 	set_ui_scale(_scale)
 
 
-## info = main.gd _visitor_info(): { who, event(보험사 이벤트 id), insured, 효과 숫자 (bonus / up_mult / gift·drop_to / fee_mult·discount·recovery_star) }
+## info = main.gd _visitor_info(): { who, event(보험사 이벤트 id), insured, bonus(명장 보너스 id) }
 func open(b: Balance, info: Dictionary) -> void:
 	who = info["who"]
 	var face: Color = Feel.NPC_FACE_COLORS[who]
@@ -79,15 +79,15 @@ func open(b: Balance, info: Dictionary) -> void:
 		"master":
 			_effect.text = tr("NPC_EFFECT_MASTER") % Fmt.master_bonus(b.master_bonuses, info["bonus"])
 		"magician":
-			_effect.text = tr("NPC_EFFECT_MAGICIAN") % Fmt.num(info["up_mult"])
+			_effect.text = tr("NPC_EFFECT_MAGICIAN") % Fmt.num(b.magician_up_mult)
 		"dealer":
-			_effect.text = tr("NPC_EFFECT_DEALER") % [info["gift"], b.broken_drop_to, info["drop_to"]]
+			_effect.text = tr("NPC_EFFECT_DEALER") % [b.dealer_premium_spares, b.broken_drop_to, b.premium_drop_to]
 		"insurer":
 			match info.get("event", ""):
-				"partner_discount": _effect.text = tr("NPC_EVENT_PARTNER_DISCOUNT") % Fmt.percent(info["discount"])
-				"recovery": _effect.text = tr("NPC_EVENT_RECOVERY") % [b.broken_drop_to, info["recovery_star"]]
+				"partner_discount": _effect.text = tr("NPC_EVENT_PARTNER_DISCOUNT") % Fmt.percent(b.partner_discount)
+				"recovery": _effect.text = tr("NPC_EVENT_RECOVERY") % [b.broken_drop_to, b.recovery_star]
 				_: _effect.text = ""
-			_rule.text = tr("NPC_INSURER_RULE") % Fmt.num(info["fee_mult"])
+			_rule.text = tr("NPC_INSURER_RULE") % Fmt.num(b.insure_fee_mult)
 	_effect.visible = _effect.text != ""
 	_rule.visible = insurer
 	_status.visible = insured

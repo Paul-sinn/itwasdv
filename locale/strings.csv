@@ -28,7 +28,7 @@ GARAGE_ENHANCING,강화 중…,Upgrading…
 GARAGE_BUY_SPARE,스페어 엔진 사기 (%s원),Buy a spare engine (₩%s)
 GARAGE_HOURLY,시간당 %s원,₩%s per hour
 GARAGE_HOURLY_NEXT,시간당 %s원 → 성공하면 %s원,₩%s per hour → ₩%s on success
-GARAGE_CHANCES,성공 %s · 실패(유지) %s · 퍼짐 %s,Success %s · Fail (no change) %s · Blow-up %s
+GARAGE_CHANCES,성공 %s · 실패(유지) %s · 퍼짐 %s,Success %s · Fail %s · Blow-up %s
 GARAGE_DANGER,퍼질 확률 %s,Blow-up chance %s
 GARAGE_COST,비용 %s원,Cost ₩%s
 GARAGE_SHORT_WAIT,강화 비용 부족 · %s,Not enough money · %s
@@ -205,7 +205,7 @@ BUILDING_TUNING,튜닝숍,Tuning Shop
 BUILDING_CAR_CENTER,카센터,Car Center
 TOWN_TUNING_BUTTON,강화,Upgrade
 TOWN_HINT_BUILDING,건물을 눌러보세요,Click a building
-GARAGE_TO_CAR,카센터로,To Car Center
+GARAGE_TO_CAR,카센터로,Car Center
 CAR_NOTE,+%d부터 강화하려면 1개가 있어야 해요. 퍼지면 자동으로 써요,From +%d you need one to upgrade. It's used automatically if the engine blows up
 CAR_SHORT,%s원 모자람 · %s,₩%s short · %s
 NPC_TUNING,튜닝숍 사장,Tuning Shop owner
@@ -221,9 +221,9 @@ TOWN_RUSH_LEFT,급송 %d건 남음,Rush: %d left
 SETTINGS_RUSH,급송 요청 전화,Rush order calls
 SETTINGS_ON,켜기,On
 SETTINGS_OFF,끄기,Off
-DEPOT_WEEKLY,이번 주 배송 %s / %s건 → 보험 쿠폰 %d장 + 경험치 %s,This week %s / %s → %d coupon + %s XP
+DEPOT_WEEKLY,이번 주 %s / %s건 → 지금 %s원 + 경험치 %s,This week %s / %s → ₩%s (if done now) + %s XP
 DEPOT_WEEKLY_DONE,이번 주 달성! (배송 %s건),Weekly goal done! (%s deliveries)
-NOTICE_WEEKLY,주간 배송 목표 달성! 보험 쿠폰 +%d장 · 경험치 +%s,Weekly goal done! +%d insurance coupon · +%s XP
+NOTICE_WEEKLY,주간 배송 목표 달성! +%s원 · 경험치 +%s,Weekly goal done! +₩%s · +%s XP
 GARAGE_TAB_MASTER,명장,Master
 MASTER_LOCKED,엔진 +%d을 달성하면 명장이 찾아와요,Reach engine +%d and the Master will start visiting
 MASTER_DAY,명장 방문일: 매주 %s,The Master visits every %s
@@ -252,19 +252,11 @@ DAY_SHORT_4,금,Fri
 DAY_SHORT_5,토,Sat
 DAY_SHORT_6,일,Sun
 MASTER_BONUS_DESTROY_CUT,퍼짐 확률 %s 줄어듦,Blow-up chance -%s
-MASTER_BONUS_ENHANCE_DISCOUNT,강화 비용 %s 할인,Upgrade cost -%s
-MASTER_BONUS_SETTING_UP_MULT,세팅 등급업 확률 ×%s,Setup grade-up chance ×%s
 MASTER_BONUS_SUCCESS_MULT,강화 성공 확률 ×%s,Upgrade success chance ×%s
-MASTER_BONUS_SPARE_MULT,스페어 엔진 나올 확률 ×%s,Spare engine drop chance ×%s
-MASTER_BONUS_SETTING_DISCOUNT,세팅 돌리기 비용 %s 할인,Setup roll cost -%s
 MASTER_BONUS_DOUBLE_STEP,강화 성공 때 %s 확률로 한 단계 더,%s chance of one extra level on success
 GARAGE_MASTER_VISIT,명장 방문 중: %s,Master visiting: %s
-GARAGE_INSURE,보험,Insurance
-GARAGE_COST_INSURED,비용 %s원 + 보험 %s원,Cost ₩%s + insurance ₩%s
-GARAGE_COST_COUPON,비용 %s원 · 보험 쿠폰 1장 사용 (%d장 남음),Cost ₩%s · uses 1 insurance coupon (%d left)
 GARAGE_INSURED_SAFE,보험: 퍼져도 단계 유지,Insured: no drop on blow-up
 GARAGE_TRIES,지금 돈이면 %d번 시도 가능,You can try %d times with your money
-GARAGE_NO_INSURE,보험을 걸 수 없어요 (명장 방문일도 아니고 쿠폰도 없음),"Can't insure (no Master visit today, no coupon)"
 RESULT_INSURED,보험 덕분에 살았어요! (+%d 그대로),Insurance saved you! (still +%d)
 RESULT_DOUBLE,+2!  +%d → +%d,+2!  +%d → +%d
 NOTICE_MASTER_TOMORROW,내일 명장이 와요: %s,The Master comes tomorrow: %s
@@ -347,3 +339,17 @@ NPC_INSURER_RULE,"보험료 = 강화 비용 × 퍼짐 확률 × %s. 오늘 퍼�
 NPC_INSURED,가입됨 · 오늘 퍼질 수 있는 강화마다 보험료가 같이 나가요,Insured · the fee is paid with every risky upgrade today
 NPC_YES,예,Yes
 NPC_NO,아니오,No
+GARAGE_SPARES_BOTH,스페어 엔진 %d개 · 고급 %d개,Spare engines: %d · premium %d
+GARAGE_USE_PREMIUM,고급 스페어 쓰기,Use premium
+GARAGE_DANGER_NOTE_PREMIUM,"퍼지면 고급 스페어 엔진(%d개 있음)을 먼저 써서 +%d로 (트럭은 계속 달림)","If it blows up, a premium spare (you have %d) is used first and it drops only to +%d (the truck keeps running)"
+GARAGE_RECOVERY_NOTE,오늘은 복구 보험: 가입 안 해도 퍼지면 +%d에서 다시,Recovery cover today: a blow-up restarts at +%d
+GARAGE_COST_PARTNER,비용 %s원 (제휴 할인 %s),Cost ₩%s (partner discount %s)
+GARAGE_INSURE_LINE,보험 가입 중 · 보험료 +%s원 · 합계 %s원,Insured · fee +₩%s · total ₩%s
+RESULT_DESTROY_PREMIUM,고급 스페어 엔진 1개 사용 → +%d에서 다시 (남은 고급 %d개),Used 1 premium spare → restart at +%d (%d premium left)
+RESULT_DESTROY_RECOVERY,복구 보험 덕분에 +%d에서 다시 (남은 스페어 %d개),Recovery cover: restart at +%d (%d spares left)
+NOTICE_VISITOR_INSURER,보험사 직원이 왔어요 · 오늘 이벤트: %s (편지봉투를 눌러 보세요),The insurance agent is here · today's event: %s (open the letter)
+NOTICE_VISITOR_MAGICIAN,마술사가 왔어요 · 오늘 세팅 돌리기 등급업 확률 ×%s,The magician is here · setup roll grade-up chance ×%s today
+NOTICE_VISITOR_DEALER,중고 부품상이 왔어요 · 고급 스페어 엔진 +%d,The used parts dealer is here · premium spare engine +%d
+NPC_EVENT_NAME_PARTNER_DISCOUNT,제휴 할인,Partner discount
+NPC_EVENT_NAME_RECOVERY,복구 보험,Recovery cover
+SETTING_MAGICIAN,(마술사 ×%s),(Magician ×%s)
