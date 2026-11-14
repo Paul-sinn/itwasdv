@@ -340,15 +340,10 @@ func _process(delta: float) -> void:
 func _advance_truck(i: int, delta: float) -> void:
 	var events := Trip.advance(state, balance, i, delta, rng)
 	var sprite: Node2D = town.trucks[i]
-	var p := Trip.lap_progress(balance, state, i)
 	if town.city:   # 시내: 집마다 서고, "+돈"은 배송된 그 집에 (정차할 곳 = 실을 수 있는 수만큼)
-		var n := Trip.lap_cargo(balance, state, i)
-		var k: int = state.truck(i).lap_delivered
-		if k == n and p > 0.0 and events.any(func(e): return e["type"] == "parcel"):
-			sprite.leg = p / n   # 이번 바퀴 마지막 배송 = n × (집 하나 몫)
-		sprite.stop_and_go(p, k, n)
+		sprite.stop_and_go(Trip.lap_stop_progress(balance, state, i), Trip.lap_cargo(balance, state, i))
 	else:
-		sprite.follow(p)
+		sprite.follow(Trip.lap_progress(balance, state, i))
 	sprite.boosting = state.truck(i).boost_lap
 	var house: int = sprite.nearest_house()   # 동네: "+돈"은 트럭(있어야 할 자리)에서 가장 가까운 집에
 	for e in events:

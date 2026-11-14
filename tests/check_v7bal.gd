@@ -6,7 +6,7 @@
 ## ② 보험사(제휴 할인): 방문 알림, 대화 창 이름·대사·이벤트·보험료 규칙·[예] [아니오] → [아니오] 닫힘·가입 안 됨 → 다시 열어 [예] → "가입됨"·저장(insured_day)
 ##    강화 칸: +17은 할인 비용만 (보험료 줄 없음), +18은 "보험 가입 중 · 보험료 +N · 합계"·"보험: 퍼져도 단계 유지"·N번 시도 = Economy.tries,
 ##    스페어 0개로 누름, 퍼짐 → "보험 덕분에 살았어요!", 빠진 돈 = 할인 비용 + 보험료
-## ③ 보험사(복구 보험, 가입 안 함): 대화 창 이벤트 글, 강화 칸 복구 보험 설명 줄, 퍼짐 → "복구 보험 덕분에 +17에서 다시"
+## ③ 보험사(복구 보험, 가입 안 함): 대화 창 이벤트 글, 강화 칸 "+17로"(Enhance.drop_to) + 복구 보험 설명 줄, 퍼짐 → "복구 보험 덕분에 +17에서 다시"
 ## ④ 중고 부품상: 선물 알림·고급 스페어 +1 (봉투를 안 눌러도), 대화 창, 강화 칸 "고급 N개"·[고급 스페어 쓰기] → state.use_premium·저장,
 ##    퍼짐 → "고급 스페어 엔진 1개 사용 → +17에서 다시"
 ## ⑤ 마술사: 방문 알림, 대화 창, 세팅 칸 등급업 확률 옆 "(마술사 ×2)" (다음 날 없음)
@@ -17,9 +17,11 @@
 ## ⑨ 번역·창 크기: en 대화 창 4명·강화 칸·결과·알림 글자에 한글·키 없음, 번역 파일에 "큐브" 없음,
 ##    큰 화면 5가지에서 보험사 대화 창, 강화 칸 (보험료 줄 + [고급 스페어 쓰기] / 복구 보험 줄 + 스페어 없음)이 창 안
 ## ⑩ 시내 그림 (U3): 창업 전에는 동네 그대로 (집 TOWN_HOUSES채, 빌딩 실루엣 없음)
-## ⑪ 창업 뒤 (계산 노선 "city"): 시내 그림, 정차할 곳 수 = Trip.lap_cargo (30), 회사 건물이 섞임, 집끼리·길·건물·구석 줄과 안 겹침, 큰 화면에서도
-## ⑫ 시내 한 바퀴 (진짜 프레임): "+돈" 수 = 계산 배송 수 = lap_cargo, 0번 집부터 차례로 한 번씩, 배송 때 트럭이 그 집 앞, 집마다 섬
-## ⑬ 띠 보이는 곳: 빌딩 실루엣·집 30채가 visible_rects() 안, 전화 아이콘 + 글자 10개에도 사각형 30개 이하, 아이콘·알림과 안 겹침
+## ⑪ 창업 뒤 (계산 노선 "city"): 시내 그림, 정차할 곳 수 = Trip.lap_cargo (세팅 없음 40), 회사 건물이 섞임, 집끼리·길·건물·구석 줄과 안 겹침, 큰 화면에서도
+## ⑫ 시내 첫 바퀴 (진짜 프레임, 트럭 자리 = Trip.lap_stop_progress): "+돈" 수 = 계산 배송 수 = lap_cargo, 0번 집부터 차례로 한 번씩,
+##    배송 때 트럭이 그 집 앞, 집마다 섬
+## ⑬ 띠 보이는 곳 (세팅 없음 40곳 / 적재량 3줄 최고 등급 = ceil(Trip.cargo)곳): 빌딩 실루엣·집이 visible_rects() 안, 집끼리·길·건물과 안 겹침,
+##    전화 아이콘과 안 겹침, 아이콘 + 글자 10개에도 사각형 30개 이하
 ## 현지 시각은 main.now_local_override로 고정 (2026-11-18 수요일 12:00부터 하루씩). 결과를 정해야 하는 강화는 main의 난수 씨앗을 미리 골라 둔다.
 ## 진짜 저장·설정 파일은 건드리지 않는다.
 ##
@@ -231,7 +233,9 @@ func _visitors(b: Balance) -> void:
 	await _frames(2)
 	var rec_note: String = p._danger_note.text
 	var rec_panel: bool = not p._insure.visible and p._cost.text == "비용 %s원" % Fmt.money(cost) \
-			and rec_note.contains("오늘은 복구 보험: 가입 안 해도 퍼지면 +%d에서 다시" % b.recovery_star) and p._danger.text.begins_with("퍼질 확률")
+			and rec_note == "퍼지면 스페어 엔진 1개를 자동으로 써서 +%d로 (트럭은 계속 달림)\n오늘은 복구 보험: 가입 안 해도 퍼지면 +%d에서 다시" % [
+				Enhance.drop_to(m.state, b, 0), b.recovery_star] and Enhance.drop_to(m.state, b, 0) == b.recovery_star \
+			and p._danger.text.begins_with("퍼질 확률")
 	m.rng.seed = _seed_for(func(r1: float, _r2: float): return r1 >= lo and r1 < hi)
 	await _press_enhance(m)
 	var rec_result: String = p._result_note.text
@@ -392,7 +396,7 @@ func _city(b: Balance) -> void:
 	var m := await _launch(b)
 	var town = m.town
 	var s = m.state
-	s.truck(0).star = 20   # 준비: 시내 한 바퀴 50초 (확인이 오래 안 걸리게)
+	s.truck(0).star = b.max_star   # 준비: 가장 빠른 단계 (집 사이가 먼 곳에서도 트럭이 배송 전에 닿나)
 	var houses_before: Array = town._houses.duplicate()
 	_report(not town.city and Trip.route_id(s, 0) == "town" and houses_before == Feel.TOWN_HOUSE_SPOTS.slice(0, Feel.TOWN_HOUSES)
 			and not _enclosed(m.visible_rects(), _global(town, town.skyline_rect())),
@@ -417,11 +421,10 @@ func _city(b: Balance) -> void:
 			and companies > 0 and companies < n and full_ok and bad.is_empty(),
 			"⑪ 창업 뒤: 시내 그림, 정차할 곳 %d곳 = lap_cargo %d (회사 건물 %d곳), 큰 화면에서도, 겹침 없음 %s" % [town._houses.size(), n, companies, bad])
 
-	# ⑫ 한 바퀴: 1바퀴째에 화면이 집 하나 몫을 잼 → 2바퀴째를 봄
+	# ⑫ 첫 바퀴 (창업 뒤 아직 게임 시간이 안 흘러서 트럭은 물류센터 앞, 바퀴 처음)
 	var tk = town.trucks[0]
+	var start_ok: bool = s.truck(0).lap_clock == 0.0 and tk.distance() == 0.0
 	Engine.time_scale = 10.0
-	await _until(func(): return s.truck(0).lap_delivered == n, 20.0)
-	await _until(func(): return s.truck(0).lap_delivered == 0, 20.0)
 	var log0: int = town.payout_log.size()
 	var parcels0: int = s.parcels_total
 	var seen := log0
@@ -429,13 +432,15 @@ func _city(b: Balance) -> void:
 	var at_house := 0
 	var stood := {}
 	var lap_parcels := -1
+	var prev_dist := 0.0   # 지난 프레임 끝 트럭 자리 (배송과 다음 집으로 떠나기가 한 프레임에 같이 나면, 배송 때 자리는 이것)
 	var t0 := Time.get_ticks_msec()
 	while houses.size() < n and Time.get_ticks_msec() - t0 < 20000:
 		await process_frame
 		for e: Array in town.payout_log.slice(seen):
 			houses.append(e[2])
-			at_house += 1 if _nearest(town._stops, tk.distance()) == e[2] else 0
+			at_house += 1 if e[2] in [_nearest(town._stops, prev_dist), _nearest(town._stops, tk.distance())] else 0
 		seen = town.payout_log.size()
+		prev_dist = tk.distance()
 		if houses.size() == n:
 			lap_parcels = s.parcels_total - parcels0
 		var k := _nearest(town._stops, tk.distance())
@@ -445,36 +450,47 @@ func _city(b: Balance) -> void:
 	var order := []
 	for i in n:
 		order.append(i)
-	_report(houses == order and lap_parcels == n and at_house == n and stood.size() >= n - 1,
-			"⑫ 시내 한 바퀴: '+돈' %d번 = 계산 배송 %d건 = lap_cargo %d, 집 0번부터 차례로 (%s), 배송 때 트럭이 그 집 앞 %d번, 선 집 %d곳" % [
+	_report(start_ok and houses == order and lap_parcels == n and at_house == n and stood.size() >= n - 1,
+			"⑫ 시내 첫 바퀴: '+돈' %d번 = 계산 배송 %d건 = lap_cargo %d, 집 0번부터 차례로 (%s), 배송 때 트럭이 그 집 앞 %d번, 선 집 %d곳" % [
 			houses.size(), lap_parcels, n, houses == order, at_house, stood.size()])
 
-	# ⑬ 띠 보이는 곳 (작은 화면 3가지): 빌딩 실루엣·집 안, 전화 아이콘 + 글자 10개에도 사각형 30개 이하
+	# ⑬ 띠 보이는 곳 (작은 화면 3가지 × 세팅 없음 / 적재량 3줄 최고 등급): 빌딩 실루엣·집 안, 안 겹침, 아이콘 + 글자 10개에도 사각형 30개 이하
 	m.state.rush_left = 0
 	await _ring(m)
 	var bad_rects := []
-	for size: Vector2i in SMALL_SIZES:
-		root.size = size
-		await _frames(3)
-		var rects: Array = m.visible_rects()
-		if not _enclosed(rects, _global(town, town.skyline_rect())):
-			bad_rects.append("%s 빌딩 실루엣" % size)
-		for spot in town._houses:
-			if not _enclosed(rects, _global(town, town._house_rect(spot))):
-				bad_rects.append("%s 집 %s" % [size, spot])
-		var icon := Rect2(town.rush_button.position, town.rush_button.size)
-		for spot in town._houses:
-			if icon.intersects(town.view_rect(town._house_rect(spot))):
-				bad_rects.append("%s 전화 아이콘 ↔ 집" % size)
-		for i in 10:
-			town.show_payout(i * 3, 2812 * (i + 1), ["normal", "large", "vip"][i % 3], i % 2 == 0)
-		await _frames(1)
-		if m.visible_rects().size() > 30:
-			bad_rects.append("%s 전화 아이콘 + 글자 10개: 사각형 %d개" % [size, m.visible_rects().size()])
+	var spot_counts := []
+	var cargo_was: Dictionary = s.truck(0).part("cargo_box").duplicate(true)
+	for full_cargo in [false, true]:
+		if full_cargo:   # 준비: 적재함 최고 등급 + 적재량 3줄 → 정차할 곳이 가장 많을 때
+			s.truck(0).part("cargo_box")["grade"] = b.lines_by_grade.size() - 1
+			s.truck(0).part("cargo_box")["lines"] = ["cargo", "cargo", "cargo"]
+			await _frames(2)
+		spot_counts.append([town._houses.size(), ceili(Trip.cargo(b, s, 0))])
+		for size: Vector2i in SMALL_SIZES:
+			root.size = size
+			await _frames(3)
+			_city_overlaps(m, bad_rects, "%s곳 %s" % [town._houses.size(), size])
+			var rects: Array = m.visible_rects()
+			if not _enclosed(rects, _global(town, town.skyline_rect())):
+				bad_rects.append("%s 빌딩 실루엣" % size)
+			for spot in town._houses:
+				if not _enclosed(rects, _global(town, town._house_rect(spot))):
+					bad_rects.append("%s 집 %s" % [size, spot])
+			var icon := Rect2(town.rush_button.position, town.rush_button.size)
+			for spot in town._houses:
+				if icon.intersects(town.view_rect(town._house_rect(spot))):
+					bad_rects.append("%s 전화 아이콘 ↔ 집" % size)
+			for i in 10:
+				town.show_payout(i * 4, 2250 * (i + 1), ["normal", "large", "vip"][i % 3], i % 2 == 0)
+			await _frames(1)
+			if m.visible_rects().size() > 30:
+				bad_rects.append("%s 전화 아이콘 + 글자 10개: 사각형 %d개" % [size, m.visible_rects().size()])
+	s.truck(0).part("cargo_box").merge(cargo_was, true)
 	root.size = Feel.SMALL_SIZE
 	await _frames(2)
-	_report(bad_rects.is_empty(), "⑬ 시내 띠: 빌딩 실루엣·집 %d채가 보이는 곳 안, 전화 아이콘과 안 겹침, 아이콘 + 글자 10개에도 사각형 30개 이하 %s" % [
-			town._houses.size(), bad_rects])
+	_report(bad_rects.is_empty() and spot_counts[0][0] == n and spot_counts[1][0] == spot_counts[1][1] and spot_counts[1][0] > n,
+			"⑬ 시내 띠: 정차할 곳 [그린 곳, ceil(평균 적재량)] %s 둘 다 빌딩 실루엣·집이 보이는 곳 안, 안 겹침, 아이콘 + 글자 10개에도 사각형 30개 이하 %s" % [
+			spot_counts, bad_rects])
 	await _close(m)
 
 

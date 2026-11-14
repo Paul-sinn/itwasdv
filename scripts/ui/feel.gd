@@ -291,7 +291,10 @@ const COLOR_ALERT := Color(0.92, 0.22, 0.20)        ## 느낌표 동그라미
 ## 시내 집 자리를 놓는 길 구간 [길 y, 시작 x, 끝 x] (물류센터에서 가까운 순, 시작 → 끝 = 트럭이 가는 쪽).
 ## 집 가운데가 이 안에 옴. 물류센터·사무실·튜닝숍·카센터·모서리를 피함. 정차할 곳 수만큼 구간 길이를 이어 붙여 고르게 나눔
 const CITY_SPANS := [[200.0, 84.0, 246.0], [200.0, 342.0, 425.0], [134.0, 425.0, 205.0], [68.0, 64.0, 440.0]]
+## 시내 집·회사 건물의 가장 큰 크기. 정차할 곳이 많아 간격이 좁으면 폭만 (간격 − CITY_HOUSE_GAP)으로 줄임
+## (적재량 옵션 없음 40곳: 간격 약 21 → 집 18, 적재량 3줄 최고 등급 66곳: 간격 약 12.7 → 9.7)
 const CITY_HOUSE_SIZE := Vector2(20, 22)     ## 시내 집 (지붕 포함 바깥 크기. 동네 집보다 작게)
+const CITY_HOUSE_GAP := 3.0                  ## 이웃한 집 사이 가장 좁은 틈
 const CITY_ROOF_HEIGHT := 8.0
 const CITY_ROOF_OVERHANG := 2.0
 const CITY_COMPANY_SIZE := Vector2(18, 25)   ## 회사 건물 (지붕 없이 높은 상자 + 창문)
@@ -312,3 +315,6 @@ const COLOR_CITY_SKYLINE := Color(0.20, 0.24, 0.33)
 const COLOR_CITY_SKY := Color(0.33, 0.42, 0.60)      ## 큰 화면 시내 하늘 (위 끝 ~ CITY_SKY_BOTTOM)
 const COLOR_CITY_GROUND := Color(0.19, 0.19, 0.22)   ## 큰 화면 시내 바닥 (동네는 COLOR_TOWN_GROUND)
 const CITY_SKY_BOTTOM := 62.0
+## 시내 화면 트럭 속도 상한 (TOWN_DRIVE_SECONDS_MIN 대신): 계산 쪽은 집 사이마다 같은 시간을 줘서, 집 사이가 먼 곳
+## (가운데 길 끝 → 위 길 첫 집 약 260px)을 짧게 달려야 함. +30·상하차 30%면 약 0.5초 → 동네 상한(8초)으로는 늦음
+const CITY_DRIVE_SECONDS_MIN := 3.0
