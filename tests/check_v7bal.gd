@@ -16,6 +16,10 @@
 ## ⑧ 주간 보상: 물류센터 줄 "지금 N원 + 경험치" (Weekly.reward_money = 지금 받으면), 달성 알림 "+N원 · 경험치" = 들어온 돈
 ## ⑨ 번역·창 크기: en 대화 창 4명·강화 칸·결과·알림 글자에 한글·키 없음, 번역 파일에 "큐브" 없음,
 ##    큰 화면 5가지에서 보험사 대화 창, 강화 칸 (보험료 줄 + [고급 스페어 쓰기] / 복구 보험 줄 + 스페어 없음)이 창 안
+## ⑩ 시내 그림 (U3): 창업 전에는 동네 그대로 (집 TOWN_HOUSES채, 빌딩 실루엣 없음)
+## ⑪ 창업 뒤 (계산 노선 "city"): 시내 그림, 정차할 곳 수 = Trip.lap_cargo (30), 회사 건물이 섞임, 집끼리·길·건물·구석 줄과 안 겹침, 큰 화면에서도
+## ⑫ 시내 한 바퀴 (진짜 프레임): "+돈" 수 = 계산 배송 수 = lap_cargo, 0번 집부터 차례로 한 번씩, 배송 때 트럭이 그 집 앞, 집마다 섬
+## ⑬ 띠 보이는 곳: 빌딩 실루엣·집 30채가 visible_rects() 안, 전화 아이콘 + 글자 10개에도 사각형 30개 이하, 아이콘·알림과 안 겹침
 ## 현지 시각은 main.now_local_override로 고정 (2026-11-18 수요일 12:00부터 하루씩). 결과를 정해야 하는 강화는 main의 난수 씨앗을 미리 골라 둔다.
 ## 진짜 저장·설정 파일은 건드리지 않는다.
 ##
@@ -36,6 +40,8 @@ const Save = preload("res://scripts/core/save.gd")
 const Setting = preload("res://scripts/core/setting.gd")
 const Visitor = preload("res://scripts/core/visitor.gd")
 const Weekly = preload("res://scripts/core/weekly.gd")
+const Company = preload("res://scripts/core/company.gd")
+const Trip = preload("res://scripts/core/trip.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
@@ -69,6 +75,7 @@ func _run() -> void:
 	await _visitors(b)
 	await _phone(b)
 	await _weekly(b)
+	await _city(b)
 	await _lang_and_fit(b)
 
 	Engine.time_scale = 1.0
@@ -377,6 +384,132 @@ func _weekly(b: Balance) -> void:
 	_report(reward > 0 and line == want and _noticed_prefix(town, want_notice),
 			"⑧ 주간 목표 '%s' → 달성 알림 '%s'" % [line, want_notice])
 	await _close(m)
+
+
+## ⑩~⑬: 시내 그림 (창업 전 동네 → 창업 뒤 도시 배경·회사 건물·정차할 곳 = lap_cargo, 집마다 서며 "+돈" = 배송, 띠 보이는 곳)
+func _city(b: Balance) -> void:
+	Save.delete_file(TEST_SAVE)
+	var m := await _launch(b)
+	var town = m.town
+	var s = m.state
+	s.truck(0).star = 20   # 준비: 시내 한 바퀴 50초 (확인이 오래 안 걸리게)
+	var houses_before: Array = town._houses.duplicate()
+	_report(not town.city and Trip.route_id(s, 0) == "town" and houses_before == Feel.TOWN_HOUSE_SPOTS.slice(0, Feel.TOWN_HOUSES)
+			and not _enclosed(m.visible_rects(), _global(town, town.skyline_rect())),
+			"⑩ 창업 전: 동네 그림 그대로 (집 %d채 = TOWN_HOUSES, 빌딩 실루엣 없음)" % houses_before.size())
+
+	s.money = b.agency_price
+	Company.found(b, s)   # 준비 (창업 클릭은 check_v7a ①). 게임 시간이 멈춰 있어서 첫 바퀴부터 시내
+	await _frames(3)
+	var n := Trip.lap_cargo(b, s, 0)
+	var companies := 0
+	for i in town._houses.size():
+		companies += 1 if town.is_company(i) else 0
+	var bad := []
+	_city_overlaps(m, bad, "작은 화면")
+	_click(town.building_rects()["depot"].get_center())
+	await _frames(3)
+	var full_ok: bool = m.is_full() and town.city and town.show_ground and town._houses.size() == n
+	_city_overlaps(m, bad, "큰 화면")
+	_click(m.small_button.get_global_rect().get_center())
+	await _frames(3)
+	_report(town.city and Trip.route_id(s, 0) == "city" and n == roundi(b.base_cargo * b.routes["city"]["stops_mult"]) and town._houses.size() == n
+			and companies > 0 and companies < n and full_ok and bad.is_empty(),
+			"⑪ 창업 뒤: 시내 그림, 정차할 곳 %d곳 = lap_cargo %d (회사 건물 %d곳), 큰 화면에서도, 겹침 없음 %s" % [town._houses.size(), n, companies, bad])
+
+	# ⑫ 한 바퀴: 1바퀴째에 화면이 집 하나 몫을 잼 → 2바퀴째를 봄
+	var tk = town.trucks[0]
+	Engine.time_scale = 10.0
+	await _until(func(): return s.truck(0).lap_delivered == n, 20.0)
+	await _until(func(): return s.truck(0).lap_delivered == 0, 20.0)
+	var log0: int = town.payout_log.size()
+	var parcels0: int = s.parcels_total
+	var seen := log0
+	var houses := []
+	var at_house := 0
+	var stood := {}
+	var lap_parcels := -1
+	var t0 := Time.get_ticks_msec()
+	while houses.size() < n and Time.get_ticks_msec() - t0 < 20000:
+		await process_frame
+		for e: Array in town.payout_log.slice(seen):
+			houses.append(e[2])
+			at_house += 1 if _nearest(town._stops, tk.distance()) == e[2] else 0
+		seen = town.payout_log.size()
+		if houses.size() == n:
+			lap_parcels = s.parcels_total - parcels0
+		var k := _nearest(town._stops, tk.distance())
+		if tk.speed() == 0.0 and absf(town._stops[k] - tk.distance()) < 0.5:
+			stood[k] = true
+	Engine.time_scale = 0.0
+	var order := []
+	for i in n:
+		order.append(i)
+	_report(houses == order and lap_parcels == n and at_house == n and stood.size() >= n - 1,
+			"⑫ 시내 한 바퀴: '+돈' %d번 = 계산 배송 %d건 = lap_cargo %d, 집 0번부터 차례로 (%s), 배송 때 트럭이 그 집 앞 %d번, 선 집 %d곳" % [
+			houses.size(), lap_parcels, n, houses == order, at_house, stood.size()])
+
+	# ⑬ 띠 보이는 곳 (작은 화면 3가지): 빌딩 실루엣·집 안, 전화 아이콘 + 글자 10개에도 사각형 30개 이하
+	m.state.rush_left = 0
+	await _ring(m)
+	var bad_rects := []
+	for size: Vector2i in SMALL_SIZES:
+		root.size = size
+		await _frames(3)
+		var rects: Array = m.visible_rects()
+		if not _enclosed(rects, _global(town, town.skyline_rect())):
+			bad_rects.append("%s 빌딩 실루엣" % size)
+		for spot in town._houses:
+			if not _enclosed(rects, _global(town, town._house_rect(spot))):
+				bad_rects.append("%s 집 %s" % [size, spot])
+		var icon := Rect2(town.rush_button.position, town.rush_button.size)
+		for spot in town._houses:
+			if icon.intersects(town.view_rect(town._house_rect(spot))):
+				bad_rects.append("%s 전화 아이콘 ↔ 집" % size)
+		for i in 10:
+			town.show_payout(i * 3, 2812 * (i + 1), ["normal", "large", "vip"][i % 3], i % 2 == 0)
+		await _frames(1)
+		if m.visible_rects().size() > 30:
+			bad_rects.append("%s 전화 아이콘 + 글자 10개: 사각형 %d개" % [size, m.visible_rects().size()])
+	root.size = Feel.SMALL_SIZE
+	await _frames(2)
+	_report(bad_rects.is_empty(), "⑬ 시내 띠: 빌딩 실루엣·집 %d채가 보이는 곳 안, 전화 아이콘과 안 겹침, 아이콘 + 글자 10개에도 사각형 30개 이하 %s" % [
+			town._houses.size(), bad_rects])
+	await _close(m)
+
+
+## 시내 집·회사 건물이 동네 안이고 서로·길·건물(빛남 포함)·구석 줄과 안 겹치나 (어긋나면 bad에)
+func _city_overlaps(m: Node, bad: Array, where: String) -> void:
+	var town = m.town
+	var others := [["구석 줄", Rect2(town._hud.position, town._hud.size).merge(Rect2(town._quest_label.position, town._quest_label.size))]]
+	for id: String in town.building_rects():
+		others.append([id, town.building_rects()[id].grow(Feel.BUILDING_GLOW_PX * town.zoom)])
+	for piece: Rect2 in town.route.pieces:
+		others.append(["길", town.view_rect(piece.grow(Feel.TOWN_ROAD_WIDTH / 2.0))])
+	var prev := Rect2()
+	for spot in town._houses:
+		var r: Rect2 = town.view_rect(town._house_rect(spot))
+		if not town.area().encloses(r) or r.intersects(prev):
+			bad.append("%s 집 %s 동네 밖이거나 옆집과 겹침" % [where, spot])
+		for o in others:
+			if r.intersects(o[1]):
+				bad.append("%s 집 %s ↔ %s" % [where, spot, o[0]])
+		prev = r
+
+
+## 동네 설계 좌표 사각형 → 창 좌표
+func _global(town: Node, r: Rect2) -> Rect2:
+	var v: Rect2 = town.view_rect(r)
+	return Rect2(v.position + town.global_position, v.size)
+
+
+## 길 위 거리 d에서 가장 가까운 서는 곳 번호
+func _nearest(stops: PackedFloat64Array, d: float) -> int:
+	var best := 0
+	for i in stops.size():
+		if absf(stops[i] - d) < absf(stops[best] - d):
+			best = i
+	return best
 
 
 ## ⑨: en 글자, "큐브" 없음, 큰 화면 5가지에서 대화 창·강화 칸이 창 안 (ko·en)

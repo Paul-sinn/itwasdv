@@ -114,7 +114,7 @@ func _run() -> void:
 		t.part("cargo_box")["lines"] = setup[1]
 		await _frames(2)
 		cargo_texts.append(st._effect.text)
-		cargo_avgs.append(Trip.cargo(b, t))
+		cargo_avgs.append(Trip.cargo(b, m.state, 0))
 	t.part("cargo_box").merge(cargo_was, true)
 	await _frames(2)
 	_report(st._effect.is_visible_in_tree() and cargo_texts == ["한 바퀴 적재량 20건", "한 바퀴 적재량 %s건" % Fmt.num(want_cargo, 1)]

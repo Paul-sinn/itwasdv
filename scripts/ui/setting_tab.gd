@@ -226,7 +226,7 @@ func refresh(b: Balance, s: GameState, locked: bool) -> void:
 	# 이 부품에서 나오는 옵션의 효과 (적재량 = 지금 평균 적재량, 소수점 한 자리까지 / 오버부스트 = 걸리면 어떻게 되나)
 	var notes := PackedStringArray()
 	if chances.has("cargo"):
-		notes.append(tr("SETTING_CARGO_NOW") % Fmt.num(Trip.cargo(b, t), 1))
+		notes.append(tr("SETTING_CARGO_NOW") % Fmt.num(Trip.cargo(b, s, truck), 1))
 	if chances.has("overboost"):
 		notes.append(tr("SETTING_OVERBOOST_NOTE") % Fmt.num(b.overboost_mult))
 	_effect.text = "\n".join(notes)

@@ -12,6 +12,8 @@
 ##      구석 줄 "시내 N위" (set_rank. 누르면 아무 일 없음)
 ## v7-bal: 오른쪽 위 아이콘 (town_icon.gd): 편지봉투 + 느낌표 (NPC가 온 날, set_letter → letter_pressed),
 ##      급송 전화는 말풍선 대신 전화 아이콘 (누르면 rush_accept_pressed. 아래 남은 시간 막대). 알림은 아이콘 왼쪽에
+##      U3 시내 (set_city. 창업 뒤 = 계산 노선 "city"): 같은 길에 작은 집·회사 건물이 정차할 곳 수만큼 촘촘히, 뒤쪽 빌딩 실루엣
+##      (띠에서도 → 보이는 곳), 큰 화면은 하늘·바닥 색. 창업 전에는 동네 그대로 (집 TOWN_HOUSES채)
 ## 동네 설계 좌표(feel.gd TOWN_SIZE = 작은 화면 크기)로 만들고, 전체 화면에서는 같은 동네를 통째로 확대한다.
 ## 길·집·트럭은 확대해서 그리고(선명함), 글자는 확대 배수에 맞춘 글자 크기로 따로 놓는다.
 ## 그리기만 한다. 돈·배송은 main.gd → scripts/core/trip.gd (배송 이벤트가 오면 show_payout)
@@ -50,7 +52,7 @@ var payouts_shown := 0       ## 지금까지 띄운 "+금액" 수 (확인용)
 var spares_shown := 0        ## 지금까지 띄운 "스페어 엔진 +1" 수 (확인용)
 var boosts_shown := 0        ## 지금까지 띄운 "오버부스트!" 수 (확인용)
 var tips_shown: Array[String] = []   ## 지금까지 띄운 "팁! +금액" 글자 (확인용)
-var payout_log: Array = []   ## 지금까지 띄운 "+금액"마다 [트럭 번호, 금액] (확인용)
+var payout_log: Array = []   ## 지금까지 띄운 "+금액"마다 [트럭 번호, 금액, 집 번호] (확인용)
 var point_dot: Panel         ## 구석 줄 레벨 옆 점: 찍을 능력치 포인트가 남음 (set_point_dot)
 var rush_button: TownIcon     ## 급송 전화 아이콘 + 남은 시간 막대 (벨이 울리는 동안. 누르면 받음)
 var letter_button: TownIcon   ## 편지봉투 + 느낌표 (NPC가 온 날. set_letter)
@@ -60,9 +62,11 @@ var tuning_button: Button    ## 구석 줄 끝 작은 버튼 [강화]
 var hint: Label              ## 처음 켰을 때 말풍선 "건물을 눌러보세요" (켜고 끄기는 main.gd → set_hint)
 var master_visit := false    ## 명장 방문 중 → 튜닝숍에 색 테두리 (set_master_visit)
 var office_open := false     ## 사무실 건물이 있나 (창업 뒤. set_office)
+var city := false            ## 시내 그림인가 (set_city)
 
-var _houses: Array[Vector2] = []     ## 집 자리 (길 가운데 선 위, 설계 좌표)
+var _houses: Array[Vector2] = []     ## 집 자리 (길 가운데 선 위, 설계 좌표). 시내면 정차할 곳마다 (집·회사 건물)
 var _stops := PackedFloat64Array()   ## 집마다 길 위 거리 (트럭이 서는 곳)
+var _rows := PackedInt32Array()      ## 집마다 묶음 번호 (보이는 곳 사각형을 묶음마다 하나로. 동네는 집마다 따로, 시내는 CITY_SPANS 구간)
 var _hud: HBoxContainer
 var _star_label: Label
 var _money_label: Label
@@ -81,9 +85,7 @@ var _rank_label: Label    ## 구석 줄 "시내 N위" (창업 뒤)
 
 func _ready() -> void:
 	route = Route.build(PackedVector2Array(Feel.TOWN_ROAD), Feel.TOWN_ROAD_CORNER)
-	for i in mini(Feel.TOWN_HOUSES, Feel.TOWN_HOUSE_SPOTS.size()):
-		_houses.append(Feel.TOWN_HOUSE_SPOTS[i])
-		_stops.append(route.distance_of(Feel.TOWN_HOUSE_SPOTS[i]))
+	_town_spots()
 	if _houses.size() < Feel.TOWN_HOUSES:
 		push_error("feel.gd: TOWN_HOUSE_SPOTS가 %d개뿐 (TOWN_HOUSES = %d)" % [_houses.size(), Feel.TOWN_HOUSES])
 
@@ -244,6 +246,58 @@ func set_office(on: bool) -> void:
 	if not on and hovered == OFFICE:
 		set_hover("")
 	queue_redraw()
+
+
+## 시내 그림 켜고 끄기 (main.gd: 계산 노선이 "city"면 켬). spots = 정차할 곳 수 (시내만. 동네는 늘 TOWN_HOUSES채).
+## 정차할 곳이 바뀌면 트럭들의 서는 곳도 바꿈 (트럭 자리는 그대로)
+func set_city(on: bool, spots: int) -> void:
+	if on == city and (not on or spots == _houses.size()):
+		return
+	city = on
+	if on:
+		_city_spots(maxi(spots, 1))
+	else:
+		_town_spots()
+	for t in trucks:
+		t.set_stops(_stops)
+	queue_redraw()
+
+
+## 동네 집 자리 (TOWN_HOUSE_SPOTS 앞에서 TOWN_HOUSES채, 집마다 따로 묶음)
+func _town_spots() -> void:
+	_houses.clear()
+	_stops.clear()
+	_rows.clear()
+	for i in mini(Feel.TOWN_HOUSES, Feel.TOWN_HOUSE_SPOTS.size()):
+		_houses.append(Feel.TOWN_HOUSE_SPOTS[i])
+		_stops.append(route.distance_of(Feel.TOWN_HOUSE_SPOTS[i]))
+		_rows.append(i)
+
+
+## 시내 집 자리 n곳: CITY_SPANS 구간 길이를 이어 붙여 n칸으로 고르게 나눈 칸 가운데 (물류센터에서 가까운 순)
+func _city_spots(n: int) -> void:
+	_houses.clear()
+	_stops.clear()
+	_rows.clear()
+	var total := 0.0
+	for span: Array in Feel.CITY_SPANS:
+		total += absf(span[2] - span[1])
+	var step := total / n
+	var start := 0.0   # 이 구간 앞까지 이어 붙인 길이
+	for k in Feel.CITY_SPANS.size():
+		var span: Array = Feel.CITY_SPANS[k]
+		var length := absf(span[2] - span[1])
+		while _houses.size() < n and (_houses.size() + 0.5) * step <= start + length + 0.001:
+			var spot := Vector2(span[1] + signf(span[2] - span[1]) * ((_houses.size() + 0.5) * step - start), span[0])
+			_houses.append(spot)
+			_stops.append(route.distance_of(spot))
+			_rows.append(k)
+		start += length
+
+
+## 시내 i번째 정차할 곳이 회사 건물인가 (나머지는 집)
+func is_company(i: int) -> bool:
+	return city and i % Feel.CITY_COMPANY_EVERY == 1
 
 
 ## 구석 줄 "시내 N위" (rank 0 = 대리점 전 → 숨김)
@@ -445,7 +499,7 @@ func pop_star() -> void:
 ## v7a: which = 어느 트럭의 배송인가 (보조 트럭도 같은 모양. amount는 내 돈으로 들어온 금액)
 func show_payout(house: int, amount: int, kind := "normal", rush := false, which := 0) -> void:
 	payouts_shown += 1
-	payout_log.append([which, amount])
+	payout_log.append([which, amount, house])
 	var words := PackedStringArray()
 	if rush:
 		words.append(tr("TOWN_PAY_RUSH"))
@@ -551,8 +605,17 @@ func visible_rects(truck_pad: float) -> Array:
 	out.append_array(_join(pieces))
 	if _name_tag.visible:
 		out.append(Rect2(_name_tag.position, _name_tag.size).grow(o))
-	for spot in _houses:
-		out.append(view_rect(_house_rect(spot)).grow(1.0))
+	# 집: 같은 묶음(시내는 같은 길 구간)끼리 한 사각형으로 (시내 30채여도 사각형 수를 안 늘리게). 시내 뒤쪽 빌딩 실루엣과 겹치면 합침
+	var rows := {}
+	for i in _houses.size():
+		var r := view_rect(_house_rect(_houses[i])).grow(1.0)
+		rows[_rows[i]] = rows[_rows[i]].merge(r) if rows.has(_rows[i]) else r
+	var blocks: Array[Rect2] = []
+	if city:
+		blocks.append(view_rect(skyline_rect()).grow(1.0))
+	for r: Rect2 in rows.values():
+		blocks.append(r)
+	out.append_array(_join(blocks))
 	# 오른쪽 위 아이콘 (편지봉투·전화): 나란히 붙어 있어서 한 사각형으로
 	var icons := Rect2()
 	for icon: TownIcon in [letter_button, rush_button]:
@@ -600,19 +663,35 @@ static func _join(rects: Array[Rect2]) -> Array[Rect2]:
 	return out
 
 
-## 집 하나가 차지하는 사각형 (설계 좌표): 벽 + 지붕
+## 집 하나가 차지하는 사각형 (설계 좌표): 벽 + 지붕. 시내면 작은 집 / 회사 건물
 func _house_rect(spot: Vector2) -> Rect2:
-	var s := Feel.TOWN_HOUSE_SIZE
 	var bottom := spot.y - Feel.TOWN_ROAD_WIDTH / 2.0 - 1.0
+	if city:
+		var c := Feel.CITY_COMPANY_SIZE if is_company(_houses.find(spot)) else Feel.CITY_HOUSE_SIZE
+		return Rect2(spot.x - c.x / 2.0, bottom - c.y, c.x, c.y)
+	var s := Feel.TOWN_HOUSE_SIZE
 	var ov := Feel.TOWN_ROOF_OVERHANG
 	return Rect2(spot.x - s.x / 2.0 - ov, bottom - s.y - Feel.TOWN_ROOF_HEIGHT, s.x + ov * 2.0, s.y + Feel.TOWN_ROOF_HEIGHT)
+
+
+## 시내 뒤쪽 빌딩 실루엣 전체 (설계 좌표)
+func skyline_rect() -> Rect2:
+	var r := Feel.CITY_SKYLINE[0]
+	for s in Feel.CITY_SKYLINE:
+		r = r.merge(s)
+	return r
 
 
 func _draw() -> void:
 	# 동네 설계 좌표로 그린다 (확대는 변환으로. 도형이라 확대해도 선명함)
 	draw_set_transform(origin, 0.0, Vector2.ONE * zoom)
 	if show_ground:
-		draw_rect(Rect2(Vector2.ZERO, Feel.TOWN_SIZE), Feel.COLOR_TOWN_GROUND)
+		draw_rect(Rect2(Vector2.ZERO, Feel.TOWN_SIZE), Feel.COLOR_CITY_GROUND if city else Feel.COLOR_TOWN_GROUND)
+		if city:
+			draw_rect(Rect2(0, 0, Feel.TOWN_SIZE.x, Feel.CITY_SKY_BOTTOM), Feel.COLOR_CITY_SKY)
+	if city:   # 뒤쪽 빌딩 실루엣 (띠에서도)
+		for r in Feel.CITY_SKYLINE:
+			draw_rect(r, Feel.COLOR_CITY_SKYLINE)
 
 	# 건물 (물류센터는 길 시작점 뒤): 사각형 + 문. 마우스를 올리면 밝게 + 둘레 빛. 사무실은 창업 뒤에만
 	for id: String in BUILDING_SPOTS:
@@ -629,19 +708,29 @@ func _draw() -> void:
 		if id == "tuning" and master_visit:   # 건물 가장자리를 가운데로: 바깥 절반 = 빛남 두께
 			draw_rect(d, Feel.COLOR_MASTER, false, Feel.MASTER_MARK_WIDTH)
 
-	# 집 (벽 + 지붕 + 문). 길보다 먼저 그려서 길 뒤에 선 것처럼
-	var hs := Feel.TOWN_HOUSE_SIZE
-	for spot in _houses:
-		var r := _house_rect(spot)
-		var ov := Feel.TOWN_ROOF_OVERHANG
-		var wall := Rect2(r.position.x + ov, r.end.y - hs.y, hs.x, hs.y)
+	# 집 (벽 + 지붕 + 문), 시내 회사 건물 (상자 + 창문). 길보다 먼저 그려서 길 뒤에 선 것처럼
+	for i in _houses.size():
+		var r := _house_rect(_houses[i])
+		if is_company(i):
+			draw_rect(r, Feel.COLOR_COMPANY)
+			var win := Feel.CITY_WINDOW
+			var gap := Feel.CITY_WINDOW_GAP
+			var y := r.position.y + gap
+			while y + win.y <= r.end.y - gap:
+				for x in [r.get_center().x - gap / 2.0 - win.x, r.get_center().x + gap / 2.0]:
+					draw_rect(Rect2(x, y, win.x, win.y), Feel.COLOR_COMPANY_WINDOW)
+				y += win.y + gap
+			continue
+		var ov := Feel.CITY_ROOF_OVERHANG if city else Feel.TOWN_ROOF_OVERHANG
+		var roof := Feel.CITY_ROOF_HEIGHT if city else Feel.TOWN_ROOF_HEIGHT
+		var wall := Rect2(r.position.x + ov, r.position.y + roof, r.size.x - ov * 2.0, r.size.y - roof)
 		draw_rect(wall, Feel.COLOR_HOUSE)
 		draw_colored_polygon(PackedVector2Array([
 			Vector2(r.position.x, wall.position.y),
 			Vector2(r.get_center().x, r.position.y),
 			Vector2(r.end.x, wall.position.y),
 		]), Feel.COLOR_HOUSE_ROOF)
-		draw_rect(Rect2(wall.get_center().x - hs.x * 0.15, wall.end.y - hs.y * 0.55, hs.x * 0.3, hs.y * 0.55), Feel.COLOR_DOOR)
+		draw_rect(Rect2(wall.get_center().x - wall.size.x * 0.15, wall.end.y - wall.size.y * 0.55, wall.size.x * 0.3, wall.size.y * 0.55), Feel.COLOR_DOOR)
 
 	# 꼬불길: 테두리(어두운 색) 위에 길(밝은 색). 끝은 둥글게
 	var w := Feel.TOWN_ROAD_WIDTH

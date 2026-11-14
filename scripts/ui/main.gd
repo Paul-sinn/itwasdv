@@ -8,7 +8,7 @@
 ##   큰 화면: 왼쪽에 같은 동네를 크게 + 오른쪽에 건물 화면(garage_panel.gd) + [설정] [작게] 버튼
 ##     큰 화면은 전체 화면 또는 창 모드(사용자가 [설정]에서 고름). 창 모드는 창 크기가 수시로 바뀜
 ##     → 창 크기가 바뀔 때마다 _layout() (최소 1280x720에서도 안 깨지게)
-## v3: 돈은 정수. 화면 트럭은 연출이고, 자리만 계산 쪽 바퀴 진행(TruckState)에서 정한다 (_lap_phase)
+## v3: 돈은 정수. 화면 트럭은 연출이고, 자리만 계산 쪽 바퀴 진행(Trip.lap_progress)에서 정한다
 ## v4: 차고 [세팅] 칸 → Setting.try_roll / Setting.choose (굴리기·고르기는 scripts/core/setting.gd)
 ## v5: 계산 쪽 알림(state.take_events: 할 일 끝·레벨업·만렙·강화 첫 달성)을 프레임마다 꺼내 동네에 하나씩,
 ##     차고 [기사·물류센터] → Depot.upgrade, 강화·세팅·스페어·올리기 직후 Quest.check (바로 반응하게)
@@ -309,6 +309,7 @@ func _process(delta: float) -> void:
 	if npc_dialog.visible and npc_dialog.who != visitor["who"]:
 		npc_dialog.visible = false   # 날이 바뀌어 NPC가 떠남
 	town.set_office(Company.stage(state) >= GameState.AGENCY)
+	town.set_city(Trip.route_id(state, TRUCK) == "city", _city_spots())
 	town.set_rank(Company.rank(balance, state))
 	panel.now_local = now
 	if _want_day_picker and is_full() and panel.building == "tuning" and not enhancing:
@@ -339,12 +340,22 @@ func _process(delta: float) -> void:
 func _advance_truck(i: int, delta: float) -> void:
 	var events := Trip.advance(state, balance, i, delta, rng)
 	var sprite: Node2D = town.trucks[i]
-	sprite.follow(_lap_phase(i))
+	var p := Trip.lap_progress(balance, state, i)
+	if town.city:   # 시내: 집마다 서고, "+돈"은 배송된 그 집에 (정차할 곳 = 실을 수 있는 수만큼)
+		var n := Trip.lap_cargo(balance, state, i)
+		var k: int = state.truck(i).lap_delivered
+		if k == n and p > 0.0 and events.any(func(e): return e["type"] == "parcel"):
+			sprite.leg = p / n   # 이번 바퀴 마지막 배송 = n × (집 하나 몫)
+		sprite.stop_and_go(p, k, n)
+	else:
+		sprite.follow(p)
 	sprite.boosting = state.truck(i).boost_lap
-	var house: int = sprite.nearest_house()   # "+돈"은 트럭(있어야 할 자리)에서 가장 가까운 집에
+	var house: int = sprite.nearest_house()   # 동네: "+돈"은 트럭(있어야 할 자리)에서 가장 가까운 집에
 	for e in events:
 		match e["type"]:
 			"parcel":
+				if town.city:
+					house = e["house"]
 				town.show_payout(house, e["pay"], e.get("kind", "normal"), e.get("rush", false), i)
 				earned_total += e["pay"]
 				parcels_total += 1
@@ -365,11 +376,12 @@ func _advance_truck(i: int, delta: float) -> void:
 					_measure_earned += e["pay"]
 
 
-## 트럭 i가 한 바퀴 중 어디쯤 있어야 하나 (0 = 물류센터 → 0.5 = 마지막 집 → 1 = 물류센터).
-## 짐 싣는 동안은 0, 그 뒤 바퀴 끝까지 고르게. 지금 바퀴 길이는 계산 쪽 Trip.lap_seconds (오버부스트 반영)
-func _lap_phase(i: int) -> float:
-	var drive := Trip.lap_seconds(balance, state, i) - balance.load_seconds
-	return clampf((state.truck(i).lap_clock - balance.load_seconds) / maxf(drive, 0.001), 0.0, 1.0)
+## 시내 정차할 곳 수 = 트럭들이 한 바퀴에 실을 수 있는 가장 많은 수 (평균 적재량 올림. 소수 적재량이면 바퀴마다 그 앞쪽 집만 감)
+func _city_spots() -> int:
+	var n := 0
+	for i in state.trucks.size():
+		n = maxi(n, ceili(Trip.cargo(balance, state, i)))
+	return n
 
 
 # ---------------- 저장 · 꺼둔 동안 수익 ----------------

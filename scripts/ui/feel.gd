@@ -286,3 +286,29 @@ const TOWN_ICON_BAR := 0.14                    ## 전화 아이콘 아래 남은
 const COLOR_LETTER := Color(0.97, 0.93, 0.82)       ## 편지봉투 종이
 const COLOR_LETTER_LINE := Color(0.45, 0.36, 0.25)  ## 봉투 테두리·덮개 선
 const COLOR_ALERT := Color(0.92, 0.22, 0.20)        ## 느낌표 동그라미
+
+# --- v7-bal U3: 시내 (창업 뒤 = Trip.route_id "city"). 같은 꼬불길에 작은 집·회사 건물이 촘촘히, 뒤쪽 빌딩 실루엣 ---
+## 시내 집 자리를 놓는 길 구간 [길 y, 시작 x, 끝 x] (물류센터에서 가까운 순, 시작 → 끝 = 트럭이 가는 쪽).
+## 집 가운데가 이 안에 옴. 물류센터·사무실·튜닝숍·카센터·모서리를 피함. 정차할 곳 수만큼 구간 길이를 이어 붙여 고르게 나눔
+const CITY_SPANS := [[200.0, 84.0, 246.0], [200.0, 342.0, 425.0], [134.0, 425.0, 205.0], [68.0, 64.0, 440.0]]
+const CITY_HOUSE_SIZE := Vector2(20, 22)     ## 시내 집 (지붕 포함 바깥 크기. 동네 집보다 작게)
+const CITY_ROOF_HEIGHT := 8.0
+const CITY_ROOF_OVERHANG := 2.0
+const CITY_COMPANY_SIZE := Vector2(18, 25)   ## 회사 건물 (지붕 없이 높은 상자 + 창문)
+const CITY_COMPANY_EVERY := 3                ## 정차할 곳 세 곳마다 하나가 회사 건물 (2, 5, 8, …번째)
+const CITY_WINDOW := Vector2(4, 3)           ## 회사 건물 창문 하나 (2줄씩, 위에서부터 CITY_WINDOW_GAP 간격)
+const CITY_WINDOW_GAP := 3.0
+const COLOR_COMPANY := Color(0.52, 0.60, 0.70)
+const COLOR_COMPANY_WINDOW := Color(0.95, 0.88, 0.55)
+## 뒤쪽 빌딩 실루엣 (위 길 뒤, 아래 끝 = 위 길 집 바닥). 띠에서도 그림 → 보이는 곳. 위 끝은 구석 줄·알림·아이콘(y 22까지) 아래
+const CITY_SKYLINE: Array[Rect2] = [
+	Rect2(0, 40, 24, 22), Rect2(24, 30, 18, 32), Rect2(42, 36, 28, 26), Rect2(70, 26, 16, 36), Rect2(86, 34, 30, 28),
+	Rect2(116, 42, 20, 20), Rect2(136, 28, 22, 34), Rect2(158, 38, 26, 24), Rect2(184, 25, 18, 37), Rect2(202, 34, 30, 28),
+	Rect2(232, 30, 20, 32), Rect2(252, 40, 26, 22), Rect2(278, 26, 22, 36), Rect2(300, 36, 28, 26), Rect2(328, 30, 18, 32),
+	Rect2(346, 42, 24, 20), Rect2(370, 28, 26, 34), Rect2(396, 36, 20, 26), Rect2(416, 25, 22, 37), Rect2(438, 34, 24, 28),
+	Rect2(462, 40, 18, 22),
+]
+const COLOR_CITY_SKYLINE := Color(0.20, 0.24, 0.33)
+const COLOR_CITY_SKY := Color(0.33, 0.42, 0.60)      ## 큰 화면 시내 하늘 (위 끝 ~ CITY_SKY_BOTTOM)
+const COLOR_CITY_GROUND := Color(0.19, 0.19, 0.22)   ## 큰 화면 시내 바닥 (동네는 COLOR_TOWN_GROUND)
+const CITY_SKY_BOTTOM := 62.0

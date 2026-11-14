@@ -615,8 +615,8 @@ func _u2(b: Balance) -> void:
 	var ranks_seen := []
 	var rank_ok: bool = locked == ["세계 순위표 · 잠김", "전국 순위표 · 잠김", "지역 순위표 · 잠김"] and o.locked_rows[0].is_visible_in_tree()
 	for target in ["start", "middle"]:
-		if target == "middle":
-			_set_stars_for_rank(b, m.state, func(r): return r > 2 and r < b.rivals.size())   # 준비: 중간 순위가 되는 단계
+		if target == "middle":   # 준비: 시작과 다른 중간 순위가 되는 단계 (v7-bal 시내 단가로는 +0 세 대도 이미 중간쯤)
+			_set_stars_for_rank(b, m.state, func(r): return r > 2 and r < b.rivals.size() and r != ranks_seen[0][0])
 		await _frames(2)
 		var rank := Company.rank(b, m.state)
 		var row := _row_with(o.rank_rows, "우리 대리점")
