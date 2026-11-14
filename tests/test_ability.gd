@@ -289,7 +289,7 @@ func test_helper_truck_no_abilities() -> void:
 	k.trucks.append(TruckState.new())
 	k.truck(1).star = 10
 	var r := Trip.apply_offline(k, b, 3 * 3600.0)
-	var p0 := floori(Trip.cargo(b, k.truck(0)) * 3600.0 / Trip.avg_lap_seconds(b, k, 0) * 3.0 * 0.5)
+	var p0 := floori(Trip.cargo(b, k, 0) * 3600.0 / Trip.avg_lap_seconds(b, k, 0) * 3.0 * 0.5)
 	check_eq(r["xp"], p0 * 5, "트럭 2대: 경험치는 트럭 0 배송(%d건)만, 전체 %d건" % [p0, r["parcels"]])
 	check(r["parcels"] > p0, "트럭 1 배송이 꺼둔 동안에 없음")
 

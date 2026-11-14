@@ -28,7 +28,7 @@ static func today(state: GameState) -> String:
 
 
 ## 프레임마다(또는 켤 때) Master.tick 뒤에 부름 (Master.tick이 끝에서 부르므로 화면이 따로 안 불러도 됨).
-##   다음 방문 날짜가 없으면(처음) 오늘 + 21~28일, 지났으면(왔거나 놓침) 그 날 + 21~28일 (그래도 지났으면 또 더함)
+##   다음 방문 날짜가 없으면(처음) 오늘 + 1~28일, 지났으면(왔거나 놓침) 그 날 + 21~28일 (그래도 지났으면 또 더함)
 ##   오늘 누가 오는지 정함 (명장 방문 중이면 아무도. 겹치면 뒤 NPC는 다음 날로)
 ##   방문이 그날 처음이면: 알림 { "type": "visitor", "who": id, "event": 보험사 이벤트 id 또는 "" },
 ##     보험사면 이벤트를 굴려 저장, 부품상이면 고급 스페어 += n 하고 알림에 "gift": n
@@ -38,9 +38,13 @@ static func tick(state: GameState, b: Balance, now_local: int, rng: RandomNumber
 		return
 	var day := _day(now_local)
 	for id in IDS:
-		var nxt: int = state.visitor_next.get(id, day + b.visitor_max_days + 1)
-		if nxt > day + b.visitor_max_days:   # 처음, 또는 시계가 거꾸로 감
-			nxt = day + rng.randi_range(b.visitor_min_days, b.visitor_max_days)
+		var nxt: int
+		if not state.visitor_next.has(id):   # 처음: 열린 다음 날 ~ max_days일 (열리고 3~4주를 기다리지 않게)
+			nxt = day + rng.randi_range(1, b.visitor_max_days)
+		else:
+			nxt = state.visitor_next[id]
+			if nxt > day + b.visitor_max_days:   # 시계가 거꾸로 감
+				nxt = day + rng.randi_range(b.visitor_min_days, b.visitor_max_days)
 		nxt = maxi(nxt, day - b.visitor_max_days)   # 아주 오래 안 켰어도 아래 반복이 한두 번이면 끝나게
 		while nxt < day:
 			nxt += rng.randi_range(b.visitor_min_days, b.visitor_max_days)

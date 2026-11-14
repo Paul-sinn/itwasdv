@@ -106,7 +106,7 @@ func test_lap_numbers_match_formula() -> void:
 		var t := _game(star).truck(0)
 		check_eq(Trip.power(b, star), e["power"], "+%d 출력" % star)
 		check_eq(Trip.speed(b, t), float(e["power"]), "+%d 속도" % star)
-		check_eq(Trip.cargo(b, t), 20, "+%d 적재량" % star)
+		check_eq(Trip.cargo(b, _st(t), 0), 20, "+%d 적재량" % star)
 		check_near(Trip.lap_seconds(b, _st(t), 0), e["lap"], 1e-9, "+%d 한 바퀴 초" % star)
 		check_near(Trip.avg_lap_seconds(b, _st(t), 0), e["lap"], 1e-9, "+%d 평균 한 바퀴 초 (오버부스트 없음)" % star)
 		check_eq(Trip.lap_income(b, _st(t), 0), e["lap_income"], "+%d 한 바퀴 수입" % star)
@@ -323,9 +323,9 @@ func test_setting_speed() -> void:
 	check_near(Trip.speed(b, t), 150.0 * 1.08, 1e-9, "속도 = 150 × 1.08")
 	_put(t, "ecu", 1, ["speed", "speed"])                           # + 스트리트 5% × 2
 	check_near(Trip.speed(b, t), 150.0 * (1.0 + 0.08 + 0.05 + 0.05), 1e-9, "속도 = 150 × 1.18 (두 부품 합)")
-	check_near(Trip.cargo(b, t), 22.4, 1e-9, "적재량 스포츠 12% → 평균 22.4건")
+	check_near(Trip.cargo(b, _st(t), 0), 22.4, 1e-9, "적재량 스포츠 12% → 평균 22.4건")
 	check_near(Trip.avg_lap_seconds(b, _st(t), 0), 10.0 + 12000.0 / (150.0 * 1.18) + 22.4 * 0.5, 1e-9, "평균 한 바퀴 초 (정차 22.4집)")
-	check_near(Trip.lap_seconds(b, _st(t), 0), 10.0 + 12000.0 / (150.0 * 1.18) + Trip.lap_cargo(b, t) * 0.5, 1e-9, "지금 바퀴 초 (실은 건수만큼 정차)")
+	check_near(Trip.lap_seconds(b, _st(t), 0), 10.0 + 12000.0 / (150.0 * 1.18) + Trip.lap_cargo(b, _st(t), 0) * 0.5, 1e-9, "지금 바퀴 초 (실은 건수만큼 정차)")
 	check_near(Trip.hourly_income_at(b, _st(t), 0, 11), 22.4 * (1875 + TIP_AVG) * 3600.0 / (10.0 + 12000.0 / (160.0 * 1.18) + 22.4 * 0.5),
 			1e-6, "성공하면 시간당도 세팅 반영")
 
@@ -334,15 +334,15 @@ func test_setting_speed() -> void:
 func test_setting_cargo() -> void:
 	var t := _game(0).truck(0)
 	_put(t, "cargo_box", 0, ["cargo"])
-	check_eq(Trip.cargo(b, t), 21.0, "적재량 5% 한 줄 → 21")
+	check_eq(Trip.cargo(b, _st(t), 0), 21.0, "적재량 5% 한 줄 → 21")
 	check_eq(Trip.lap_income(b, _st(t), 0), 21 * 1875, "한 바퀴 수입 = 21건")
 	_put(t, "cargo_box", 1, ["cargo", "junk_radio"])
-	check_near(Trip.cargo(b, t), 21.6, 1e-12, "8% 한 줄 → 21.6 (소수점 그대로)")
-	check_eq(typeof(Trip.cargo(b, t)), TYPE_FLOAT, "평균 적재량은 소수")
+	check_near(Trip.cargo(b, _st(t), 0), 21.6, 1e-12, "8% 한 줄 → 21.6 (소수점 그대로)")
+	check_eq(typeof(Trip.cargo(b, _st(t), 0)), TYPE_FLOAT, "평균 적재량은 소수")
 	_put(t, "cargo_box", 3, ["cargo", "cargo"])
-	check_eq(Trip.cargo(b, t), 28.0, "20% 두 줄 → 28 (27.999… 가 아님)")
+	check_eq(Trip.cargo(b, _st(t), 0), 28.0, "20% 두 줄 → 28 (27.999… 가 아님)")
 	_put(t, "cargo_box", 4, ["cargo", "cargo", "cargo"])
-	check_eq(Trip.cargo(b, t), 38.0, "30% 세 줄 → 38")
+	check_eq(Trip.cargo(b, _st(t), 0), 38.0, "30% 세 줄 → 38")
 	check_near(Trip.lap_seconds(b, _st(t), 0), 10.0 + 120.0 + 38 * 0.5, 1e-9, "정차가 38집")
 
 

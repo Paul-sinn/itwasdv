@@ -213,6 +213,7 @@ func test_agency_my_truck_tax() -> void:
 ## ⑥ 보조 트럭: 내 돈 = 번 돈 − 30% − 3%, 직원 몫·세금·내 돈의 합 = 번 돈 (1원도 안 틀림, 많이 돌려서)
 func test_helper_staff_and_tax() -> void:
 	var s := _game([0, 18, 15], true)
+	s.weekly_done = true   # 시내에서 20시간 × 2대면 주간 목표(6만 건)를 넘어 보상 돈이 섞여서 (v7-bal C2)
 	var ev := _run(s, 1, 20, _rng(6)) + _run(s, 2, 20, _rng(7))
 	var gross := 0
 	var bad := 0
@@ -361,13 +362,14 @@ func test_rank() -> void:
 ## ⑪ 타이어 정비비 감소가 1건 돈에 반영, 기름값 절감과 합쳐 60% 상한
 func test_tire_maint_cut() -> void:
 	var s := _game([0], true)
-	var u := 2500
-	check_eq(Trip.parcel_pay(b, s, 0), u - 500 - 125, "세팅 없음 1건 돈")
+	var u := roundi(2500 * b.routes["city"]["price_mult"])   # 대리점 = 시내 단가 (v7-bal C2)
+	var fuel := roundi(u * 0.2)
+	check_eq(Trip.parcel_pay(b, s, 0), u - fuel - roundi(u * 0.05), "세팅 없음 1건 돈")
 	var tire := s.truck(0).part("tire")
 	tire["lines"] = ["maint_cut"]
-	check_eq(Trip.parcel_pay(b, s, 0), u - 500 - roundi(u * 0.05 * (1.0 - 0.15)), "순정 정비비 감소 15% (v7-bal 임시)")
+	check_eq(Trip.parcel_pay(b, s, 0), u - fuel - roundi(u * 0.05 * (1.0 - 0.15)), "순정 정비비 감소 15% (v7-bal 임시)")
 	tire["grade"] = 4
-	check_eq(Trip.parcel_pay(b, s, 0), u - 500 - roundi(u * 0.05 * (1.0 - 0.6)), "프로토타입 정비비 감소 60%")
+	check_eq(Trip.parcel_pay(b, s, 0), u - fuel - roundi(u * 0.05 * (1.0 - 0.6)), "프로토타입 정비비 감소 60%")
 	var box := s.truck(0).part("cargo_box")
 	box["grade"] = 4
 	box["lines"] = ["fuel_cut", "fuel_cut", "fuel_cut"]   # 기름값 절감 135%

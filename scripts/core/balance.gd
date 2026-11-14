@@ -2,7 +2,8 @@
 ## 묶음은 "trip"(한 바퀴·팁), "engine"(강화·스페어), "offline"(꺼둔 동안), "setting"(세팅 돌리기),
 ## "driver"(기사 레벨), "abilities"(기사 능력치), "depot"(창고·야간팀), "quests"(다음 할 일 목록),
 ## "special"(대형·VIP), "rush"(급송 전화), "weekly"(주간 배송 목표), "master"(명장 방문일·보너스),
-## "company"(회사 단계·세금·대리점·보조 트럭·순위 v7a), "visitors"(특별 NPC: 보험사·마술사·중고 부품상 v7-bal).
+## "company"(회사 단계·세금·대리점·보조 트럭·순위 v7a), "visitors"(특별 NPC: 보험사·마술사·중고 부품상 v7-bal),
+## "routes"(노선: 동네·시내 v7-bal C2).
 ##
 ## 쓰는 법:
 ##   var b := Balance.load_file()
@@ -27,6 +28,8 @@ const ABILITY_IDS := ["unload", "kind", "nego", "knowhow", "mech"]
 const SPECIAL_IDS := ["large", "vip"]
 ## 명장 보너스 (v7-bal에서 3개로). enhance.gd가 이 id로 효과를 읽어서 다 있어야 하고, 모르는 id는 막는다
 const MASTER_BONUS_IDS := ["destroy_cut", "success_mult", "double_step"]
+## 노선 id (v7-bal C2. v7b에서 "long"). trip.gd가 이 id로 읽어서 json에 다 있어야 함
+const ROUTE_IDS := ["town", "city"]
 
 ## 읽기/검사에서 나온 문제들. 비어 있으면 정상.
 var errors: PackedStringArray = PackedStringArray()
@@ -100,6 +103,9 @@ var recovery_star: int                  ## 보험사 "복구 보험" 날 가입 
 var magician_up_mult: float             ## 마술사 날 세팅 등급업 확률 × 이것 (최대 1)
 var dealer_premium_spares: int          ## 중고 부품상이 주는 고급 스페어 수
 var premium_drop_to: int                ## 고급 스페어를 쓰고 퍼지면 이 단계로
+
+## 노선 id → { "price_mult": 단가 ×, "road_mult": 도로 길이 ×, "stops_mult": 한 바퀴 싣는 수(집 수)·싣는 시간 × } (모두 > 0)
+var routes: Dictionary = {}
 
 # --- company (회사 단계 v7a). [단계] 0 개인 기사 / 1 대리점 / 2~ 업데이트용 (세율표 공개만) ---
 var company_stages: PackedStringArray     ## 단계 id ("solo", "agency", …)
@@ -238,6 +244,9 @@ static func from_dict(d: Dictionary) -> RefCounted:
 	b.magician_up_mult = float(visitors["magician"]["up_mult"])
 	b.dealer_premium_spares = int(visitors["dealer"]["premium_spares"])
 	b.premium_drop_to = int(visitors["dealer"]["premium_drop_to"])
+	for id in ROUTE_IDS:
+		var r: Dictionary = d["routes"][id]
+		b.routes[id] = { "price_mult": float(r["price_mult"]), "road_mult": float(r["road_mult"]), "stops_mult": float(r["stops_mult"]) }
 	var company: Dictionary = d["company"]
 	b.company_stages = PackedStringArray(company["stages"])
 	b.tax_rates = PackedFloat64Array(company["tax_rates"])
@@ -291,7 +300,7 @@ static func validate(d: Dictionary) -> PackedStringArray:
 	var abilities = d.get("abilities")
 	for pair in [["trip", trip], ["engine", engine], ["offline", offline], ["setting", setting], ["driver", driver], ["depot", depot],
 			["abilities", abilities], ["special", d.get("special")], ["rush", d.get("rush")], ["weekly", d.get("weekly")],
-			["master", d.get("master")], ["company", d.get("company")], ["visitors", d.get("visitors")]]:
+			["master", d.get("master")], ["company", d.get("company")], ["visitors", d.get("visitors")], ["routes", d.get("routes")]]:
 		if typeof(pair[1]) != TYPE_DICTIONARY:
 			errs.append("\"%s\" 묶음이 없음" % pair[0])
 	if typeof(d.get("quests")) != TYPE_ARRAY or d["quests"].is_empty():
@@ -355,6 +364,12 @@ static func validate(d: Dictionary) -> PackedStringArray:
 	_validate_setting(setting, max_star, d["company"]["stages"] if stages_ok else [], errs)
 	_validate_v6b(d, max_star, errs)
 	_validate_visitors(d["visitors"], max_star, errs)
+	for id in ROUTE_IDS:   # 노선마다 배수 3개, 0보다 큼
+		if typeof(d["routes"].get(id)) != TYPE_DICTIONARY:
+			errs.append("routes.%s 가 없거나 { } 묶음이 아님" % id)
+			continue
+		for k in ["price_mult", "road_mult", "stops_mult"]:
+			_check_number(d["routes"][id], "routes." + id, k, errs, "0보다 커야 함", func(x): return x > 0.0)
 	var max_level := _validate_driver(driver, max_star, errs)
 	_validate_quests(d["quests"], max_star, max_level, setting, depot, d["company"], errs)
 	return errs
