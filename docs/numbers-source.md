@@ -29,3 +29,6 @@
 | 2026-11-13 | 기획서 16.6 / 4.12 (Q15 답) | `rush.min_minutes`, `rush.max_minutes`, `rush.pay_mult` | PROTOTYPE_V6B | 30~60분, ×2 |
 | 2026-11-13 | 경험치 얻는 법 (스냅샷 7번), 명장 보험 쿠폰 (9번) | `weekly.xp`, `weekly.coupons` | PROTOTYPE_V6B | 2000, 1장 |
 | 2026-11-13 | 명장 방문일 (스냅샷 9번), 기획서 2장·16.1 (Q15 답) | `master.unlock_star`, `master.insure_fee_mult`, `master.bonuses.*` | PROTOTYPE_V6B | +10에 열림, 보험 = 비용 × 2, 보너스 7개 (퍼짐 −30%, 강화 비용 −20%, 세팅 등급업 ×1.5, 성공 ×1.2, 드랍 ×2, 세팅 비용 −20%, 2단계 10%. 초안) |
+| 2026-11-13 | 회사 단계 & 세금 (스냅샷 10번), 지출 (12번), 경험치 얻는 법 (7번) | `company.stages`, `company.tax_rates`, `company.staff_share`, `company.city_xp_per_parcel` | PROTOTYPE_V7A | 세율 0/3/5/7/10%, 직원 몫 30%, 시내 배송 경험치 15 |
+| 2026-11-13 | 세팅 옵션 수치 (스냅샷 5번), 출시 세팅 부품 (2번) | `setting.options.maint_cut.values`, `setting.parts.tire` | PROTOTYPE_V7A | 정비비 감소 3/6/9/13/18%, 타이어·휠 = 대리점에 열림 (`"unlock": "agency"`) |
+| 2026-11-13 | 시트에 없음 (임시 시작값, 조율자 → QUESTIONS Q23) | `company.agency_price`, `company.helper_prices`, `company.rivals`, `setting.options.maint_cut.weight`, `quests` found_agency·first_helper·tire_first | PROTOTYPE_V7A | 5억, 500만·2,000만, 800만 × 약 1.16배씩 10곳(→ 3,040만), 가중치 10, 보상 1000·500만 / 800·300만 / 600·200만 |

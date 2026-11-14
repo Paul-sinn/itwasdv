@@ -16,7 +16,11 @@
 ##   대형 = 단가 × 3, VIP = × 5 (special.*.pay_mult). 협상·기름값·정비비·팁은 그 단가 기준. 평균 계산은 몫 그대로
 ## v6b 급송: state.rush_left > 0이면 트럭 0의 배송은 단가 × rush.pay_mult (배송 종류 배수에 곱함). 한 건마다 −1 (벨은 rush.gd)
 ## v6b 주간 배송 목표: 배송마다(꺼둔 동안은 합) Weekly.add_parcels
+## v7a 회사: 번 돈(배송 1건 돈·팁)마다 직원 몫(보조 트럭만, × staff_share)·세금(× 세율)을 반올림해 떼고 나머지가 내 돈 (_split).
+##   오늘 집계(state.today_*)에 번 돈·직원 몫·세금을 더함. 배송 경험치는 내 트럭만 (대리점이면 시내 경험치), 보조 트럭 0
 extends RefCounted
+
+const Company = preload("res://scripts/core/company.gd")
 
 const Ability = preload("res://scripts/core/ability.gd")
 const Weekly = preload("res://scripts/core/weekly.gd")
@@ -99,33 +103,36 @@ static func lap_income(b: Balance, s: GameState, i: int) -> int:
 
 ## 트럭 i의 시간당 수입 = 평균 적재량 × 배송 1건 평균 돈 × 3600 ÷ 평균 한 바퀴 초 (소수. 화면에는 버림)
 ##   배송 1건 평균 돈 = 종류(보통·대형·VIP) 몫마다 (그 종류 1건 돈 + 팁 확률 × 그 종류 팁)의 합. 급송은 안 들어감 (잠깐이라)
+##   번 돈 기준 (직원 몫·세금 떼기 전. 순위·강화 칸 표시용). 떼고 난 내 돈은 hourly_net
 static func hourly_income(b: Balance, s: GameState, i: int) -> float:
-	return hourly_income_at(b, s, i, s.truck(i).star)
+	return _hourly(b, s, i, s.truck(i).star, false)
 
 
 ## 단계만 star로 바꿨을 때의 시간당 수입 ("성공하면 시간당": +15·+18이면 대형·VIP 몫도 그 단계로). 세팅·능력치는 그대로
 static func hourly_income_at(b: Balance, s: GameState, i: int, star: int) -> float:
-	var tip_p := tip_chance(b, s, i)
-	var shares := _kind_shares(b, star)
-	var per_parcel := 0.0
-	for kind: String in shares:
-		var mult := _kind_mult(b, kind)
-		per_parcel += shares[kind] * (_pay(b, s, i, mult) + tip_p * _tip(b, s, i, mult))
-	return cargo(b, s.truck(i)) * per_parcel * Economy.SECONDS_PER_HOUR / _avg_lap_at(b, s, i, star)
+	return _hourly(b, s, i, star, false)
+
+
+## 트럭 i의 시간당 내 돈 (hourly_income과 같은 식, 배송 1건 돈·팁마다 직원 몫·세금을 뗀 뒤)
+static func hourly_net(b: Balance, s: GameState, i: int) -> float:
+	return _hourly(b, s, i, s.truck(i).star, true)
 
 
 ## 트럭 i를 dt초 진행. 그사이 끝난 배송마다 돈을 더하고 이벤트를 돌려준다 (dt가 길면 여러 바퀴).
-##   { "type": "parcel", "pay": int, "house": int(0~N-1), "kind": "normal"/"large"/"vip", "rush": bool }
+##   { "type": "parcel", "pay": int, "gross": int, "house": int(0~N-1), "kind": "normal"/"large"/"vip", "rush": bool }
 ##   { "type": "spare" } (바로 앞 배송에서 나옴)
-##   { "type": "tip", "pay": int } (바로 앞 배송에서 나옴. 돈은 이미 더해짐. 순서: parcel → spare(있으면) → tip(있으면))
+##   { "type": "tip", "pay": int, "gross": int } (바로 앞 배송에서 나옴. 돈은 이미 더해짐. 순서: parcel → spare(있으면) → tip(있으면))
+##   pay = 내 돈으로 들어온 금액 (직원 몫·세금 뗀 뒤), gross = 번 돈
 ##   { "type": "boost" } (새 바퀴를 출발할 때 오버부스트가 걸림)
 ## 바퀴 중간에 단계·세팅이 바뀌면 남은 집은 새 속도로 계산한다 (이미 지난 집은 바로 배송). 실은 건수는 다음 바퀴부터.
-## 배송마다 parcels_total +1, 기사 경험치. 부를 때마다 끝에 Quest.check 한 번 (레벨·퀘스트 알림은 state.take_events)
+## 배송마다 parcels_total +1, 기사 경험치. 부를 때마다 끝에 Quest.check 한 번, 트럭 0이면 Company.check_first 한 번 (알림은 state.take_events)
 static func advance(state: GameState, b: Balance, i: int, dt: float, rng: RandomNumberGenerator) -> Array:
 	var events := []
 	if dt > 0.0:
 		_drive(state, b, i, dt, rng, events)
 	Quest.check(state, b)
+	if i == 0:   # 순위는 모든 트럭 시간당 매출을 다시 계산해서, 프레임마다 트럭 수만큼 하지 않게 내 트럭 진행 때만
+		Company.check_first(state, b)
 	return events
 
 
@@ -140,7 +147,8 @@ static func _drive(state: GameState, b: Balance, i: int, dt: float, rng: RandomN
 	var tip_p := tip_chance(b, state, i)
 	var vip_p: float = b.special["vip"]["share"] if t.star >= b.special["vip"]["unlock_star"] else 0.0
 	var large_p: float = b.special["large"]["share"] if t.star >= b.special["large"]["unlock_star"] else 0.0
-	var money_of := {}   # 배수 → [1건 돈, 팁] (이번 호출 안에서 같은 배수는 한 번만 계산)
+	var money_of := {}   # 배수 → [1건 번 돈, 그 _split, 팁 번 돈, 그 _split] (이번 호출 안에서 같은 배수는 한 번만 계산)
+	var xp := _xp_per_parcel(b, state, i)
 	var boost_chance := minf(Setting.total(b, t, "overboost"), 1.0)
 	var drive := _drive_at(b, t, t.star, t.boost_lap)
 	while true:
@@ -159,21 +167,22 @@ static func _drive(state: GameState, b: Balance, i: int, dt: float, rng: RandomN
 				mult *= b.rush_pay_mult
 				state.rush_left -= 1
 			if not money_of.has(mult):
-				money_of[mult] = [_pay(b, state, i, mult), _tip(b, state, i, mult)]
-			var pay: int = money_of[mult][0]
-			state.money += pay
+				var pay_g := _pay(b, state, i, mult)
+				var tip_g := _tip(b, state, i, mult)
+				money_of[mult] = [pay_g, _split(b, state, i, pay_g), tip_g, _split(b, state, i, tip_g)]
+			var m: Array = money_of[mult]
+			_earn(state, m[0], m[1])
 			state.parcels_total += 1
-			Driver.add_xp(state, b, b.driver_xp_per_parcel)
-			events.append({ "type": "parcel", "pay": pay, "house": t.lap_delivered, "kind": kind, "rush": rush })
+			Driver.add_xp(state, b, xp)
+			events.append({ "type": "parcel", "pay": m[1][2], "gross": m[0], "house": t.lap_delivered, "kind": kind, "rush": rush })
 			t.lap_delivered = k
 			Weekly.add_parcels(state, b, 1)
 			if Enhance.random01(rng) < drop:
 				state.spares += 1
 				events.append({ "type": "spare" })
 			if tip_p > 0.0 and Enhance.random01(rng) < tip_p:
-				var tip: int = money_of[mult][1]
-				state.money += tip
-				events.append({ "type": "tip", "pay": tip })
+				_earn(state, m[2], m[3])
+				events.append({ "type": "tip", "pay": m[3][2], "gross": m[2] })
 		elif t.lap_clock >= _lap_from_drive(b, n, drive, stop):
 			t.lap_clock -= _lap_from_drive(b, n, drive, stop)
 			t.lap_delivered = 0
@@ -188,39 +197,47 @@ static func _drive(state: GameState, b: Balance, i: int, dt: float, rng: RandomN
 
 
 ## 꺼둔 동안을 상태에 반영(모든 트럭)하고 돌려준다:
-##   { "money": int, "parcels": int, "spares": int, "hours": float, "xp": int, "full": bool, "ignored": bool }
+##   { "money": int, "staff": int, "tax": int, "parcels": int, "spares": int, "hours": float, "xp": int, "full": bool, "ignored": bool }
 ##   꺼둔 초 < offline.ignore_under_seconds(3분)면 아무것도 안 함: ignored = true, 나머지 0 (시계가 거꾸로 간 음수도)
 ##   시간 = min(꺼둔 초 ÷ 3600, 창고 시간). full = 창고 시간에 닿음
-##   돈 = 트럭마다 floor(시간당 수입 × 시간 × 야간팀 비율)의 합 (시간당 수입은 오버부스트·팁·대형·VIP 평균, 능력치 포함. 급송 없음)
+##   번 돈 = 트럭마다 floor(시간당 수입 × 시간 × 야간팀 비율) (시간당 수입은 오버부스트·팁·대형·VIP 평균, 능력치 포함. 급송 없음)
+##   → 트럭마다 직원 몫·세금을 켜 둔 때와 같은 비율로 떼고(_split) 합. money = 내 돈 합, staff·tax = 뗀 합. 오늘 집계에도 더함
 ##   배송 = 트럭마다 floor(평균 적재량 × 3600 ÷ 평균 한 바퀴 초 × 시간 × 야간팀 비율)의 합 → parcels_total에도 더함
 ##   스페어 = 트럭마다 배송 × 그 트럭 드랍 확률(spare_chance)을 spare_drop_carry에 더하고 정수 부분만큼 (나머지는 다음에 이어짐)
-##   경험치 = floor(트럭 0 배송 × xp_per_parcel × 노하우) → Driver.add_xp (만렙이면 평판으로). 노하우 0이면 0
+##   경험치 = floor(트럭 0 배송 × 배송 1건 경험치(대리점이면 시내) × 노하우) → Driver.add_xp (만렙이면 평판으로). 노하우 0이면 0
 ##   주간 배송 목표에 배송 합을 더함 (Weekly.add_parcels. 주가 바뀐 뒤 켰으면 Master.tick을 먼저 불러 새 주에)
 ## 트럭의 바퀴 진행(lap_clock)은 그대로 둔다.
 static func apply_offline(state: GameState, b: Balance, seconds_away: float) -> Dictionary:
 	if seconds_away < b.offline_ignore_under_seconds:
-		return { "money": 0, "parcels": 0, "spares": 0, "hours": 0.0, "xp": 0, "full": false, "ignored": true }
+		return { "money": 0, "staff": 0, "tax": 0, "parcels": 0, "spares": 0, "hours": 0.0, "xp": 0, "full": false, "ignored": true }
 	var cap := Depot.cap_hours(b, state)
 	var rate := Depot.rate(b, state)
 	var hours := minf(seconds_away / Economy.SECONDS_PER_HOUR, cap)
 	var money := 0
+	var staff := 0
+	var tax := 0
 	var parcels := 0
 	var xp := 0
 	for i in state.trucks.size():
-		money += floori(hourly_income(b, state, i) * hours * rate)
+		var gross := floori(hourly_income(b, state, i) * hours * rate)
+		var parts := _split(b, state, i, gross)
+		_earn(state, gross, parts)
+		staff += parts[0]
+		tax += parts[1]
+		money += parts[2]
 		var n := floori(cargo(b, state.truck(i)) * Economy.SECONDS_PER_HOUR / avg_lap_seconds(b, state, i) * hours * rate)
 		parcels += n
 		state.spare_drop_carry += n * _spare_chance(b, state, i, false)   # 명장 보너스는 켜 둔 동안만
 		if i == 0:   # 1e-9: 1080 × 10 × 0.175처럼 딱 떨어져야 할 곱이 1889.999…로 1 모자라지 않게 (실수 찌꺼기만 막음)
-			xp = floori(n * b.driver_xp_per_parcel * Ability.value(b, state, "knowhow") + 1e-9)
+			xp = floori(n * _xp_per_parcel(b, state, 0) * Ability.value(b, state, "knowhow") + 1e-9)
 	var spares := floori(state.spare_drop_carry)
 	state.spare_drop_carry -= spares
-	state.money += money
 	state.spares += spares
 	state.parcels_total += parcels
 	Driver.add_xp(state, b, xp)
 	Weekly.add_parcels(state, b, parcels)
-	return { "money": money, "parcels": parcels, "spares": spares, "hours": hours, "xp": xp, "full": hours >= cap, "ignored": false }
+	return { "money": money, "staff": staff, "tax": tax, "parcels": parcels, "spares": spares, "hours": hours, "xp": xp,
+			"full": hours >= cap, "ignored": false }
 
 
 static func _speed_at(b: Balance, t: TruckState, star: int) -> float:
@@ -260,7 +277,7 @@ static func _unit(b: Balance, s: GameState, i: int) -> int:
 static func _pay(b: Balance, s: GameState, i: int, mult: float) -> int:
 	var t := s.truck(i)
 	var f := Setting.total(b, t, "fuel_cut")
-	var m := Setting.total(b, t, "maint_cut")   # 정비비 감소(타이어)는 v7. 지금은 늘 0
+	var m := Setting.total(b, t, "maint_cut")   # 정비비 감소 (타이어·휠, v7a)
 	var sum := f + m
 	if sum > b.cost_cut_cap:
 		f = f * b.cost_cut_cap / sum
@@ -284,6 +301,45 @@ static func _kind_shares(b: Balance, star: int) -> Dictionary:
 ## 배송 종류의 단가 배수 (보통 1)
 static func _kind_mult(b: Balance, kind: String) -> float:
 	return 1.0 if kind == "normal" else b.special[kind]["pay_mult"]
+
+
+## 트럭 i가 번 돈 gross → [직원 몫, 세금, 내 돈]. 직원 몫 = round(gross × staff_share) (보조 트럭만), 세금 = round(gross × 세율).
+## 내 돈 = 나머지 (소수는 내 돈 쪽에서 버림). 세금은 직원 몫을 뗀 나머지를 넘지 않음 (내 돈이 음수가 안 되게)
+static func _split(b: Balance, s: GameState, i: int, gross: int) -> Array:
+	var staff := roundi(gross * b.staff_share) if i > 0 else 0
+	var tax := mini(roundi(gross * b.tax_rates[s.company_stage]), gross - staff)
+	return [staff, tax, gross - staff - tax]
+
+
+## 번 돈 gross와 그 _split을 상태에: 내 돈 + 오늘 집계
+static func _earn(s: GameState, gross: int, parts: Array) -> void:
+	s.money += parts[2]
+	s.today_sales += gross
+	s.today_staff += parts[0]
+	s.today_tax += parts[1]
+
+
+## 배송 1건 경험치: 내 트럭만 (보조 트럭 0). 대리점이면 시내 경험치
+static func _xp_per_parcel(b: Balance, s: GameState, i: int) -> int:
+	if i > 0:
+		return 0
+	return b.city_xp_per_parcel if s.company_stage >= GameState.AGENCY else b.driver_xp_per_parcel
+
+
+## 시간당 수입 (hourly_income·hourly_net). net = 배송 1건 돈·팁마다 직원 몫·세금을 뗀 내 돈으로
+static func _hourly(b: Balance, s: GameState, i: int, star: int, net: bool) -> float:
+	var tip_p := tip_chance(b, s, i)
+	var shares := _kind_shares(b, star)
+	var per_parcel := 0.0
+	for kind: String in shares:
+		var mult := _kind_mult(b, kind)
+		var pay := _pay(b, s, i, mult)
+		var tip := _tip(b, s, i, mult)
+		if net:
+			pay = _split(b, s, i, pay)[2]
+			tip = _split(b, s, i, tip)[2]
+		per_parcel += shares[kind] * (pay + tip_p * tip)
+	return cargo(b, s.truck(i)) * per_parcel * Economy.SECONDS_PER_HOUR / _avg_lap_at(b, s, i, star)
 
 
 ## 능력치 효과는 내 트럭(트럭 0)에만 (보조 트럭은 0)

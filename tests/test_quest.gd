@@ -13,16 +13,16 @@ var b: Balance = Balance.load_file()
 
 const IDS := ["first_parcel", "parcels_20", "first_enhance", "first_setting", "star_3", "setting_street", "star_5",
 		"ecu_first", "warehouse_2", "level_5", "star_8", "setting_sport", "night_2", "star_10", "level_10", "warehouse_3",
-		"star_12", "star_15", "level_20", "setting_racing", "first_spare", "star_18"]
+		"star_12", "star_15", "level_20", "setting_racing", "first_spare", "star_18", "found_agency", "first_helper", "tire_first"]
 
 
 func _quest_ids(events: Array) -> Array:
 	return events.filter(func(ev): return ev["type"] == "quest_done").map(func(ev): return ev["id"])
 
 
-## v5 C1 ⑨: 목록 22개, 처음 차례·진행, 조건이 안 찼으면 아무 일 없음
+## v5 C1 ⑨: 목록 22개 (v7a +3 = 25), 처음 차례·진행, 조건이 안 찼으면 아무 일 없음
 func test_list_and_first() -> void:
-	check_eq(Quest.count(b), 22, "퀘스트 수")
+	check_eq(Quest.count(b), 25, "퀘스트 수")
 	var ids := []
 	for q in b.quests:
 		ids.append(q["id"])
@@ -40,7 +40,7 @@ func test_list_and_first() -> void:
 ## v5 C1 ⑨: 조건을 미리 넘긴 퀘스트는 check 한 번에 하나씩, 보상(돈·경험치)은 정확히 한 번, 다 끝나면 {}
 func test_all_in_order_one_per_check() -> void:
 	var s := GameState.new_game()
-	# 22개 조건을 전부 미리 채움
+	# 25개 조건을 전부 미리 채움 (v7a: 창업, 보조 트럭 1대, 타이어 돌림)
 	s.parcels_total = 20
 	s.truck(0).star = 18
 	s.setting_rolls = 1
@@ -50,9 +50,12 @@ func test_all_in_order_one_per_check() -> void:
 	s.night_level = 2
 	s.driver_level = 20
 	s.spares_bought = 1
+	s.company_stage = GameState.AGENCY
+	s.trucks.append(TruckState.new())
+	s.parts_rolled["tire"] = true
 	var money := 0
 	var xp := 0
-	for k in 22:
+	for k in IDS.size():
 		var q := Quest.current(b, s)
 		check_eq(q["id"], IDS[k], "%d번째 차례" % (k + 1))
 		check(Quest.check(s, b), "%d번째(%s)가 안 끝남" % [k + 1, IDS[k]])
@@ -67,8 +70,8 @@ func test_all_in_order_one_per_check() -> void:
 	check_eq(Quest.current(b, s), {}, "다 끝나면 current {}")
 	check_eq(Quest.progress(b, s), [0, 0], "다 끝나면 progress [0, 0]")
 	check(not Quest.check(s, b), "다 끝났는데 또 끝남")
-	check_eq([s.money, s.quest_index], [money, 22], "다 끝난 뒤 check: 상태 그대로")
-	note("22개 보상 합: 경험치 %d, 돈 %d원" % [xp, money])
+	check_eq([s.money, s.quest_index], [money, IDS.size()], "다 끝난 뒤 check: 상태 그대로")
+	note("%d개 보상 합: 경험치 %d, 돈 %d원" % [IDS.size(), xp, money])
 
 
 ## v5 C1 ⑨: 종류별 조건 — 차례가 왔을 때 지금 값 ≥ target이면 끝남. 세팅 등급은 고른 뒤에만, 단계는 트럭 중 가장 높은 것

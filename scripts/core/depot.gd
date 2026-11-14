@@ -26,9 +26,9 @@ static func top_level(b: Balance, kind: String) -> int:
 	return _values(b, kind).size()
 
 
-## 지금 살 수 있는 최고 레벨. 창고는 대리점 전이라 warehouse_max_level_solo(3)까지
-static func buyable_level(b: Balance, _state: GameState, kind: String) -> int:
-	if kind == "warehouse":
+## 지금 살 수 있는 최고 레벨. 창고는 대리점 전이면 warehouse_max_level_solo(3)까지, 대리점이면 표 끝(4)까지
+static func buyable_level(b: Balance, state: GameState, kind: String) -> int:
+	if kind == "warehouse" and state.company_stage < GameState.AGENCY:
 		return mini(b.warehouse_max_level_solo, top_level(b, kind))
 	return top_level(b, kind)
 

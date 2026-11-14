@@ -1,5 +1,5 @@
 {
-  "version": "0.12",
+  "version": "0.13",
   "trip": {
     "unit_price": 2500,
     "base_cargo": 20,
@@ -61,6 +61,15 @@
     "night_rates": [0.5, 0.6, 0.7, 0.8],
     "night_prices": [1500000, 2200000, 2500000]
   },
+  "company": {
+    "stages": ["solo", "agency", "regional", "national", "global"],
+    "tax_rates": [0.0, 0.03, 0.05, 0.07, 0.10],
+    "agency_price": 500000000,
+    "staff_share": 0.3,
+    "helper_prices": [5000000, 20000000],
+    "city_xp_per_parcel": 15,
+    "rivals": [8000000, 9300000, 10800000, 12500000, 14500000, 16800000, 19500000, 22600000, 26200000, 30400000]
+  },
   "setting": {
     "lines_by_grade": [1, 2, 3, 3, 3],
     "up_chance": [0.3, 0.08, 0.02, 0.003],
@@ -77,6 +86,10 @@
       "ecu": {
         "unlock_star": 5,
         "options": ["speed", "fuel_cut", "engine_guard", "overboost", "junk_ride", "junk_scent", "junk_cupholder", "junk_radio", "junk_gloss"]
+      },
+      "tire": {
+        "unlock": "agency",
+        "options": ["speed", "fuel_cut", "maint_cut", "junk_ride", "junk_scent", "junk_cupholder", "junk_radio", "junk_gloss"]
       }
     },
     "options": {
@@ -104,6 +117,11 @@
         "kind": "own",
         "weight": 10,
         "values": [0.03, 0.06, 0.09, 0.15, 0.24]
+      },
+      "maint_cut": {
+        "kind": "own",
+        "weight": 10,
+        "values": [0.03, 0.06, 0.09, 0.13, 0.18]
       },
       "junk_ride": { "kind": "junk", "weight": 12 },
       "junk_scent": { "kind": "junk", "weight": 12 },
@@ -134,6 +152,9 @@
     { "id": "level_20", "kind": "level", "target": 20, "xp": 800, "money": 1000000 },
     { "id": "setting_racing", "kind": "setting_grade", "target": 3, "xp": 1000, "money": 1000000 },
     { "id": "first_spare", "kind": "spares_bought", "target": 1, "xp": 600, "money": 1000000 },
-    { "id": "star_18", "kind": "star", "target": 18, "xp": 1000, "money": 1500000 }
+    { "id": "star_18", "kind": "star", "target": 18, "xp": 1000, "money": 1500000 },
+    { "id": "found_agency", "kind": "agency", "target": 1, "xp": 1000, "money": 5000000 },
+    { "id": "first_helper", "kind": "helpers", "target": 1, "xp": 800, "money": 3000000 },
+    { "id": "tire_first", "kind": "part_rolled", "target": 1, "part": "tire", "xp": 600, "money": 2000000 }
   ]
 }

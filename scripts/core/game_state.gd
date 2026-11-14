@@ -1,17 +1,29 @@
 ## 게임 상태: 돈, 스페어 엔진, 트럭들, 기사 레벨·창고·야간팀·퀘스트 진행, 화면에 띄울 알림.
 ## 화면 없이 돌아가는 계산 코드. (scripts/core 규칙)
 ## 한 바퀴·배송·꺼둔 동안은 trip.gd, 강화 굴리기는 enhance.gd, 레벨은 driver.gd, 능력치는 ability.gd, 창고·야간팀은 depot.gd,
-## 퀘스트는 quest.gd에 있다.
+## 퀘스트는 quest.gd, 회사(대리점·보조 트럭·세금·순위)는 company.gd에 있다.
 extends RefCounted
 
 const Balance = preload("res://scripts/core/balance.gd")
 const TruckState = preload("res://scripts/core/truck_state.gd")
 const GameState = preload("res://scripts/core/game_state.gd")   # new_game()의 돌려주는 모양 표시용 (자기 자신)
 
+## company_stage 값 (balance.json company.stages 순서). 2~는 업데이트용
+const SOLO := 0
+const AGENCY := 1
+
 var money: int = 0
 var spares: int = 0                  ## 들고 있는 스페어 엔진
 var spare_drop_carry: float = 0.0    ## 꺼둔 동안 스페어 평균값의 소수 나머지 (0 이상 1 미만)
-var trucks: Array = []               ## TruckState들. 새 게임은 1대
+var trucks: Array = []               ## TruckState들. 새 게임은 1대. 0 = 내 트럭, 1~ = 보조 트럭 (company.gd)
+
+# --- v7a 회사 (company.gd). 전부 저장 ---
+var company_stage: int = SOLO     ## 0 개인 기사, 1 대리점
+var today_day: int = -1           ## 오늘 집계가 어느 날 것인가 (현지 날짜 번호, Master.tick). -1 = 아직 모름 → 첫 tick에서 그날로
+var today_sales: int = 0          ## 오늘 번 돈 (모든 트럭, 직원 몫·세금 떼기 전, 꺼둔 동안 포함)
+var today_staff: int = 0          ## 오늘 직원 몫
+var today_tax: int = 0            ## 오늘 세금
+var rank_first_done: bool = false ## 시내 1위 알림을 보냈나 (한 번만)
 
 # --- 기사 레벨 (driver.gd) ---
 var driver_level: int = 1
@@ -93,6 +105,7 @@ func add_event(event: Dictionary) -> void:
 ##   { "type": "quest_done", "id": String, "xp": int, "money": int } / { "type": "milestone", "star": int, "xp": int }
 ##   { "type": "weekly_done", "coupons": int, "xp": int } / { "type": "rush_call" } / { "type": "rush_missed" } (v6b)
 ##   { "type": "master_unlocked" } / { "type": "master_notice", "bonus": String } / { "type": "master_visit", "bonus": String } (v6b)
+##   { "type": "agency_founded" } / { "type": "helper_bought", "truck": int } / { "type": "rank_first" } (v7a)
 func take_events() -> Array:
 	var out := _events
 	_events = []

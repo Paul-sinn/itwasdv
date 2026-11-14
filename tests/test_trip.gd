@@ -226,7 +226,8 @@ func test_offline() -> void:
 	for away in [0.0, -3 * hour]:
 		var s := _game(10)
 		var r := Trip.apply_offline(s, bv3, away)
-		check_eq(r, { "money": 0, "parcels": 0, "spares": 0, "hours": 0.0, "xp": 0, "full": false, "ignored": true }, "%s초 꺼둠 → 무시" % away)
+		check_eq(r, { "money": 0, "staff": 0, "tax": 0, "parcels": 0, "spares": 0, "hours": 0.0, "xp": 0, "full": false, "ignored": true },
+				"%s초 꺼둠 → 무시" % away)
 		check_eq([s.money, s.spares, s.spare_drop_carry, s.parcels_total], [0, 0, 0.0, 0], "%s초 꺼둠: 상태가 바뀜" % away)
 
 	# (v3 숫자) +0, 3시간: 시간당 375 × 3600 ÷ 140 = 9642.86 → × 3 × 0.5 = 14464.29 → 14464
@@ -249,13 +250,14 @@ func test_offline() -> void:
 	check_eq(r20["money"], Trip.apply_offline(_game(0), bv3, 4 * hour)["money"], "20시간 = 4시간")
 	check(r20["full"], "20시간인데 창고가 안 참")
 
-	# 트럭마다 floor해서 더함
+	# 트럭마다 floor해서 더함 (v7a: 트럭 1은 보조 트럭이라 직원 몫을 뗌)
 	var s2 := _game(0)
 	s2.trucks.append(TruckState.new())
 	s2.truck(1).star = 10
 	var r2 := Trip.apply_offline(s2, bv3, 3 * hour)
-	var want := floori(Trip.hourly_income(bv3, s2, 0) * 3.0 * 0.5) + floori(Trip.hourly_income(bv3, s2, 1) * 3.0 * 0.5)
-	check_eq(r2["money"], want, "트럭 2대 돈 = 트럭마다 더함")
+	var g1 := floori(Trip.hourly_income(bv3, s2, 1) * 3.0 * 0.5)
+	var want := floori(Trip.hourly_income(bv3, s2, 0) * 3.0 * 0.5) + g1 - roundi(g1 * bv3.staff_share)
+	check_eq(r2["money"], want, "트럭 2대 돈 = 트럭마다 더함 (트럭 1은 직원 몫 뗌)")
 
 
 ## 꺼둔 동안 스페어: 배송 × 확률을 소수 나머지에 쌓고 정수만큼 +

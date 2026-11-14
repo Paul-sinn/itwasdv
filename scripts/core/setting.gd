@@ -1,4 +1,4 @@
-## 세팅 돌리기: 부품(적재함·ECU)의 등급과 옵션 줄.
+## 세팅 돌리기: 부품(적재함·ECU·타이어·휠)의 등급과 옵션 줄.
 ## 화면 없이 돌아가는 계산 코드. (scripts/core 규칙)
 ## 등급업·옵션 뽑기 굴리기는 이 파일에만 둔다. (오버부스트 굴리기는 trip.gd)
 ##
@@ -16,7 +16,7 @@ const TruckState = preload("res://scripts/core/truck_state.gd")
 enum Block { NONE, LOCKED, NO_MONEY, PENDING }
 
 
-## 부품 id들 (json 순서. ["cargo_box", "ecu"])
+## 부품 id들 (json 순서. ["cargo_box", "ecu", "tire"])
 static func part_ids(b: Balance) -> Array:
 	return b.setting_parts.keys()
 
@@ -30,9 +30,14 @@ static func unlock_star(b: Balance, part: String) -> int:
 	return b.setting_parts[part]["unlock_star"]
 
 
-## 그 트럭의 지금 강화 단계로 이 부품이 열렸나
-static func unlocked(b: Balance, t: TruckState, part: String) -> bool:
-	return t.star >= unlock_star(b, part)
+## 이 부품이 열리는 회사 단계 (0 = 처음부터, 1 = 대리점: 타이어·휠)
+static func unlock_stage(b: Balance, part: String) -> int:
+	return b.setting_parts[part]["unlock_stage"]
+
+
+## 트럭 i의 이 부품이 열렸나: 그 트럭 강화 단계 ≥ unlock_star 이고 회사 단계 ≥ unlock_stage
+static func unlocked(b: Balance, state: GameState, i: int, part: String) -> bool:
+	return state.truck(i).star >= unlock_star(b, part) and state.company_stage >= unlock_stage(b, part)
 
 
 ## 돌리기 1번 비용. 명장 "세팅 비용 할인" 보너스 중이면(s.active_bonus) round(비용 × (1 − 할인)). 화면 = 실제
@@ -93,10 +98,9 @@ static func total(b: Balance, t: TruckState, option: String) -> float:
 
 ## 트럭 i의 부품을 지금 돌릴 수 있나? 못 하면 그 이유 (잠김 → 고르는 중 → 돈 순서)
 static func block_reason(state: GameState, b: Balance, i: int, part: String) -> Block:
-	var t := state.truck(i)
-	if not unlocked(b, t, part):
+	if not unlocked(b, state, i, part):
 		return Block.LOCKED
-	var p := t.part(part)
+	var p := state.truck(i).part(part)
 	if p["pending"] != null:
 		return Block.PENDING
 	if state.money < roll_cost(b, p["grade"], state):

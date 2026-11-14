@@ -34,9 +34,9 @@ func test_real_file_shape() -> void:
 	var d := real_balance_dict()
 	var keys := d.keys()
 	keys.sort()
-	check_eq(keys, ["abilities", "depot", "driver", "engine", "master", "offline", "quests", "rush", "setting", "special", "trip", "version",
-			"weekly"], "json 묶음 (v5b: abilities, v6b: special·rush·weekly·master)")
-	check_eq(d["version"], "0.12", "version")
+	check_eq(keys, ["abilities", "company", "depot", "driver", "engine", "master", "offline", "quests", "rush", "setting", "special", "trip",
+			"version", "weekly"], "json 묶음 (v5b: abilities, v6b: special·rush·weekly·master, v7a: company)")
+	check_eq(d["version"], "0.13", "version")
 	check(not d["engine"].has("cost_hours"), "engine.cost_hours 가 남아 있음")
 	check_eq(d["offline"].keys(), ["ignore_under_seconds"], "offline 묶음에는 ignore_under_seconds만 (cap_hours·rate는 depot 표로)")
 
@@ -204,7 +204,7 @@ func test_v5_numbers_match_spec() -> void:
 		["star_18", "star", 18, "", 1000, 1500000],
 	]
 	var got := []
-	for q in b.quests:
+	for q in b.quests.slice(0, 22):   # v7a 3개는 test_company
 		got.append([q["id"], q["kind"], q["target"], q["part"], q["xp"], q["money"]])
 	check_eq(got, want, "퀘스트 22개")
 	note("driver: 배송 %d, 첫 달성 %d (단계 %s), base %s, 지수 %s, 포인트 %d (+%d), 만렙 %d"

@@ -1,7 +1,8 @@
 ## 게임 숫자(data/balance.json)를 읽고 검사한다.
 ## 묶음은 "trip"(한 바퀴·팁), "engine"(강화·스페어), "offline"(꺼둔 동안), "setting"(세팅 돌리기),
 ## "driver"(기사 레벨), "abilities"(기사 능력치), "depot"(창고·야간팀), "quests"(다음 할 일 목록),
-## "special"(대형·VIP), "rush"(급송 전화), "weekly"(주간 배송 목표), "master"(명장 방문일·보험·보너스).
+## "special"(대형·VIP), "rush"(급송 전화), "weekly"(주간 배송 목표), "master"(명장 방문일·보험·보너스),
+## "company"(회사 단계·세금·대리점·보조 트럭·순위 v7a).
 ##
 ## 쓰는 법:
 ##   var b := Balance.load_file()
@@ -16,7 +17,10 @@ const SUM_EPSILON := 1e-9
 ## 세팅 등급 수 (순정·스트리트·스포츠·레이싱·프로토타입). 이름은 번역 파일에 5개라 고정. 줄 수·확률 목록 길이를 이걸로 검사
 const SETTING_GRADES := 5
 const OPTION_KINDS := ["common", "own", "junk"]
-const QUEST_KINDS := ["parcels", "star", "setting_rolls", "setting_grade", "part_rolled", "spares_bought", "warehouse", "night", "level"]
+const QUEST_KINDS := ["parcels", "star", "setting_rolls", "setting_grade", "part_rolled", "spares_bought", "warehouse", "night", "level",
+		"agency", "helpers"]
+## 회사 단계 앞 두 개 (코드가 번호로 씀: GameState.company_stage 0 = 개인 기사, 1 = 대리점). 그 뒤 단계는 세율표 공개용
+const STAGES_START := ["solo", "agency"]
 ## 기사 능력치 id (v5b). trip.gd가 이 id로 효과를 읽어서 json에 다 있어야 하고, 모르는 id는 막는다 (효과 없이 포인트만 먹지 않게)
 const ABILITY_IDS := ["unload", "kind", "nego", "knowhow", "mech"]
 ## 출력 제한 배송 종류 (v6b). trip.gd가 이 id로 읽음
@@ -89,6 +93,15 @@ var master_bonuses: Dictionary = {}     ## 보너스 id → 수치 (destroy_cut 
                                         ## setting_up_mult 1.5배, success_mult 1.2배, spare_mult 2배, setting_discount 0.2, double_step 10%)
 var master_bonus_ids: Array[String] = []   ## json 순서 (그 주 보너스를 고르게 뽑을 때)
 
+# --- company (회사 단계 v7a). [단계] 0 개인 기사 / 1 대리점 / 2~ 업데이트용 (세율표 공개만) ---
+var company_stages: PackedStringArray     ## 단계 id ("solo", "agency", …)
+var tax_rates: PackedFloat64Array         ## [단계] = 번 돈에서 떼는 세금 비율
+var agency_price: int                     ## 대리점 창업 가격
+var staff_share: float                    ## 보조 트럭이 번 돈에서 떼는 직원 몫 비율
+var helper_prices: PackedInt64Array       ## [이미 산 보조 트럭 수] = 다음 보조 트럭 값 (길이 = 살 수 있는 보조 트럭 수)
+var city_xp_per_parcel: int               ## 대리점(시내) 뒤 내 트럭 배송 1건 경험치
+var rivals: PackedFloat64Array            ## 순위표 라이벌 시간당 매출 (오름차순)
+
 # --- depot (창고 확장·야간 배송팀). [레벨-1] ---
 var warehouse_hours: PackedFloat64Array   ## 꺼둔 동안 쌓이는 최대 시간
 var warehouse_prices: PackedInt64Array    ## [지금 레벨-1] = 다음 레벨 가격 (길이 = 레벨 수 − 1)
@@ -107,7 +120,8 @@ var roll_cost: PackedInt64Array         ## [등급] = 돌리기 1번 비용 (원
 var cost_cut_cap: float                 ## 기름값 + 정비비 절감 합의 상한
 var engine_guard_cap: float             ## 엔진 보호 합의 상한
 var overboost_mult: float               ## 오버부스트: 걸린 바퀴 내내 운전 속도 몇 배
-var setting_parts: Dictionary = {}      ## 부품 id → { "unlock_star": int, "options": PackedStringArray } (json 순서)
+var setting_parts: Dictionary = {}      ## 부품 id → { "unlock_star": int, "unlock_stage": int, "options": PackedStringArray } (json 순서)
+                                        ## json "unlock": 회사 단계 id (없으면 처음부터 = 0), "unlock_star" 없으면 0
 var setting_options: Dictionary = {}    ## 옵션 id → { "kind": String, "weight": float, "values": PackedFloat64Array (잡옵은 전부 0) }
 
 
@@ -207,6 +221,14 @@ static func from_dict(d: Dictionary) -> RefCounted:
 	for id in master["bonuses"]:
 		b.master_bonus_ids.append(id)
 		b.master_bonuses[id] = float(master["bonuses"][id])
+	var company: Dictionary = d["company"]
+	b.company_stages = PackedStringArray(company["stages"])
+	b.tax_rates = PackedFloat64Array(company["tax_rates"])
+	b.agency_price = int(company["agency_price"])
+	b.staff_share = float(company["staff_share"])
+	b.helper_prices = PackedInt64Array(company["helper_prices"])
+	b.city_xp_per_parcel = int(company["city_xp_per_parcel"])
+	b.rivals = PackedFloat64Array(company["rivals"])
 	var depot: Dictionary = d["depot"]
 	b.warehouse_hours = PackedFloat64Array(depot["warehouse_hours"])
 	b.warehouse_prices = PackedInt64Array(depot["warehouse_prices"])
@@ -233,7 +255,8 @@ static func from_dict(d: Dictionary) -> RefCounted:
 		b.setting_options[id] = { "kind": o["kind"], "weight": float(o["weight"]), "values": values }
 	for id in setting["parts"]:
 		var pt: Dictionary = setting["parts"][id]
-		b.setting_parts[id] = { "unlock_star": int(pt["unlock_star"]), "options": PackedStringArray(pt["options"]) }
+		b.setting_parts[id] = { "unlock_star": int(pt.get("unlock_star", 0)), "unlock_stage": b.company_stages.find(pt.get("unlock", "solo")),
+				"options": PackedStringArray(pt["options"]) }
 	return b
 
 
@@ -250,7 +273,7 @@ static func validate(d: Dictionary) -> PackedStringArray:
 	var abilities = d.get("abilities")
 	for pair in [["trip", trip], ["engine", engine], ["offline", offline], ["setting", setting], ["driver", driver], ["depot", depot],
 			["abilities", abilities], ["special", d.get("special")], ["rush", d.get("rush")], ["weekly", d.get("weekly")],
-			["master", d.get("master")]]:
+			["master", d.get("master")], ["company", d.get("company")]]:
 		if typeof(pair[1]) != TYPE_DICTIONARY:
 			errs.append("\"%s\" 묶음이 없음" % pair[0])
 	if typeof(d.get("quests")) != TYPE_ARRAY or d["quests"].is_empty():
@@ -310,10 +333,11 @@ static func validate(d: Dictionary) -> PackedStringArray:
 			if sum > 1.0 + SUM_EPSILON:
 				errs.append("engine.success[%d] + engine.destroy[%d] = %s (1 이하여야 함)" % [s, s, sum])
 
-	_validate_setting(setting, max_star, errs)
+	var stages_ok := _validate_company(d["company"], errs)
+	_validate_setting(setting, max_star, d["company"]["stages"] if stages_ok else [], errs)
 	_validate_v6b(d, max_star, errs)
 	var max_level := _validate_driver(driver, max_star, errs)
-	_validate_quests(d["quests"], max_star, max_level, setting, depot, errs)
+	_validate_quests(d["quests"], max_star, max_level, setting, depot, d["company"], errs)
 	return errs
 
 
@@ -386,6 +410,39 @@ static func _validate_v6b(d: Dictionary, max_star: int, errs: PackedStringArray)
 		_check_number(bonuses, "master.bonuses", id, errs, rules[id][1], rules[id][0])
 
 
+## "company" 묶음 검사 (v7a). stages가 맞으면 true (세팅 부품 "unlock" 검사에 씀)
+## 단계 = 글자 목록, 앞 두 개는 solo·agency. 세율은 단계마다 0~1, 오를수록 줄지 않음. 직원 몫 + 가장 큰 세율 ≤ 1 (내 돈이 음수가 안 되게).
+## 보조 트럭 값은 정수, 줄지 않음. 라이벌 매출은 0보다 크고 오름차순 (순위 계산이 이 순서를 씀)
+static func _validate_company(c: Dictionary, errs: PackedStringArray) -> bool:
+	var whole := func(v): return v >= 0.0 and v == floorf(v)
+	var stages = c.get("stages")
+	var stages_ok: bool = typeof(stages) == TYPE_ARRAY and stages.size() >= STAGES_START.size() 			and stages.all(func(x): return typeof(x) == TYPE_STRING) and stages.slice(0, STAGES_START.size()) == STAGES_START
+	if not stages_ok:
+		errs.append("company.stages = %s (글자 목록, 앞은 %s 이어야 함)" % [stages, STAGES_START])
+	var n: int = stages.size() if stages_ok else 0
+	var tax_ok: bool = stages_ok and _check_list(c, "company", "tax_rates", n, "company.stages %d개와 같아야 함" % n, errs, "0~1 사이여야 함",
+			func(v): return v >= 0.0 and v <= 1.0)
+	if tax_ok:
+		_check_not_decreasing(c["tax_rates"], "company.tax_rates", errs)
+	_check_number(c, "company", "agency_price", errs, "0 이상의 정수여야 함", whole)
+	if _check_number(c, "company", "staff_share", errs, "0~1 사이여야 함", func(v): return v >= 0.0 and v <= 1.0) and tax_ok:
+		var top := float(c["staff_share"]) + float(c["tax_rates"].max())
+		if top > 1.0 + SUM_EPSILON:
+			errs.append("company: staff_share + 가장 큰 세율 = %s (1 이하여야 함. 내 돈이 음수가 됨)" % top)
+	var helpers = c.get("helper_prices")
+	if typeof(helpers) != TYPE_ARRAY:
+		errs.append("company.helper_prices 가 [ ] 목록이 아님")
+	elif _check_list(c, "company", "helper_prices", helpers.size(), "", errs, "0 이상의 정수여야 함", whole):
+		_check_not_decreasing(helpers, "company.helper_prices", errs)
+	_check_number(c, "company", "city_xp_per_parcel", errs, "0 이상의 정수여야 함", whole)
+	var rivals = c.get("rivals")
+	if typeof(rivals) != TYPE_ARRAY or rivals.is_empty():
+		errs.append("company.rivals 가 없거나 빈 목록")
+	elif _check_list(c, "company", "rivals", rivals.size(), "", errs, "0보다 커야 함", func(v): return v > 0.0):
+		_check_not_decreasing(rivals, "company.rivals", errs)
+	return stages_ok
+
+
 ## "abilities" 묶음 검사 (기사 능력치 v5b): ABILITY_IDS가 다 있고 그 밖은 없음, per_point ≥ 0, max_points 0 이상 정수.
 ## 최대로 찍어도 말이 되게: 상하차 per_point × max ≤ 1 (정차 시간이 0 아래로 안 감), 팁 기본 확률 + 친절 최대 ≤ 1
 static func _validate_abilities(abilities: Dictionary, tip_base: float, errs: PackedStringArray) -> void:
@@ -429,7 +486,7 @@ static func _validate_depot(depot: Dictionary, errs: PackedStringArray) -> void:
 
 
 ## "quests" 목록 검사 (다음 할 일 v5). 끝낼 수 없는 퀘스트가 있으면 그 뒤가 영영 막히므로 target이 닿을 수 있는 값인지도 본다
-static func _validate_quests(list: Array, max_star: int, max_level: int, setting: Dictionary, depot: Dictionary,
+static func _validate_quests(list: Array, max_star: int, max_level: int, setting: Dictionary, depot: Dictionary, company: Dictionary,
 		errs: PackedStringArray) -> void:
 	var whole := func(v): return v >= 0.0 and v == floorf(v)
 	var parts = setting.get("parts")
@@ -440,6 +497,8 @@ static func _validate_quests(list: Array, max_star: int, max_level: int, setting
 		"setting_grade": SETTING_GRADES - 1, "level": max_level,
 		"warehouse": int(solo) if _is_number(solo) else 0,
 		"night": nights.size() if typeof(nights) == TYPE_ARRAY else 0,
+		"agency": 1,
+		"helpers": company["helper_prices"].size() if typeof(company.get("helper_prices")) == TYPE_ARRAY else 0,
 	}
 	var seen := {}
 	for i in list.size():
@@ -469,7 +528,7 @@ static func _validate_quests(list: Array, max_star: int, max_level: int, setting
 
 
 ## "setting" 묶음 검사 (세팅 돌리기 v4)
-static func _validate_setting(setting: Dictionary, max_star: int, errs: PackedStringArray) -> void:
+static func _validate_setting(setting: Dictionary, max_star: int, stages: Array, errs: PackedStringArray) -> void:
 	var g := SETTING_GRADES
 	var whole := func(v): return v >= 0.0 and v == floorf(v)
 	var rate := func(v): return v >= 0.0 and v <= 1.0
@@ -521,8 +580,11 @@ static func _validate_setting(setting: Dictionary, max_star: int, errs: PackedSt
 		if typeof(pt) != TYPE_DICTIONARY:
 			errs.append("%s 가 { } 묶음이 아님" % where)
 			continue
-		_check_number(pt, where, "unlock_star", errs, "0~%d 정수여야 함" % max_star,
-				func(v): return v >= 0.0 and v <= max_star and v == floorf(v))
+		if pt.has("unlock_star"):   # 없으면 0
+			_check_number(pt, where, "unlock_star", errs, "0~%d 정수여야 함" % max_star,
+					func(v): return v >= 0.0 and v <= max_star and v == floorf(v))
+		if pt.has("unlock") and not stages.has(pt["unlock"]):   # 없으면 처음부터
+			errs.append("%s.unlock = %s (company.stages 중 하나여야 함)" % [where, pt["unlock"]])
 		var list = pt.get("options")
 		if typeof(list) != TYPE_ARRAY or list.is_empty():
 			errs.append("%s.options 가 없거나 빈 목록" % where)

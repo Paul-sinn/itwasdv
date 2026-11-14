@@ -68,4 +68,8 @@ static func _value(state: GameState, q: Dictionary) -> int:
 			return state.night_level
 		"level":
 			return state.driver_level
+		"agency":   # 창업했나
+			return 1 if state.company_stage >= GameState.AGENCY else 0
+		"helpers":   # 보조 트럭 수
+			return state.trucks.size() - 1
 	return 0   # balance.gd가 모르는 kind를 막으므로 여기 안 옴

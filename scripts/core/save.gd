@@ -14,6 +14,7 @@
 ##   (형식 8) coupons, weekly_week, weekly_parcels, weekly_done, rush_enabled, rush_next, rush_ring, rush_left
 ##   (형식 9) master_unlocked, master_day, master_next_day, master_week, master_bonus, master_bonus_week, master_next_bonus,
 ##            master_notice_week, master_visit_week (active_bonus는 저장 안 함: Master.tick이 채움)
+##   (형식 10) company_stage, today_day, today_sales, today_staff, today_tax, rank_first_done
 ## 모르는 키는 버리고 범위 밖 값은 자른다. 음수 돈·스페어, 빠진 칸, 틀린 모양은 깨진 저장.
 ## 세팅: 모르는 부품·그 부품에 없는 옵션 id는 버리고, 등급·카운터는 범위로 자르고, 줄은 그 등급 줄 수까지 (앞에서부터).
 ## 형식 5 칸: 숫자가 아니면 깨진 저장, 숫자는 범위로 자름 (레벨 1~만렙, 경험치 0~다음 레벨 필요량−1, 창고·야간팀 1~표 끝,
@@ -22,9 +23,11 @@
 ## 형식 8 칸: 숫자·참거짓이 아니면 깨진 저장. 쿠폰·주간 진행 0 이상, 급송 남은 건수 0~rush.parcels, 벨 남은 초 0~ring_seconds,
 ##   다음 벨까지 −1(안 굴림)~max_minutes분으로 자름. 주 번호는 정수면 그대로 (시계 조작 허용).
 ## 형식 9 칸: 숫자·참거짓·글자가 아니면 깨진 저장. 요일은 −1~6으로 자르고, 모르는 보너스 id는 ""(다음 tick에서 새로 굴림).
-## 형식 3~8 파일은 그대로 읽는다 (없는 칸은 처음 값: 세팅 없음, 오버부스트 안 걸린 바퀴, 레벨 1, 창고·야간팀 Lv1, 퀘스트 처음부터,
+## 형식 10 칸: 숫자·참거짓이 아니면 깨진 저장. 회사 단계 0~1(대리점), 오늘 집계 0 이상으로 자름. 날짜 번호는 정수면 그대로.
+##   트럭은 1 + company.helper_prices 길이(3대)까지 (넘으면 뒤를 버림).
+## 형식 3~9 파일은 그대로 읽는다 (없는 칸은 처음 값: 세팅 없음, 오버부스트 안 걸린 바퀴, 레벨 1, 창고·야간팀 Lv1, 퀘스트 처음부터,
 ##   lap_cargo 0 = 지금 바퀴 건수를 다음 진행 때 굴림, 능력치 없음, 쿠폰 0, 주간 진행 0·주 모름, 급송 켜짐·벨 시계 새로,
-##   명장 안 열림 → 이미 +10을 넘었으면 다음 Master.tick에서 열림).
+##   명장 안 열림 → 이미 +10을 넘었으면 다음 Master.tick에서 열림, 개인 기사·오늘 집계 0·날짜 모름·1위 알림 안 보냄).
 ##
 ## 백업: 쓸 때마다 지금 파일을 path.bak1(가장 최근) → bak2 → bak3 으로 돌린다.
 ## 본 파일이 깨졌으면 path.broken 으로 옮기고 bak1 → bak2 → bak3 중 읽히는 첫 파일로 살린다.
@@ -41,9 +44,9 @@ const Setting = preload("res://scripts/core/setting.gd")
 const TruckState = preload("res://scripts/core/truck_state.gd")
 
 const DEFAULT_PATH := "user://save.json"
-const FORMAT_VERSION := 9   ## 1: v0·v1 / 2: 튜닝(v2) / 3: 한 바퀴 경제·트럭 여러 대(v3) / 4: 세팅 돌리기(v4) / 5: 기사 레벨·퀘스트·창고(v5)
+const FORMAT_VERSION := 10  ## 1: v0·v1 / 2: 튜닝(v2) / 3: 한 바퀴 경제·트럭 여러 대(v3) / 4: 세팅 돌리기(v4) / 5: 기사 레벨·퀘스트·창고(v5)
                             ## 6: 트럭 lap_cargo (지금 바퀴에 실은 건수, v6-bal) / 7: 기사 능력치 abilities (v5b)
-                            ## 8: 쿠폰·주간 배송 목표·급송 전화 (v6b C1) / 9: 명장 방문일 (v6b C2)
+                            ## 8: 쿠폰·주간 배송 목표·급송 전화 (v6b C1) / 9: 명장 방문일 (v6b C2) / 10: 회사·오늘 집계 (v7a)
 const OLDEST_READABLE := 3  ## 이보다 옛 형식은 변환하지 않고 옮겨 둔다
 
 enum Status { OK, NONE, BROKEN }   ## 읽음 / 저장 파일 없음(새 게임) / 깨짐(새 게임)
@@ -58,6 +61,8 @@ const PROGRESS_INTS := ["driver_level", "driver_xp", "ability_points", "reputati
 ## 형식 9에 더한 명장 칸 (GameState 변수 이름 그대로). 읽기는 _v9_from
 const MASTER_FIELDS := ["master_unlocked", "master_day", "master_next_day", "master_week", "master_bonus", "master_bonus_week",
 		"master_next_bonus", "master_notice_week", "master_visit_week"]
+## 형식 10에 더한 회사 칸 (GameState 변수 이름 그대로). 읽기는 _v10_from
+const COMPANY_FIELDS := ["company_stage", "today_day", "today_sales", "today_staff", "today_tax", "rank_first_done"]
 const MAX_WHOLE := 1 << 53   # JSON 숫자가 정확한 정수로 왕복하는 한계
 const MAX_MONEY := 999_999_999_999_999_999   ## 돈 글자 18자리까지. 넘으면 이 값으로 자름 (to_int가 넘치면 음수로 돌아감)
 
@@ -96,7 +101,7 @@ static func to_dict(s: GameState, saved_at_unix: int) -> Dictionary:
 		"rush_ring": s.rush_ring,
 		"rush_left": s.rush_left,
 	}
-	for key in MASTER_FIELDS:
+	for key in MASTER_FIELDS + COMPANY_FIELDS:
 		d[key] = s.get(key)
 	for key in PROGRESS_INTS:
 		d[key] = s.get(key)
@@ -166,6 +171,8 @@ static func from_dict(d, b: Balance) -> Dictionary:
 		why = _v8_from(d, b, s)   # 형식 7까지는 없음 → 처음 값
 	if why == "":
 		why = _v9_from(d, b, s)   # 형식 8까지는 없음 → 처음 값
+	if why == "":
+		why = _v10_from(d, b, s)   # 형식 9까지는 없음 → 처음 값
 	if why != "":
 		return _broken(why)
 	return _result(Status.OK, s, saved_at)
@@ -359,6 +366,23 @@ static func _v9_from(d: Dictionary, b: Balance, s: GameState) -> String:
 		elif want == TYPE_STRING and v != "" and not b.master_bonuses.has(v):
 			v = ""   # 모르는 보너스 → 다음 tick에서 새로
 		s.set(key, v)
+	return ""
+
+
+## 형식 10 회사 칸 → s. 없는 칸은 GameState 처음 값. 틀린 모양이면 그 이유 (없으면 ""). 트럭이 너무 많으면 뒤를 버림
+static func _v10_from(d: Dictionary, b: Balance, s: GameState) -> String:
+	for key in COMPANY_FIELDS:
+		var v = d.get(key, s.get(key))
+		if key == "rank_first_done":
+			if typeof(v) != TYPE_BOOL:
+				return "%s 가 true/false가 아님: %s" % [key, v]
+			s.rank_first_done = v
+			continue
+		if not _is_finite_number(v):
+			return "%s 가 숫자가 아님: %s" % [key, v]
+		s.set(key, floori(v) if key == "today_day" else clampi(floori(v), 0, MAX_WHOLE))
+	s.company_stage = mini(s.company_stage, GameState.AGENCY)
+	s.trucks = s.trucks.slice(0, 1 + b.helper_prices.size())
 	return ""
 
 

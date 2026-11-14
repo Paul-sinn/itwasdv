@@ -270,12 +270,12 @@ func test_helper_truck_no_abilities() -> void:
 		check_eq(Trip.spare_chance(b, s, 1), b.spare_drop_chance, "%s: 트럭 1 드랍" % [picks])
 		check_near(Trip.hourly_income(b, s, 1), Trip.hourly_income(b, plain, 0), 1e-9, "%s: 트럭 1 시간당" % [picks])
 		check(Trip.hourly_income(b, s, 0) > Trip.hourly_income(b, s, 1) or picks.has("knowhow"), "%s: 트럭 0에는 들어가야 함" % [picks])
-	# advance 트럭 1: 배송 1875, 팁 2500
+	# advance 트럭 1: 배송 1875, 팁 2500 (번 돈. v7a부터 pay는 직원 몫을 뗀 내 돈)
 	var s2 := _game(10, { "nego": 20, "kind": 30 })
 	s2.trucks.append(TruckState.new())
 	var ev := Trip.advance(s2, b, 1, 3600.0, _rng(9))
-	var pays := ev.filter(func(e): return e["type"] == "parcel").map(func(e): return e["pay"])
-	var tips := ev.filter(func(e): return e["type"] == "tip").map(func(e): return e["pay"])
+	var pays := ev.filter(func(e): return e["type"] == "parcel").map(func(e): return e["gross"])
+	var tips := ev.filter(func(e): return e["type"] == "tip").map(func(e): return e["gross"])
 	check(pays.all(func(x): return x == 1875) and tips.all(func(x): return x == 2500), "트럭 1 advance에 협상이 들어감")
 	check(_count(ev, "tip") < _count(ev, "parcel") * 0.06, "트럭 1 팁 비율이 친절(17%%)을 따름: %d / %d" % [_count(ev, "tip"), _count(ev, "parcel")])
 	# 꺼둔 동안 경험치는 트럭 0 배송만

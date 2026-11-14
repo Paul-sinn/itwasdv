@@ -7,6 +7,7 @@ const TruckState = preload("res://scripts/core/truck_state.gd")
 const Save = preload("res://scripts/core/save.gd")
 const Trip = preload("res://scripts/core/trip.gd")
 const Ability = preload("res://scripts/core/ability.gd")
+const Quest = preload("res://scripts/core/quest.gd")
 
 # 옛 형식 파일이 "같은 폴더/save.v2.json"으로 가서, 진짜 저장 폴더와 겹치지 않게 시험용 폴더를 씀
 const DIR := "user://test_unit_save"
@@ -128,16 +129,17 @@ func test_write_then_read_same() -> void:
 	_clean()
 
 
-func test_format_9_dict() -> void:
+func test_format_10_dict() -> void:
 	var d := Save.to_dict(_sample_state(), 1794000000)
-	check_eq(d["version"], 9, "저장 형식")
+	check_eq(d["version"], 10, "저장 형식")
 	var keys := d.keys()
 	keys.sort()
-	check_eq(keys, ["abilities", "ability_points", "coupons", "driver_level", "driver_xp", "master_bonus", "master_bonus_week", "master_day",
-			"master_next_bonus", "master_next_day", "master_notice_week", "master_unlocked", "master_visit_week", "master_week",
-			"milestones_done", "money", "night_level", "parcels_total", "parts_rolled", "quest_index", "reputation", "rush_enabled",
-			"rush_left", "rush_next", "rush_ring", "saved_at_utc", "setting_rolls", "spare_drop_carry", "spares", "spares_bought",
-			"trucks", "version", "warehouse_level", "weekly_done", "weekly_parcels", "weekly_week"], "저장 칸 (active_bonus는 저장 안 함)")
+	check_eq(keys, ["abilities", "ability_points", "company_stage", "coupons", "driver_level", "driver_xp", "master_bonus", "master_bonus_week",
+			"master_day", "master_next_bonus", "master_next_day", "master_notice_week", "master_unlocked", "master_visit_week", "master_week",
+			"milestones_done", "money", "night_level", "parcels_total", "parts_rolled", "quest_index", "rank_first_done", "reputation",
+			"rush_enabled", "rush_left", "rush_next", "rush_ring", "saved_at_utc", "setting_rolls", "spare_drop_carry", "spares", "spares_bought",
+			"today_day", "today_sales", "today_staff", "today_tax", "trucks", "version", "warehouse_level", "weekly_done", "weekly_parcels",
+			"weekly_week"], "저장 칸 (active_bonus는 저장 안 함)")
 	var tk: Array = d["trucks"][0].keys()
 	tk.sort()
 	check_eq(tk, ["boost_lap", "destroy_count", "fail_count", "lap_cargo", "lap_clock", "lap_delivered", "settings", "star", "success_count"], "트럭 칸")
@@ -302,7 +304,7 @@ func test_progress_clamped() -> void:
 	if r["state"] != null:
 		var s: GameState = r["state"]
 		check_eq([s.driver_level, s.driver_xp, s.ability_points, s.reputation], [50, 0, 0, 5], "레벨 99 → 50 (만렙 경험치 0), 음수 → 0, 소수 → 버림")
-		check_eq([s.warehouse_level, s.night_level, s.quest_index, s.parcels_total], [4, 1, 22, 0], "창고 9 → 4, 야간팀 0 → 1, 퀘스트 999 → 22, 음수 → 0")
+		check_eq([s.warehouse_level, s.night_level, s.quest_index, s.parcels_total], [4, 1, Quest.count(b), 0], "창고 9 → 4, 야간팀 0 → 1, 퀘스트 999 → 목록 길이, 음수 → 0")
 		check_eq(s.parts_rolled, { "ecu": true }, "모르는 부품·true가 아닌 값 버림")
 		check_eq(s.milestones_done, [10, 30], "보너스 단계가 아닌 값·겹친 값 버림")
 	var d2 := Save.to_dict(_sample_state(), 1794000000)

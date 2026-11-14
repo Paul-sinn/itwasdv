@@ -56,6 +56,7 @@ func test_json_matches_spec() -> void:
 		"cargo": ["own", 10.0, [0.05, 0.08, 0.12, 0.20, 0.30]],
 		"engine_guard": ["own", 10.0, [0.0, 0.0, 0.04, 0.06, 0.10]],
 		"overboost": ["own", 10.0, [0.03, 0.06, 0.09, 0.15, 0.24]],
+		"maint_cut": ["own", 10.0, [0.03, 0.06, 0.09, 0.13, 0.18]],
 	}
 	for j in JUNK:
 		want[j] = ["junk", 12.0, [0.0, 0.0, 0.0, 0.0, 0.0]]
@@ -65,7 +66,7 @@ func test_json_matches_spec() -> void:
 		check_eq([o["kind"], o["weight"], o["values"]], [want[id][0], want[id][1], PackedFloat64Array(want[id][2])], "옵션 %s" % id)
 		check_eq(Setting.option_kind(b, id), want[id][0], "option_kind %s" % id)
 		note("%s: %s, 가중치 %s, 수치 %s" % [id, o["kind"], o["weight"], o["values"]])
-	check_eq(Setting.part_ids(b), ["cargo_box", "ecu"], "부품 (json 순서)")
+	check_eq(Setting.part_ids(b), ["cargo_box", "ecu", "tire"], "부품 (json 순서)")
 	check_eq([Setting.unlock_star(b, "cargo_box"), Setting.unlock_star(b, "ecu")], [0, 5], "열리는 단계")
 	check_eq(b.setting_parts["cargo_box"]["options"], PackedStringArray(["speed", "fuel_cut", "cargo"] + JUNK), "적재함 옵션")
 	check_eq(b.setting_parts["ecu"]["options"], PackedStringArray(["speed", "fuel_cut", "engine_guard", "overboost"] + JUNK), "ECU 옵션")
@@ -253,12 +254,12 @@ func test_choose() -> void:
 func test_lock_and_money() -> void:
 	var rng := _rng(4)
 	var s := _game(4)
-	check(not Setting.unlocked(b, s.truck(0), "ecu"), "+4에서 ECU가 열림")
+	check(not Setting.unlocked(b, s, 0, "ecu"), "+4에서 ECU가 열림")
 	check_eq(Setting.block_reason(s, b, 0, "ecu"), Setting.Block.LOCKED, "+4 ECU")
 	check_eq(Setting.try_roll(s, b, 0, "ecu", rng), { "ok": false }, "+4에서 ECU가 돌려짐")
 	check_eq(Setting.block_reason(s, b, 0, "cargo_box"), Setting.Block.NONE, "+4 적재함은 열림")
 	s.truck(0).star = 5
-	check(Setting.unlocked(b, s.truck(0), "ecu"), "+5에서 ECU가 안 열림")
+	check(Setting.unlocked(b, s, 0, "ecu"), "+5에서 ECU가 안 열림")
 	check_eq(Setting.block_reason(s, b, 0, "ecu"), Setting.Block.NONE, "+5 ECU")
 	var s0 := _game(0)
 	s0.money = 19999

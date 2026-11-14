@@ -1,7 +1,7 @@
 ## 명장 방문일 (v6b): 엔진 +10 첫 달성 때 열림 → 유저가 요일을 고름 (처음 고르면 이번 주부터, 바꾸면 다음 주부터).
 ## 고른 요일 0~24시(현지)에 방문 중 → 그 주 보너스(7개 중 1개, 주마다 굴림)가 적용되고 보험을 걸 수 있음 (enhance.gd).
 ## 방문 전날 켜져 있으면 예고 알림 한 번 (예고한 보너스 = 방문일 보너스. 월요일 방문이면 일요일에 다음 주 보너스를 미리 굴림).
-## 주가 바뀌면 주간 배송 목표 0 (weekly.gd).
+## 주가 바뀌면 주간 배송 목표 0 (weekly.gd). 날짜(현지 0시)가 바뀌면 오늘 집계 0 (v7a, company.gd today).
 ## 화면 없이 돌아가는 계산 코드. (scripts/core 규칙) 시계를 직접 읽지 않는다: 현지 시각 now_local을 화면이 넘겨 준다.
 ## now_local = 현지 시각을 1970-01-01 0시(현지)부터 센 초 (화면: Time.get_unix_time_from_system() + 시간대 차이(초))
 ## 그 주 보너스 굴리기는 이 파일에만. 보너스의 효과는 쓰는 곳에서 state.active_bonus를 본다 (enhance·economy·setting·trip).
@@ -71,12 +71,14 @@ static func week_bonus(state: GameState) -> String:
 
 
 ## 프레임마다(또는 켤 때) 부름. 켤 때는 Trip.apply_offline보다 먼저 (꺼둔 동안 배송이 새 주에 들어가게).
+##   날짜가 바뀌면: 오늘 집계(GameState.today_*) 0 (처음이면 지금 집계 그대로 그날로. 켤 때 먼저 불러야 꺼둔 동안 번 것이 켠 날에)
 ##   주가 바뀌면: 주간 목표 0, 다음 주로 미뤄 둔 요일 적용, 그 주 보너스 굴림
 ##   +10을 이미 넘었는데 안 열렸으면 (v6b 전 저장) 열고 { "type": "master_unlocked" }
 ##   내일이 방문일이면 { "type": "master_notice", "bonus": id } (한 주에 한 번)
 ##   오늘이 방문일이면 처음 한 번 { "type": "master_visit", "bonus": id }
 ##   state.active_bonus = 방문 중이면 그 주 보너스, 아니면 ""
 static func tick(state: GameState, b: Balance, now_local: int, rng: RandomNumberGenerator) -> void:
+	_roll_today(state, _day(now_local))
 	var week := week_index(now_local)
 	Weekly.roll_week(state, week)
 	check_unlock(state, b)
@@ -156,6 +158,17 @@ static func _bonus_for(state: GameState, b: Balance, week: int, rng: RandomNumbe
 ## 보너스 7개 중 하나 (고르게)
 static func _pick(b: Balance, rng: RandomNumberGenerator) -> String:
 	return b.master_bonus_ids[rng.randi_range(0, b.master_bonus_ids.size() - 1)]
+
+
+## 날짜 번호가 바뀌었으면 오늘 집계 0. 처음(-1: 새 게임·형식 9까지 저장)이면 지금 집계 그대로 그날로 (시계가 거꾸로 가도 "바뀜")
+static func _roll_today(state: GameState, day: int) -> void:
+	if state.today_day == day:
+		return
+	if state.today_day != -1:
+		state.today_sales = 0
+		state.today_staff = 0
+		state.today_tax = 0
+	state.today_day = day
 
 
 ## 1970-01-01 0시(현지)부터 며칠째 (그 전이면 음수)

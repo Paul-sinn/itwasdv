@@ -180,7 +180,7 @@ func test_rush() -> void:
 	check(Rush.accept(s, b), "울리는데 받기가 안 됨")
 	check_eq([Rush.is_ringing(s), Rush.parcels_left(s)], [false, 20], "받은 뒤 벨 끝, 급송 20건")
 	var e1 := Trip.advance(s, b, 1, 600.0, r).filter(func(e): return e["type"] == "parcel")
-	check(not e1.is_empty() and e1.all(func(e): return not e["rush"] and e["pay"] == 1875), "트럭 1 배송이 급송이 됨")
+	check(not e1.is_empty() and e1.all(func(e): return not e["rush"] and e["gross"] == 1875), "트럭 1 배송이 급송이 됨")
 	check_eq(Rush.parcels_left(s), 20, "트럭 1 배송에 급송 건수가 줄어듦")
 	var p0 := []
 	while p0.size() < 25:
