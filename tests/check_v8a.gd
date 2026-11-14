@@ -1,12 +1,15 @@
-## v8a U1 틀 완료 기준 자동 확인. 진짜 게임 화면(main.tscn)에 진짜 클릭을 넣어서 본다.
-## C1·C2 전이라 업그레이드·랩핑·통계·도감·업적 값은 껍데기(scripts/ui/stub_*.gd: 지시서 약속과 같은 이름·인자)에 준비로 넣는다.
-## C1·C2를 합치면 준비를 진짜 상태(GameState.depot_upgrades · wraps · stats · junk_seen · achievements_done, TruckState.wrap)로 바꾼다.
+## v8a U1 완료 기준 자동 확인. 진짜 게임 화면(main.tscn)에 진짜 클릭을 넣어서 본다.
+## 물류센터 업그레이드는 진짜 계산(scripts/core/upgrade.gd, C1). C2 전이라 랩핑·통계·도감·업적 값은 껍데기
+## (scripts/ui/stub_*.gd: 지시서 약속과 같은 이름·인자)에 준비로 넣는다. C2를 합치면 준비를 진짜 상태
+## (GameState.wraps · stats · junk_seen · achievements_done, TruckState.wrap)로 바꾼다.
 ## ① 랩핑 그림: Truck.body_shapes 5가지(랩핑 없음 + 4개)가 서로 다르고, 점이 전부 트럭 몸통 안 (보이는 곳 그대로), 양쪽 방향, 반창고는 원래 색 위에
 ## ② 튜닝숍 [랩핑]: 카드 4개 (미리 보기·이름), 구매용 [값] 클릭 → Wrap.buy (모자라면 꺼짐·눌러도 그대로), 보상용 "업적 '…' 달성하면 받아요"(버튼 없음),
 ##    [입히기] → 띠 트럭 랩핑 (큰 화면·작은 화면 같은 트럭), "입는 중" + [벗기기] → 랩핑 없음, 2호차 탭 → 보조 트럭에만
 ## ③ 물류센터 [기록]: 통계 12줄 값, 도감 25칸 ("?"·본 횟수·3줄 별·채운 칸 수), 업적 20줄 (달성·진행·랩핑 보상·목표 수 설명), 휠로 스크롤
 ## ④ 물류센터 [창고·할 일] 업그레이드 3줄: "이름 Lv.N / 5", 지금 → 다음 효과, [값] 클릭 → Upgrade.buy·알림, 모자라면 꺼짐,
 ##    다 사면 "(최고 단계)", 대리점이면 버튼 대신 "동네에서만 살 수 있어요 (효과는 유지)", Upgrade.enabled 거짓이면 숨김
+##    + 업그레이드 3개를 산 뒤 화면 한 바퀴 표시 = 계산: 튜닝숍 시간당 줄(Trip.hourly_income), [세팅] "한 바퀴 적재량 N건"(Trip.cargo),
+##      대리점 뒤 시내 정차할 곳 수(ceil(Trip.cargo), 기본 적재함 효과 유지)
 ## ⑤ ko·en 큰 화면 5가지에서 [랩핑]·[창고·할 일](개인 기사·대리점)·[기록]이 창 안, 동네·[작게]·[설정]과 안 겹침   ⑥ en 글자에 한글·키 없음
 ## 진짜 저장·설정 파일은 건드리지 않는다.
 ##
@@ -25,8 +28,9 @@ const Fmt = preload("res://scripts/ui/fmt.gd")
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
 const Town = preload("res://scripts/ui/town.gd")
 const Truck = preload("res://scripts/ui/truck.gd")
-## shortcut: C1·C2 전 껍데기. 합치면 준비를 진짜 상태로 (위 머리글)
-const Upgrade = preload("res://scripts/ui/stub_upgrade.gd")
+const Trip = preload("res://scripts/core/trip.gd")
+const Upgrade = preload("res://scripts/core/upgrade.gd")
+## shortcut: C2 전 껍데기. 합치면 준비를 진짜 상태로 (위 머리글)
 const Wrap = preload("res://scripts/ui/stub_wrap.gd")
 const Stats = preload("res://scripts/ui/stub_stats.gd")
 const Achievement = preload("res://scripts/ui/stub_achievement.gd")
@@ -59,6 +63,7 @@ func _run() -> void:
 	await _wrap_tab(b)
 	await _record_tab(b)
 	await _upgrades(b)
+	await _upgrade_lap(b)
 	for loc in ["ko", "en"]:
 		TranslationServer.set_locale(loc)
 		var bad := await _fit_all(b, loc == "en")
@@ -297,20 +302,21 @@ func _upgrades(b: Balance) -> void:
 	_click(zone.get_global_rect().get_center())
 	await _frames(2)
 	var notice := "물류센터 업그레이드! 배송 구역 확장 Lv.1"
-	var bought_ok: bool = Upgrade.level(s, "zone") == 1 and s.money == money0 - price1 and d.center_titles["zone"].text == "배송 구역 확장 Lv.1 / 5" \
+	var saved = _saved_state(b)
+	var bought_ok: bool = Upgrade.level(s, "zone") == 1 and saved != null and Upgrade.level(saved, "zone") == 1 and s.money == money0 - price1 and d.center_titles["zone"].text == "배송 구역 확장 Lv.1 / 5" \
 			and d.center_values["zone"].text == "배송 단가 +2% → +4%" and _count_notice(m.town, notice) == 1 \
 			and zone.disabled and zone.text == "올리기 (%s원)" % Fmt.money(Upgrade.price(b, s, "zone"))
 	var money1 := s.money
 	_click(zone.get_global_rect().get_center())   # 꺼짐 (돈 모자람)
 	await _frames(2)
 	var short_ok: bool = Upgrade.level(s, "zone") == 1 and s.money == money1
-	Upgrade.levels["sort"] = Upgrade.max_level(b, "sort")   # 준비: 다 삼
+	s.depot_upgrades["sort"] = Upgrade.max_level(b, "sort")   # 준비: 다 삼
 	await _frames(2)
 	var top_text: String = d.center_values["sort"].text
 	var top_ok: bool = top_text == "물류센터에서 싣는 시간 −30% (최고 단계)" and not d.center_buttons["sort"].visible and not d.center_notes["sort"].visible \
 			and d.center_titles["sort"].text == "분류 속도 Lv.5 / 5"
 	_report(bought_ok and short_ok and top_ok,
-			"④ [값] 클릭 → Upgrade.buy (돈 −%s, Lv.1, '%s' → 알림 '%s'), 모자라면 꺼짐·눌러도 그대로, 다 사면 '%s' 버튼 없음" % [
+			"④ [값] 클릭 → Upgrade.buy·저장 (돈 −%s, Lv.1, '%s' → 알림 '%s'), 모자라면 꺼짐·눌러도 그대로, 다 사면 '%s' 버튼 없음" % [
 			Fmt.money(price1), d.center_values["zone"].text, notice, top_text])
 
 	_agency_with_helpers(b, s, 0)
@@ -322,14 +328,77 @@ func _upgrades(b: Balance) -> void:
 			and d.center_values["zone"].text == "배송 단가 +2%" and d.center_values["box"].text == "한 바퀴 기본 적재량 +0건"
 	_report(agency_ok, "④ 대리점: 버튼 대신 '%s', 효과는 지금 값 '%s' (다 산 줄은 '최고 단계' 그대로)" % [solo_text, d.center_values["zone"].text])
 
-	Upgrade.on = false   # 준비: json에 depot_upgrades 묶음이 없음
+	m.balance.depot_upgrades = {}   # 준비: json에 depot_upgrades 묶음이 없음 (main이 읽은 숫자에서 뺌)
 	await _frames(2)
 	var hidden_ok := true
 	for id: String in want:
 		hidden_ok = hidden_ok and not d.center_titles[id].is_visible_in_tree() and not d.center_values[id].is_visible_in_tree() \
 				and not d.center_buttons[id].is_visible_in_tree() and not d.center_notes[id].is_visible_in_tree()
-	_report(hidden_ok and d._weekly.is_visible_in_tree(), "④ Upgrade.enabled 거짓 → 업그레이드 3줄 숨김 (다른 줄은 그대로)")
+	_report(hidden_ok and not Upgrade.enabled(m.balance) and d._weekly.is_visible_in_tree(), "④ Upgrade.enabled 거짓 → 업그레이드 3줄 숨김 (다른 줄은 그대로)")
 	await _close(m)
+
+
+## 업그레이드 3개를 진짜 클릭으로 산 뒤 화면의 한 바퀴 표시가 계산 값과 같이 바뀌나
+func _upgrade_lap(b: Balance) -> void:
+	_reset_stubs()
+	Save.delete_file(TEST_SAVE)
+	var m := await _launch(b)
+	var s: GameState = m.state
+	var p = m.panel
+	var d = p.driver
+	var st = p.setting
+	for id: String in Upgrade.IDS:
+		s.money += Upgrade.price(b, s, id)   # 준비: 첫 레벨 셋 다 살 돈
+	await _frames(2)
+	_click(m.town.building_rects()["tuning"].get_center())
+	await _frames(3)
+	var hour0: String = p._income.text
+	var hourly0 := Trip.hourly_income(b, s, 0)
+	_click(p.setting_tab_button.get_global_rect().get_center())
+	await _frames(2)
+	_click(st.part_buttons["cargo_box"].get_global_rect().get_center())
+	await _frames(2)
+	var cargo0 := Trip.cargo(b, s, 0)
+	var cargo_text0: String = st._effect.text
+
+	_click(p.building_buttons["depot"].get_global_rect().get_center())
+	await _frames(3)
+	_click(d.depot_page_button.get_global_rect().get_center())
+	await _frames(3)
+	for id: String in Upgrade.IDS:
+		await _scroll_to(d._depot_scroll, d.center_buttons[id])
+		_click(d.center_buttons[id].get_global_rect().get_center())
+		await _frames(2)
+	var bought: bool = Upgrade.level(s, "zone") == 1 and Upgrade.level(s, "sort") == 1 and Upgrade.level(s, "box") == 1 and s.money == 0
+
+	_click(p.building_buttons["tuning"].get_global_rect().get_center())   # 튜닝숍은 마지막 칸 ([세팅] 적재함)
+	await _frames(3)
+	var cargo1 := Trip.cargo(b, s, 0)
+	var cargo_text1: String = st._effect.text
+	var cargo_ok: bool = st.is_visible_in_tree() and _effect_has(cargo_text0, "한 바퀴 적재량 %s건" % Fmt.num(cargo0, 1)) 			and _effect_has(cargo_text1, "한 바퀴 적재량 %s건" % Fmt.num(cargo1, 1)) 			and is_equal_approx(cargo1, cargo0 + Upgrade.value(b, s, "box")) and cargo1 > cargo0
+	_click(p.engine_tab_button.get_global_rect().get_center())
+	await _frames(2)
+	var hourly1 := Trip.hourly_income(b, s, 0)
+	var hour1: String = p._income.text
+	var want1 := "시간당 %s원 → 성공하면 %s원" % [Fmt.money(int(hourly1)), Fmt.money(int(Trip.hourly_income_at(b, s, 0, 1)))]
+	var hour_ok: bool = hour1 == want1 and hour1 != hour0 and hourly1 > hourly0
+	_report(bought and cargo_ok and hour_ok,
+			"④ 업그레이드 3개 (클릭) 산 뒤 화면 = 계산: [세팅] 적재함 '%s' → '%s' (Trip.cargo %s → %s), 튜닝숍 '%s' → '%s' (Trip.hourly_income)" % [
+			cargo_text0.get_slice("\n", 0), cargo_text1.get_slice("\n", 0), Fmt.num(cargo0, 1), Fmt.num(cargo1, 1), hour0, hour1])
+
+	# 대리점 뒤: 시내 정차할 곳 = ceil(Trip.cargo) (기본 적재함 +1이 시내 배수만큼 남음)
+	_agency_with_helpers(b, s, 0)
+	await _frames(3)
+	var spots: int = m.town._houses.size()
+	var plain := ceili(b.base_cargo * float(b.routes["city"]["stops_mult"]))   # 업그레이드 없을 때
+	var city_ok: bool = m.town.city and spots == ceili(Trip.cargo(b, s, 0)) and spots > plain and Upgrade.level(s, "box") == 1
+	_report(city_ok, "④ 대리점 뒤 시내 정차할 곳 %d곳 = ceil(Trip.cargo %s) (업그레이드 없으면 %d곳, 효과 유지)" % [spots, Fmt.num(Trip.cargo(b, s, 0), 1), plain])
+	await _close(m)
+
+
+## [세팅] 효과 글(여러 줄)에 그 줄이 있나
+func _effect_has(text: String, line: String) -> bool:
+	return Array(text.split("\n")).has(line)
 
 
 # ---------------- ⑤ 창 크기 ----------------
@@ -416,8 +485,6 @@ func _fit_all(b: Balance, en: bool) -> Array:
 
 ## 껍데기 값 비우기 (확인 사이에 남지 않게)
 func _reset_stubs() -> void:
-	Upgrade.on = true
-	Upgrade.levels.clear()
 	Wrap.owned_ids.clear()
 	Wrap.worn_by.clear()
 	Stats.values.clear()
@@ -440,6 +507,12 @@ func _scroll_to(sc: ScrollContainer, c: Control) -> bool:
 		_wheel(sc.get_global_rect().get_center(), MOUSE_BUTTON_WHEEL_DOWN, 1)
 		await _frames(2)
 	return _shown_in(sc, c)
+
+
+## 저장 파일의 상태 (없으면 null)
+func _saved_state(b: Balance):
+	var r := Save.read_file(TEST_SAVE, b)
+	return r["state"] if r["status"] == Save.Status.OK else null
 
 
 ## 도감 칸 (잡옵 id, 등급)

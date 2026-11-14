@@ -29,8 +29,7 @@ const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const Town = preload("res://scripts/ui/town.gd")
 const RecordTab = preload("res://scripts/ui/record_tab.gd")
-## shortcut: C1 전 껍데기 (약속과 같은 이름·인자. value_at만 약속에 없음 → 보고 "질문"). 합치면 scripts/core/upgrade.gd
-const Upgrade = preload("res://scripts/ui/stub_upgrade.gd")
+const Upgrade = preload("res://scripts/core/upgrade.gd")
 
 signal upgrade_pressed(kind: String)
 signal ability_pressed(id: String)   ## 능력치 [+]
@@ -176,11 +175,11 @@ func _ready() -> void:
 		var row := HBoxContainer.new()
 		_depot_box.add_child(row)
 		center_titles[id] = _label(row, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
-		center_titles[id].size_flags_horizontal = Control.SIZE_SHRINK_BEGIN   # 산 순간 커질 기준점
+		# 줄바꿈 됨: en 이름 + "Upgrade (₩100K)"가 한 줄이면 1280x720에서 차고가 넓어져 동네와 겹침. 산 순간 왼쪽 기준으로 커짐
+		center_titles[id].size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		center_titles[id].size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		center_titles[id].autowrap_mode = TextServer.AUTOWRAP_OFF
 		var btn := _button(row, "")
-		btn.size_flags_horizontal = Control.SIZE_EXPAND | Control.SIZE_SHRINK_END   # 오른쪽 끝에
+		btn.size_flags_horizontal = Control.SIZE_SHRINK_END   # 오른쪽 끝에
 		btn.pressed.connect(func(): center_upgrade_pressed.emit(id))
 		center_buttons[id] = btn
 		center_notes[id] = _label(row, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
