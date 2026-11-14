@@ -310,6 +310,8 @@ func _check_queue(b: Balance) -> void:
 		max_waiting = maxi(max_waiting, town._notice_queue.size())
 		if town._notice.visible and town._notice.text != last:
 			last = town._notice.text
+			if last.begins_with("업적 "):   # v8a: 첫 배송이면 업적 "첫 배달" 알림도 끼어듦 (할 일 순서만 봄)
+				continue
 			seen.append(last.get_slice("\n", 0))
 			started.append(Time.get_ticks_msec())
 			outside.append_array(_notice_fits(m))

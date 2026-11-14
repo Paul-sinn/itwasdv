@@ -14,7 +14,7 @@
 ## 창 세 가지:
 ##   투명 창 (보통 실행): 작은 화면 = 오른쪽 아래 구석 투명 창,
 ##       큰 화면 = 주 모니터 꽉(FULLSCREEN) 또는 테두리 있는 보통 창(WINDOWED) (desktop_window.gd)
-##   평범한 창 (-- --windowed, 개발용): 테두리 있는 창. 크기만 SMALL_SIZE ↔ WINDOWED_FULL_SIZE (full_style은 값만)
+##   평범한 창 (-- --windowed, 개발용): 테두리 있는 창. 크기만 SMALL_SIZE(× 띠 크기 설정) ↔ WINDOWED_FULL_SIZE (full_style은 값만)
 ##   화면 없음 (headless 테스트): 창은 안 건드리고 mode·full_style 값과 신호만 (설정 저장은 함)
 ## Esc → 작은 화면, 알림 영역 아이콘 → 큰 화면 (이미 큰 화면이면 앞으로 가져오기)
 extends Node
@@ -22,6 +22,7 @@ extends Node
 const DesktopWindow = preload("res://scripts/ui/desktop_window.gd")
 const TrayIcon = preload("res://scripts/ui/tray_icon.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
+const Prefs = preload("res://scripts/ui/prefs.gd")
 
 const SETTINGS_SECTION := "screen"
 const SETTINGS_KEY := "full_style"
@@ -74,7 +75,7 @@ func _ready() -> void:
 		add_child(_desktop)
 	else:
 		_plain = true
-		DesktopWindow.make_plain_window(get_window(), Feel.SMALL_SIZE)
+		DesktopWindow.make_plain_window(get_window(), DesktopWindow.strip_size(Prefs.get_value("strip/scale")))
 	if TrayIcon.supported():
 		tray = TrayIcon.new()
 		tray.full_pressed.connect(_on_tray_full)
@@ -108,13 +109,27 @@ func enter_small() -> void:
 	if _desktop != null:
 		_desktop.apply_small()
 	elif _plain:
-		get_window().size = Feel.SMALL_SIZE
+		get_window().size = DesktopWindow.strip_size(Prefs.get_value("strip/scale"))
 	_sync_menu()
 	mode_changed.emit(mode)
 	# 화면 내용이 작은 화면에 맞게 다시 놓인 뒤의 사각형으로 클릭 영역을 바로 만든다
 	# (안 그러면 다음 갱신 전까지 한순간 창 전체가 보이고 클릭을 받음)
 	if _desktop != null:
 		_desktop.refresh_region()
+
+
+## v8b 띠 설정(항상 위·크기·자리·모니터)을 바로 적용 (설정 화면에서 부름. 투명도는 main.gd).
+## 작은 화면이면 창을 다시 놓고, 전체 화면 큰 화면이면 모니터를 바꿨을 때 그 모니터로 옮김
+## (창 모드 큰 화면은 사용자가 옮겨 둔 자리 그대로. 처음 띄울 때만 고른 모니터 가운데)
+func apply_strip() -> void:
+	if mode == Mode.SMALL:
+		if _desktop != null:
+			_desktop.apply_small()
+			_desktop.refresh_region()
+		elif _plain:
+			get_window().size = DesktopWindow.strip_size(Prefs.get_value("strip/scale"))
+	elif _desktop != null and full_style == FullStyle.FULLSCREEN:
+		_desktop.apply_full(false)
 
 
 ## 큰 화면 띄우는 방식 바꾸기 (설정 화면에서 부름). 저장하고, 큰 화면에 있으면 바로 바꾼다.

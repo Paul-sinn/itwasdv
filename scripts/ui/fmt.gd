@@ -1,6 +1,8 @@
 ## 화면에 보여줄 글자 만들기 (숫자에 쉼표 등). 말은 번역 파일(locale/strings.csv) 키로
 extends RefCounted
 
+const Prefs = preload("res://scripts/ui/prefs.gd")
+
 
 ## 번역 (static 함수라 Object.tr()를 못 써서)
 static func _t(key: String) -> String:
@@ -11,11 +13,13 @@ static func _t(key: String) -> String:
 ##   ko: 9999 → "9,999", 12000 → "1.2만", 340000000 → "3.4억", 1200000000000 → "1.2조"
 ##   en: 999 → "999", 12000 → "12K", 340000000 → "340M", 1200000000000 → "1.2T"
 ## 단위로 나눈 값이 100 미만이면 소수 첫째 자리까지 버림(".0"은 뗌), 100 이상이면 정수. "원"은 붙이지 않음 (번역 글에)
+## v8b: 설정 숫자 표기가 "만·억"(ko) / "K·M"(en)이면 지금 언어와 상관없이 그 언어의 단위로
 static func money(v: int) -> String:
 	if v < 0:
 		return "-" + money(-v)
-	var group := int(_t("FMT_MONEY_GROUP"))
-	var units := _t("FMT_MONEY_UNITS").split(",")
+	var style: String = Prefs.get_value("ui/number_style")
+	var group := int(_unit_text(style, "FMT_MONEY_GROUP"))
+	var units := _unit_text(style, "FMT_MONEY_UNITS").split(",")
 	var i := units.size()
 	while i > 0 and v < int(pow(10.0, group * i)):
 		i -= 1
@@ -27,6 +31,13 @@ static func money(v: int) -> String:
 	if tenths % 10 == 0:
 		return "%d%s" % [tenths / 10, units[i - 1]]
 	return "%d.%d%s" % [tenths / 10, tenths % 10, units[i - 1]]
+
+
+## 돈 단위 번역 글: "auto"면 지금 언어, 아니면 그 언어(ko / en) 번역에서
+static func _unit_text(style: String, key: String) -> String:
+	if style == "auto":
+		return _t(key)
+	return String(TranslationServer.get_translation_object(style).get_message(key))
 
 
 ## 건수·경험치처럼 단위를 안 붙이는 수: 12340 → "12,340" (돈은 money: "1.2만")

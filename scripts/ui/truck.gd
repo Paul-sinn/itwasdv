@@ -14,7 +14,8 @@ const CAB_RATIO := 0.32      ## 운전석 폭 / 트럭 폭
 const SMOKE_SPREAD := 10.0   ## 퍼짐 연기가 처음 옆으로 흩어지는 폭 (트럭 자기 좌표)
 
 var boosting := false  ## 오버부스트가 걸린 바퀴 (트럭 뒤 불꽃)
-var box_color := Feel.COLOR_TRUCK_BOX   ## 짐칸 색 (v7a: 보조 트럭은 색만 다름)
+var box_color := Feel.COLOR_TRUCK_BOX   ## 짐칸 색 (v7a: 보조 트럭은 색만 다름. base_color)
+var wrap := ""         ## 입힌 랩핑 id (v8a: "" = 없음, "stripe" / "flame" / "gold18" / "bandage"). 차체 색·무늬만 (draw_body)
 
 var view_origin := Vector2.ZERO   ## 동네 설계 좌표 (0,0)이 동네 노드 안에서 어디에 오나
 var view_zoom := 1.0              ## 동네 확대 배수
@@ -206,7 +207,82 @@ func _flame_points(length: float, width: float) -> PackedVector2Array:
 
 ## 바퀴 바닥부터 짐칸 위까지 높이 (트럭 자기 좌표)
 func _height() -> float:
+	return body_height()
+
+
+static func body_height() -> float:
 	return Feel.TRUCK_SIZE.y + Feel.WHEEL_RADIUS * 1.6
+
+
+## 트럭 번호의 원래 짐칸 색 (0 = 내 트럭, 1~ = 보조 트럭은 HELPER_TRUCK_COLORS를 돌아가며)
+static func base_color(i: int) -> Color:
+	return Feel.COLOR_TRUCK_BOX if i == 0 else Feel.HELPER_TRUCK_COLORS[(i - 1) % Feel.HELPER_TRUCK_COLORS.size()]
+
+
+## 트럭 몸통 (짐칸·운전석 + 랩핑 무늬 = body_shapes, 그리고 바퀴)을 ci에 그림. 왼쪽 위 = (0,0), 폭 TRUCK_SIZE.x, 높이 body_height().
+## 띠·큰 화면 트럭(_draw)과 튜닝숍 [랩핑] 미리 보기(wrap_tab.gd)가 같이 씀
+static func draw_body(ci: CanvasItem, face: int, box_color: Color, wrap: String) -> void:
+	for shape: Array in body_shapes(face, box_color, wrap):
+		ci.draw_colored_polygon(shape[0], shape[1])
+	var w := Feel.TRUCK_SIZE.x
+	var h := Feel.TRUCK_SIZE.y
+	var wr := Feel.WHEEL_RADIUS
+	ci.draw_circle(Vector2(w * 0.22, h + wr * 0.6), wr, Feel.COLOR_WHEEL)
+	ci.draw_circle(Vector2(w * 0.78, h + wr * 0.6), wr, Feel.COLOR_WHEEL)
+
+
+## 짐칸·운전석 + 랩핑 무늬 도형들 [점들, 색] (그리는 순서). face 1 = 오른쪽을 봄(운전석이 오른쪽).
+## 랩핑(v8a)은 차체 색·무늬만 바꾸고 짐칸·운전석 사각형 밖으로 안 나감 (보이는 곳 그대로. check_v8a가 점마다 확인)
+static func body_shapes(face: int, box_color: Color, wrap: String) -> Array:
+	var w := Feel.TRUCK_SIZE.x
+	var h := Feel.TRUCK_SIZE.y
+	var cab_w := w * CAB_RATIO
+	# 앞(운전석)은 보는 쪽
+	var cab := Rect2(w - cab_w if face > 0 else 0.0, h * 0.3, cab_w, h * 0.7)
+	var box := Rect2(0.0 if face > 0 else cab_w, 0, w - cab_w, h)
+	var colors: Array = Feel.WRAP_BODY.get(wrap, [box_color, Feel.COLOR_TRUCK_CAB])
+	var out := [[_quad(box), colors[0]], [_quad(cab), colors[1]]]
+	match wrap:
+		"stripe":   # 짐칸·운전석을 가로지르는 줄무늬 두 줄
+			for top: float in Feel.WRAP_STRIPES:
+				var band := Rect2(0, h * top, w, h * Feel.WRAP_STRIPE_HEIGHT)
+				for part: Rect2 in [band.intersection(box), band.intersection(cab)]:
+					if part.has_area():
+						out.append([_quad(part), Feel.COLOR_WRAP_STRIPE])
+		"flame":   # 짐칸 앞(운전석 쪽)에서 뒤로 뻗는 불꽃 혀 (위쪽 조금 빼고)
+			var front := box.end.x if face > 0 else box.position.x
+			var back := -float(face)
+			var n: int = Feel.WRAP_FLAME_LENGTHS.size()
+			var top := h * Feel.WRAP_FLAME_TOP
+			var step := (h - top) / n
+			for k in n:
+				var reach: float = box.size.x * Feel.WRAP_FLAME_LENGTHS[k]
+				var y0 := top + step * k
+				out.append([PackedVector2Array([Vector2(front, y0), Vector2(front + back * reach, y0 + step * 0.3), Vector2(front, y0 + step)]),
+						Feel.COLOR_WRAP_FLAME])
+				out.append([PackedVector2Array([Vector2(front, y0 + step * 0.25), Vector2(front + back * reach * 0.55, y0 + step * 0.4),
+						Vector2(front, y0 + step * 0.75)]), Feel.COLOR_WRAP_FLAME_CORE])
+		"gold18":   # 금색 차체 + 비스듬한 반짝임 띠
+			var x0 := box.position.x + box.size.x * Feel.WRAP_SHINE_X
+			var dx := box.size.x * Feel.WRAP_SHINE_WIDTH
+			var lean := box.size.x * Feel.WRAP_SHINE_LEAN
+			out.append([PackedVector2Array([Vector2(x0 + lean, 0), Vector2(x0 + lean + dx, 0), Vector2(x0 + dx, h), Vector2(x0, h)]),
+					Feel.COLOR_WRAP_SHINE])
+		"bandage":   # 원래 색 짐칸에 X자로 붙인 반창고 두 장 + 가운데 거즈
+			var inset := box.grow(-h * Feel.WRAP_BANDAGE_INSET)
+			var half := h * Feel.WRAP_BANDAGE_WIDTH / 2.0
+			for d: Array in [[inset.position, inset.end], [Vector2(inset.position.x, inset.end.y), Vector2(inset.end.x, inset.position.y)]]:
+				var a: Vector2 = d[0]
+				var b: Vector2 = d[1]
+				var side := (b - a).normalized().orthogonal() * half
+				out.append([PackedVector2Array([a + side, b + side, b - side, a - side]), Feel.COLOR_WRAP_BANDAGE])
+			var pad := Vector2.ONE * half * 1.6
+			out.append([_quad(Rect2(inset.get_center() - pad / 2.0, pad)), Feel.COLOR_WRAP_BANDAGE_PAD])
+	return out
+
+
+static func _quad(r: Rect2) -> PackedVector2Array:
+	return PackedVector2Array([r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)])
 
 
 ## 연기가 나오는 곳: 엔진(운전석) 위 (트럭 그림 왼쪽 위 기준)
@@ -268,17 +344,8 @@ func _update_smoke(delta: float) -> void:
 ## 트럭 자기 좌표: (0,0) = 바퀴 바닥 가운데. 크기는 TRUCK_SIZE (scale로 키움)
 func _draw() -> void:
 	var w := Feel.TRUCK_SIZE.x
-	var h := Feel.TRUCK_SIZE.y
-	var wr := Feel.WHEEL_RADIUS
 	draw_set_transform(_shake_offset + Vector2(-w / 2.0, -_height()))
-	var cab_w := w * CAB_RATIO
-	# 앞(운전석)은 보는 쪽
-	var cab_x := w - cab_w if _face > 0 else 0.0
-	var box_x := 0.0 if _face > 0 else cab_w
-	draw_rect(Rect2(box_x, 0, w - cab_w, h), box_color)
-	draw_rect(Rect2(cab_x, h * 0.3, cab_w, h * 0.7), Feel.COLOR_TRUCK_CAB)
-	draw_circle(Vector2(w * 0.22, h + wr * 0.6), wr, Feel.COLOR_WHEEL)
-	draw_circle(Vector2(w * 0.78, h + wr * 0.6), wr, Feel.COLOR_WHEEL)
+	draw_body(self, _face, box_color, wrap)
 
 	# 불꽃: 짐칸 뒤(보는 쪽 반대)로 뻗는 세모 두 겹 (오버부스트 바퀴 동안, 강화 성공 순간)
 	if _flaming():

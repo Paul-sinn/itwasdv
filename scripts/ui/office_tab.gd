@@ -32,6 +32,7 @@ signal route_pressed(i: int, id: String)   ## [시내] / [장거리] (i = 트럭
 enum Page { TRUCKS, RANK, BOOKS }
 ## 잠긴 순위표 줄 (위가 큰 무대)
 const LOCKED_SCOPES := ["RANK_SCOPE_GLOBAL", "RANK_SCOPE_NATIONAL", "RANK_SCOPE_REGIONAL"]
+const HEAD_KEYS := ["RANK_HEAD", "BOOKS_HEAD", "TAX_HEAD"]
 
 var page := Page.TRUCKS
 var page_buttons := {}               ## Page → 칸 고르기 버튼
@@ -47,6 +48,7 @@ var tax_rows: Array[Label] = []      ## 세율표 줄 (단계 순서)
 var _pages := {}          ## Page → 칸 내용
 var _truck_list: VBoxContainer
 var _no_helper: Label
+var _heads: Array[Label] = []   ## 순위표·장부·세율표 제목 (HEAD_KEYS 순)
 var _buy_note: Label      ## "더 살 수 없어요" / "N원 모자람"
 var _rank_next: Label     ## "다음 순위까지 시간당 N원" / 1위면 "시내 1위!"
 var _rank_list: VBoxContainer
@@ -69,7 +71,8 @@ func _ready() -> void:
 	var group := ButtonGroup.new()
 	for pg: Page in [Page.TRUCKS, Page.RANK, Page.BOOKS]:
 		var key: String = ["OFFICE_PAGE_TRUCKS", "OFFICE_PAGE_RANK", "OFFICE_PAGE_BOOKS"][pg]
-		var btn := _button(tabs, tr(key), Feel.SETTING_TAB_SIZE)
+		var btn := _button(tabs, "", Feel.SETTING_TAB_SIZE)
+		btn.set_meta("key", key)
 		btn.toggle_mode = true
 		btn.button_group = group
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -86,7 +89,6 @@ func _ready() -> void:
 	_truck_list = VBoxContainer.new()
 	trucks.add_child(_truck_list)
 	_no_helper = _label(trucks, Feel.PANEL_TEXT_SIZE, Feel.COLOR_DIM)
-	_no_helper.text = tr("OFFICE_NO_HELPER")
 	buy_button = _button(trucks, "")
 	buy_button.pressed.connect(func(): buy_pressed.emit())
 	_buy_note = _label(trucks, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
@@ -94,17 +96,15 @@ func _ready() -> void:
 	# [순위표]: 잠긴 줄 3개, 제목, 다음 순위까지, 순위 줄들 (refresh에서 만듦)
 	var rank: VBoxContainer = _pages[Page.RANK]
 	for key: String in LOCKED_SCOPES:
-		var l := _label(rank, Feel.OFFICE_ROW_SIZE, Feel.COLOR_LOCKED)
-		l.text = tr("RANK_LOCKED") % tr(key)
-		locked_rows.append(l)
-	_label(rank, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM).text = tr("RANK_HEAD")
+		locked_rows.append(_label(rank, Feel.OFFICE_ROW_SIZE, Feel.COLOR_LOCKED))
+	_heads.append(_label(rank, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM))
 	_rank_next = _label(rank, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
 	_rank_list = VBoxContainer.new()
 	rank.add_child(_rank_list)
 
 	# [장부]: 오늘 매출·직원 몫·세금·순이익, 세율표 (줄은 refresh에서 만듦)
 	var books: VBoxContainer = _pages[Page.BOOKS]
-	_label(books, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM).text = tr("BOOKS_HEAD")
+	_heads.append(_label(books, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM))
 	_sales = _label(books, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
 	_contract = _label(books, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
 	_staff = _label(books, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
@@ -112,11 +112,23 @@ func _ready() -> void:
 	_profit = _label(books, Feel.PANEL_TITLE_SIZE, Feel.COLOR_STAR)
 	_contracts = _label(books, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
 	_contract_next = _label(books, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
-	_label(books, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM).text = tr("TAX_HEAD")
+	_heads.append(_label(books, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM))
 	_tax_list = VBoxContainer.new()
 	books.add_child(_tax_list)
 	show_page(page)
+	retranslate()
 	set_ui_scale(_scale)
+
+
+## 한 번만 넣는 글자 (언어를 바꾸면 main.gd가 다시 부름). 바뀌는 글자는 refresh가 매 프레임
+func retranslate() -> void:
+	for pg: Page in page_buttons:
+		page_buttons[pg].text = tr(page_buttons[pg].get_meta("key"))
+	_no_helper.text = tr("OFFICE_NO_HELPER")
+	for i in LOCKED_SCOPES.size():
+		locked_rows[i].text = tr("RANK_LOCKED") % tr(LOCKED_SCOPES[i])
+	for i in HEAD_KEYS.size():
+		_heads[i].text = tr(HEAD_KEYS[i])
 
 
 ## 크기 배수 (1 = v0 패널). garage_panel.gd가 같이 부른다

@@ -32,6 +32,15 @@
 ## v7b: 이번 바퀴 노선이 "long"인 트럭은 띠에서 화면 밖으로 나갔다 돌아오고(truck.far), "+금액"은 나간 쪽 가장자리, 나가 있는 동안
 ##      구석 "장거리 배송 중 · N분 N초". 사무실 [시내] [장거리] → Trip.set_route → 저장. 장거리 열림(long_unlocked) → 동네 알림
 ##      U2: 프레임마다 Contract.tick (기업 계약 체결·돈), 체결(contract) → 동네 알림, 꺼둔 동안 요약에 계약 줄
+## v8a: 띠·큰 화면 트럭마다 입힌 랩핑(TruckState.wrap), 프레임마다 Stats.tick(켜 둔 시간 = 진짜 초)·Achievement.check.
+##      업적 알림은 그 프레임에 달성한 것을 한 알림으로: 1개면 "업적 달성: 이름", 여러 개(옛 저장 첫 프레임 등)면 "업적 N개 달성!",
+##      보상 랩핑이 있으면 아래 줄 "랩핑 '…' 받음" (여러 개면 "랩핑 N개 받음")
+##      물류센터 업그레이드 [값] → Upgrade.buy → 알림·저장, 튜닝숍 [랩핑] [값] → Wrap.buy, [입히기]/[벗기기] → Wrap.wear (고른 트럭) → 저장
+## v8b: 설정 값은 Prefs (prefs.gd). 켤 때 읽고, 고른 언어가 있으면 화면을 만들기 전에 적용.
+##      [설정] 고르기 → Prefs.set_value → 적용 (언어: 번역 바꾸기 → 언어가 바뀌면 화면 글자를 retranslate로 다시),
+##      [기본값으로] → Prefs.reset + 큰 화면 방식도 전체 화면으로 (게임 저장은 안 건드림)
+##      U2: 띠 설정 → screen.apply_strip (항상 위·크기·자리·모니터). 띠 투명도는 작은 화면일 때 이 노드 modulate (큰 화면은 늘 100%).
+##          띠 크기는 창이 커지면 _layout이 동네를 창에 맞춰 키움 (그림·글자·클릭 받는 곳 같이)
 extends Control
 
 const Ability = preload("res://scripts/core/ability.gd")
@@ -50,6 +59,10 @@ const Quest = preload("res://scripts/core/quest.gd")
 const Save = preload("res://scripts/core/save.gd")
 const Setting = preload("res://scripts/core/setting.gd")
 const Trip = preload("res://scripts/core/trip.gd")
+const Upgrade = preload("res://scripts/core/upgrade.gd")
+const Wrap = preload("res://scripts/core/wrap.gd")
+const Stats = preload("res://scripts/core/stats.gd")
+const Achievement = preload("res://scripts/core/achievement.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const Town = preload("res://scripts/ui/town.gd")
@@ -59,6 +72,7 @@ const SettingsPanel = preload("res://scripts/ui/settings_panel.gd")
 const DayPicker = preload("res://scripts/ui/day_picker.gd")
 const NpcDialog = preload("res://scripts/ui/npc_dialog.gd")
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
+const Prefs = preload("res://scripts/ui/prefs.gd")
 
 const AUTOSAVE_SECONDS := 30.0        ## 30초마다 저장 (배속과 상관없이 진짜 30초)
 const TRUCK := 0   ## 내 트럭 번호 (구석 줄 "+N", 치트 키). 강화·세팅은 panel.truck (튜닝숍 트럭 탭)
@@ -126,6 +140,9 @@ var suspense_scale := 1.0
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE   # 빈 곳 클릭은 _unhandled_input에서 처리
+	Prefs.read_file()
+	if Prefs.get_value("ui/locale") != "":   # 안 골랐으면 Godot이 이미 PC 언어 (한국어가 아니면 en)
+		TranslationServer.set_locale(Prefs.locale())
 	rng.randomize()
 	balance = Balance.load_file()
 	if not balance.is_ok():
@@ -162,6 +179,9 @@ func _ready() -> void:
 	panel.driver.ability_pressed.connect(_on_ability_pressed)
 	panel.driver.reset_pressed.connect(_on_ability_reset)
 	panel.driver.found_pressed.connect(_on_found_pressed)
+	panel.driver.center_upgrade_pressed.connect(_on_center_upgrade_pressed)
+	panel.wrap.buy_pressed.connect(_on_wrap_buy_pressed)
+	panel.wrap.wear_pressed.connect(_on_wrap_wear_pressed)
 	panel.office.buy_pressed.connect(_on_helper_buy_pressed)
 	panel.office.route_pressed.connect(_on_route_pressed)
 	panel.master.day_pressed.connect(_on_day_picked)
@@ -189,6 +209,8 @@ func _ready() -> void:
 	settings.style_picked.connect(_on_style_picked)
 	settings.close_pressed.connect(close_settings)
 	settings.rush_picked.connect(_on_rush_picked)
+	settings.pref_picked.connect(_on_pref_picked)
+	settings.defaults_pressed.connect(_on_defaults_pressed)
 	town.rush_accept_pressed.connect(_on_rush_accept)
 	screen.full_style_changed.connect(func(style): settings.show_style(style))
 
@@ -237,6 +259,7 @@ func _layout() -> void:
 	var view := get_viewport_rect().size
 	_bg.visible = not screen.is_transparent()
 	var full := is_full()
+	modulate.a = 1.0 if full else Prefs.get_value("strip/opacity")
 	panel.visible = full
 	small_button.visible = full
 	settings_button.visible = full
@@ -301,6 +324,8 @@ func _process(delta: float) -> void:
 	Master.tick(state, balance, now, rng)
 	Rush.tick(state, balance, delta, rng)
 	Contract.tick(state, balance, delta)
+	Stats.tick(state, delta / Engine.time_scale if Engine.time_scale > 0.0 else delta)   # 켜 둔 시간은 진짜 초 (F2 배속과 상관없이)
+	Achievement.check(state, balance)
 	town.set_truck_count(state.trucks.size())
 	for i in state.trucks.size():
 		_advance_truck(i, delta)
@@ -355,6 +380,7 @@ func _advance_truck(i: int, delta: float) -> void:
 	else:
 		sprite.follow(Trip.lap_progress(balance, state, i))
 	sprite.boosting = state.truck(i).boost_lap
+	sprite.wrap = state.truck(i).wrap   # v8a: 입힌 랩핑대로 차체 색·무늬
 	var house: int = Town.EDGE if far else sprite.nearest_house()   # 동네: "+돈"은 트럭(있어야 할 자리)에서 가장 가까운 집에
 	for e in events:
 		match e["type"]:
@@ -473,8 +499,11 @@ func _quest_line() -> String:
 ## 할 일 끝·강화 첫 달성 바로 뒤에 온 레벨업·만렙은 같은 알림에 줄을 더해 하나로 (한 번에 여러 레벨이면 마지막 레벨, 포인트는 합)
 func _show_events(events: Array) -> void:
 	var cur := {}
+	var achieved := []   # 이번 프레임에 달성한 업적 (마지막에 한 알림으로)
 	for e: Dictionary in events:
 		match e["type"]:
+			"achievement":
+				achieved.append(e)
 			"quest_done":
 				_notify(cur)
 				cur = { "head": tr("NOTICE_QUEST") % [Fmt.quest_name(e["id"]), Fmt.money(e["money"]), e["xp"]] }
@@ -513,6 +542,25 @@ func _show_events(events: Array) -> void:
 				_notify(cur)
 				cur = { "head": tr("NOTICE_CONTRACT") % Fmt.money(e["hourly"]) }
 	_notify(cur)
+	_notify_achievements(achieved)
+
+
+## 업적 알림 한 개로 묶기 (옛 저장을 읽은 첫 프레임에 한꺼번에 달성해도 알림이 줄줄이 안 뜨게):
+## 1개 "업적 달성: 이름" / 여러 개 "업적 N개 달성!", 받은 랩핑이 있으면 아래 줄 (1개 이름, 여러 개 수)
+func _notify_achievements(list: Array) -> void:
+	if list.is_empty():
+		return
+	var lines := PackedStringArray()
+	if list.size() == 1:
+		lines.append(tr("NOTICE_ACHIEVEMENT") % tr("ACH_" + String(list[0]["id"]).to_upper()))
+	else:
+		lines.append(tr("NOTICE_ACHIEVEMENTS") % list.size())
+	var wraps := list.filter(func(e): return e["wrap"] != "")
+	if wraps.size() == 1:
+		lines.append(tr("NOTICE_WRAP_GOT") % tr("WRAP_" + String(wraps[0]["wrap"]).to_upper()))
+	elif wraps.size() > 1:
+		lines.append(tr("NOTICE_WRAPS_GOT") % wraps.size())
+	town.notify("\n".join(lines))
 
 
 func _notify(n: Dictionary) -> void:
@@ -547,6 +595,18 @@ func _notification(what: int) -> void:
 		_save()
 	elif what == NOTIFICATION_WM_MOUSE_EXIT and town != null:
 		town.set_hover("")   # 마우스가 창(작은 화면은 보이는 곳) 밖으로 나가면 빛남·이름표 끔
+	elif what == NOTIFICATION_TRANSLATION_CHANGED and is_node_ready() and state != null:
+		# 언어가 바뀜 (설정 또는 확인 스크립트): 한 번만 만든 글자들을 다시 쓰고 글자 폭이 바뀌었으니 다시 배치
+		propagate_call("retranslate")
+		_layout()
+
+
+## 언어를 바꾸면 (propagate_call): 한 번만 넣은 글자. 열린 NPC 대화 창은 새 언어로 다시 염
+func retranslate() -> void:
+	small_button.text = tr("SMALL_ESC")
+	settings_button.text = tr("SETTINGS")
+	if npc_dialog.visible:
+		npc_dialog.open(balance, _visitor_info())
 
 
 ## 지금 보이는 것들의 사각형 (창 좌표). 투명 창에서는 이것만 그려지고 클릭을 받는다.
@@ -580,6 +640,7 @@ func open_settings() -> void:
 		return
 	settings.show_style(screen.full_style)
 	settings.show_rush(state.rush_enabled)
+	settings.show_prefs()
 	settings.visible = true
 
 
@@ -592,6 +653,28 @@ func _on_rush_picked(on: bool) -> void:
 	state.rush_enabled = on
 	settings.show_rush(on)
 	_save()
+
+
+## [설정] Prefs 값 고름 → 저장 → 적용. 언어는 번역을 바꾸면 NOTIFICATION_TRANSLATION_CHANGED로 글자를 다시 씀,
+## 숫자 표기·알림은 다음 그리기부터 (Fmt.money·town.notify가 Prefs를 봄), 띠는 screen.apply_strip + 다시 배치 (투명도는 _layout)
+func _on_pref_picked(key: String, value: Variant) -> void:
+	if Prefs.set_value(key, value):
+		if key == "ui/locale":
+			TranslationServer.set_locale(Prefs.locale())
+		elif key.begins_with("strip/"):
+			screen.apply_strip()
+			_layout()
+	settings.show_prefs()
+
+
+## [기본값으로] → 설정 파일의 [ui]·[strip]을 기본값으로 + 큰 화면 방식도 전체 화면 (게임 저장·급송 전화는 그대로)
+func _on_defaults_pressed() -> void:
+	Prefs.reset()
+	screen.set_full_style(ScreenMode.FullStyle.FULLSCREEN)
+	screen.apply_strip()
+	TranslationServer.set_locale(Prefs.locale())
+	_layout()
+	open_settings()
 
 
 ## 급송 전화 [받기] → Rush.accept (벨이 울릴 때만) → 저장
@@ -806,6 +889,29 @@ func _on_upgrade_pressed(kind: String) -> void:
 		Quest.check(state, balance)
 		panel.driver.show_bought(kind)
 		_save()   # 산 직후 저장
+	panel.refresh(balance, state)
+
+
+## 물류센터 업그레이드 [값] → Upgrade.buy (개인 기사·돈·레벨은 계산 쪽이 봄) → 알림 → 저장
+func _on_center_upgrade_pressed(id: String) -> void:
+	if Upgrade.buy(balance, state, id):
+		panel.driver.show_upgraded(id)
+		town.notify(tr("NOTICE_UPGRADE") % [tr("UPGRADE_" + id.to_upper()), Upgrade.level(state, id)])
+		_save()
+	panel.refresh(balance, state)
+
+
+## 튜닝숍 [랩핑] [값] → Wrap.buy (보상용·가진 것·돈 모자람이면 그대로) → 저장
+func _on_wrap_buy_pressed(id: String) -> void:
+	if Wrap.buy(balance, state, id):
+		_save()
+	panel.refresh(balance, state)
+
+
+## [입히기] / [벗기기] ("") → 고른 트럭(튜닝숍 트럭 탭)에 Wrap.wear → 저장. 띠 트럭은 다음 프레임 _advance_truck이 바꿈
+func _on_wrap_wear_pressed(id: String) -> void:
+	if Wrap.wear(state, panel.truck, id):
+		_save()
 	panel.refresh(balance, state)
 
 

@@ -154,6 +154,8 @@ const FULL_UI_SCALE_MAX := 2.0
 const FULL_MARGIN := 28.0         ## 창 가장자리·동네·차고 사이 간격 (높이 900 기준)
 const GARAGE_SCALE := 1.5         ## 전체 화면 차고 = v0 패널의 몇 배 (높이 900 기준)
 const SETTINGS_WIDTH := 300.0     ## [설정] 화면 폭 (v0 패널 크기 기준, 차고와 같은 배수로 키움)
+const SETTINGS_PANEL_WIDTH := 440.0   ## v8b [설정] 세 묶음 화면 폭 (같은 기준. 요일 고르기·NPC 창은 SETTINGS_WIDTH 그대로)
+const SETTINGS_ROW_GAP := 3.0          ## v8b [설정] 표 줄 사이 (1280x720에 세 묶음이 다 들어가게 촘촘히)
 const FULL_TOWN_TEXT_MAX := 2.5   ## 동네를 확대해도 동네 글자("+N"·돈·+금액)는 이 배수(× 화면 배수)까지만
 
 
@@ -327,3 +329,40 @@ const LONG_VIEW_LOOPS := 5.0
 ## "장거리 배송 중 · N분 N초" 줄 왼쪽 위 (동네 설계 좌표): 아래 길(y 200) 밑, 트럭이 나가는 왼쪽 구석
 const TOWN_LONG_POS := Vector2(8, 204)
 const COLOR_LONG := Color(0.62, 0.85, 1.0)
+
+# --- v8a: 랩핑 (차체 색·무늬만. 코드로 그리는 임시 도형. 크기는 짐칸 폭·트럭 높이의 몇 배. Truck.draw_body) ---
+## 랩핑 id → [짐칸 색, 운전석 색]. 없는 id(랩핑 없음, 반창고)는 트럭 원래 짐칸 색 + COLOR_TRUCK_CAB
+const WRAP_BODY := {
+	"stripe": [Color(0.16, 0.32, 0.78), Color(0.16, 0.32, 0.78)],
+	"flame": [Color(0.13, 0.13, 0.15), Color(0.22, 0.22, 0.25)],
+	"gold18": [Color(0.95, 0.76, 0.22), Color(0.84, 0.60, 0.12)],
+}
+const WRAP_STRIPES := [0.30, 0.58]        ## 줄무늬 두 줄 위쪽 끝 (트럭 높이의 몇 배)
+const WRAP_STRIPE_HEIGHT := 0.14
+const COLOR_WRAP_STRIPE := Color(0.97, 0.97, 0.97)
+const WRAP_FLAME_TOP := 0.3               ## 불꽃 혀가 시작하는 높이 (그 아래를 혀 수만큼 나눔)
+const WRAP_FLAME_LENGTHS := [0.7, 0.95, 0.55]   ## 혀마다 길이 (짐칸 폭의 몇 배, 위에서부터)
+const COLOR_WRAP_FLAME := Color(1.0, 0.42, 0.10)
+const COLOR_WRAP_FLAME_CORE := Color(1.0, 0.85, 0.25)
+const WRAP_SHINE_X := 0.15                ## 금색 반짝임 띠 아래쪽 왼쪽 끝 (짐칸 폭의 몇 배)
+const WRAP_SHINE_WIDTH := 0.18
+const WRAP_SHINE_LEAN := 0.2              ## 위쪽이 오른쪽으로 기우는 정도
+const COLOR_WRAP_SHINE := Color(1.0, 0.95, 0.70, 0.85)
+const WRAP_BANDAGE_INSET := 0.18          ## 반창고 X를 짐칸 가장자리에서 띄우는 거리 (트럭 높이의 몇 배)
+const WRAP_BANDAGE_WIDTH := 0.24          ## 반창고 폭 (트럭 높이의 몇 배)
+const COLOR_WRAP_BANDAGE := Color(0.93, 0.78, 0.60)
+const COLOR_WRAP_BANDAGE_PAD := Color(0.99, 0.95, 0.88)
+## 튜닝숍 [랩핑] 칸 카드 미리 보기 크기 (v0 패널 기준)
+const WRAP_PREVIEW_SIZE := Vector2(60, 36)
+const COLOR_WRAP_WORN := Color(0.55, 0.95, 0.55)   ## "입는 중"
+
+# --- v8a: 물류센터 [기록] 칸 (통계·잡옵 도감·업적. 크기는 v0 패널 기준) ---
+## [창고·할 일]·[기록] 스크롤 칸 높이: 1280x720·2200x800에서도 물류센터 화면이 창 안, [작게]·[설정]과 안 겹치게
+## (330이면 1280x720에서 [작게]와 4픽셀 겹침)
+const DRIVER_PAGE_HEIGHT := 320.0
+const RECORD_HEAD_SIZE := 15              ## 묶음 제목 ("통계", "잡옵 도감 · N / 25칸", "업적 · N / 20")
+const BOOK_CELL_HEIGHT := 20.0            ## 도감 칸 높이
+const BOOK_CELL_ALPHA := 0.35             ## 본 칸 바탕 = 등급 색을 이만큼 (글자가 읽히게 옅게)
+const COLOR_BOOK_EMPTY := Color(0.20, 0.22, 0.26)   ## 안 본 칸 바탕
+const BOOK_STAR_SIZE := 9.0               ## 같은 잡옵 3줄이 나온 칸의 별 그림 지름
+const COLOR_ACH_DONE := Color(1.0, 0.85, 0.30)

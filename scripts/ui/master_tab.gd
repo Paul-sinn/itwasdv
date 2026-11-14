@@ -37,7 +37,7 @@ func _ready() -> void:
 	_row = HBoxContainer.new()
 	_open_box.add_child(_row)
 	for d in 7:
-		var b := _button(_row, Fmt.day_name(d, true))
+		var b := _button(_row, "")
 		b.toggle_mode = true
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.add_theme_color_override("font_pressed_color", Feel.COLOR_STAR)
@@ -46,7 +46,14 @@ func _ready() -> void:
 		day_buttons.append(b)
 	_pick_note = _label(_open_box, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
 	_bonus = _label(_open_box, Feel.PANEL_TEXT_SIZE, Feel.COLOR_MASTER)
+	retranslate()
 	set_ui_scale(_scale)
+
+
+## 한 번만 넣는 글자 (언어를 바꾸면 main.gd가 다시 부름). 바뀌는 글자는 refresh가 매 프레임
+func retranslate() -> void:
+	for d in day_buttons.size():
+		day_buttons[d].text = Fmt.day_name(d, true)
 
 
 func set_ui_scale(s: float) -> void:

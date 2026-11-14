@@ -21,10 +21,15 @@
 ##   - 클릭 통과 다각형을 빈 배열로 주면 창 전체가 클릭을 받는다.
 ##
 ## 평범한 창으로 띄우려면(개발용): 실행 명령 끝에 -- --windowed
+##
+## v8b 설정 (Prefs [strip]): 띠 크기(Feel.SMALL_SIZE × 배율)·자리(오른쪽 아래 / 왼쪽 아래)·모니터·항상 위.
+##   자리·크기 계산은 화면 없이 시험되는 순수 함수(strip_rect, pick_screen), 진짜 창에 넣는 곳은 small_rect / place_window / apply_small.
+##   고른 모니터가 없으면(뽑힘) 주 모니터에 놓고 설정값은 남김. 큰 화면도 그 모니터에. 투명도는 그림 쪽(main.gd)
 extends Node
 
 const ClickRegion = preload("res://scripts/ui/click_region.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
+const Prefs = preload("res://scripts/ui/prefs.gd")
 
 ## 클릭 받을 사각형 목록(창 좌표)을 돌려주는 함수. main.gd가 넣어준다.
 var rects_provider: Callable
@@ -36,7 +41,7 @@ var _big_maximized := false            ## 창 모드 큰 화면을 최대화해 
 var _last_polygon := PackedVector2Array()
 var _next_region_usec := 0
 var _next_recheck_usec := 0
-var _placed_for := Rect2i()
+var _placed_for := Rect2i()   ## 마지막으로 놓은 띠 자리 (small_rect가 달라지면 다시 놓음)
 
 
 ## 투명 창으로 띄울까? (화면 없는 테스트 실행이거나 --windowed면 아님)
@@ -55,15 +60,40 @@ static func make_plain_window(win: Window, size: Vector2i) -> void:
 	win.size = size
 
 
-## 작은 화면이 놓일 자리 (Godot 화면 좌표): 주 모니터 쓸 수 있는 영역의 오른쪽 아래 구석
+## 띠 크기: 작은 화면 크기 × 배율 (1.25 → 600x275)
+static func strip_size(scale: float) -> Vector2i:
+	return Vector2i((Vector2(Feel.SMALL_SIZE) * scale).round())
+
+
+## 띠 자리 (순수 함수): 모니터 screen 안의 쓸 수 있는 영역 usable(작업표시줄 뺀 곳) 아래 구석에 붙임.
+## corner = "right"(오른쪽 아래) / "left"(왼쪽 아래). 영역보다 크면 영역 크기로 자름
+static func strip_rect(screen: Rect2i, usable: Rect2i, scale: float, corner: String) -> Rect2i:
+	var area := usable.intersection(screen) if usable.intersects(screen) else screen   # 쓸 수 있는 영역이 이상하게 오면 모니터 전체
+	var size := strip_size(scale).min(area.size)
+	var x := area.position.x if corner == "left" else area.end.x - size.x
+	return Rect2i(Vector2i(x, area.end.y - size.y), size)
+
+
+## 띠·큰 화면을 놓을 모니터 (순수 함수): 고른 번호가 지금 연결돼 있으면 그것, 아니면(-1 = 주 모니터, 뽑힘) 주 모니터
+static func pick_screen(pick: int, count: int, primary: int) -> int:
+	return pick if pick >= 0 and pick < count else primary
+
+
+## 지금 띠·큰 화면을 놓을 모니터 (설정 + 연결된 모니터)
+static func screen_index() -> int:
+	return pick_screen(Prefs.get_value("strip/screen"), DisplayServer.get_screen_count(), DisplayServer.get_primary_screen())
+
+
+## 작은 화면이 놓일 자리 (Godot 화면 좌표): 설정 모니터 쓸 수 있는 영역의 구석 (기본 = 주 모니터 오른쪽 아래, 480x220)
 static func small_rect() -> Rect2i:
-	var usable := DisplayServer.screen_get_usable_rect(DisplayServer.get_primary_screen())
-	return Rect2i(usable.end - Feel.SMALL_SIZE, Feel.SMALL_SIZE)
+	var s := screen_index()
+	return strip_rect(Rect2i(DisplayServer.screen_get_position(s), DisplayServer.screen_get_size(s)),
+			DisplayServer.screen_get_usable_rect(s), Prefs.get_value("strip/scale"), Prefs.get_value("strip/corner"))
 
 
-## 전체 화면이 덮을 곳 (Godot 화면 좌표): 주 모니터 전체
+## 전체 화면이 덮을 곳 (Godot 화면 좌표): 설정 모니터 전체 (기본 = 주 모니터)
 static func full_rect() -> Rect2i:
-	var s := DisplayServer.get_primary_screen()
+	var s := screen_index()
 	return Rect2i(DisplayServer.screen_get_position(s), DisplayServer.screen_get_size(s))
 
 
@@ -87,7 +117,7 @@ func apply_small() -> void:
 		win.mode = Window.MODE_WINDOWED
 	win.borderless = true          # 크기를 맞추기 전에 (테두리가 있으면 안쪽 크기가 달라짐)
 	win.min_size = Vector2i.ZERO   # 창 모드 큰 화면의 최소 크기가 남아 있으면 작아지지 않음
-	win.always_on_top = true
+	win.always_on_top = Prefs.get_value("strip/always_on_top")
 	win.transparent_bg = true
 	place_window()
 
@@ -142,9 +172,9 @@ func bring_front(windowed: bool) -> void:
 		apply_full(false)
 
 
-## 창 모드 큰 화면이 처음 놓일 자리 (Godot 화면 좌표): 주 모니터 쓸 수 있는 영역 가운데
+## 창 모드 큰 화면이 처음 놓일 자리 (Godot 화면 좌표): 설정 모니터(기본 = 주 모니터) 쓸 수 있는 영역 가운데
 static func big_window_first_rect() -> Rect2i:
-	var usable := DisplayServer.screen_get_usable_rect(DisplayServer.get_primary_screen())
+	var usable := DisplayServer.screen_get_usable_rect(screen_index())
 	var size := Feel.BIG_WINDOW_SIZE.min(usable.size)
 	return Rect2i(usable.position + (usable.size - size) / 2, size)
 
@@ -168,10 +198,10 @@ static func _on_some_screen(r: Rect2i) -> bool:
 	return false
 
 
-## 주 모니터 작업표시줄 바로 위, 오른쪽 구석에 붙이기 (작은 화면일 때만)
+## 작업표시줄 바로 위 구석에 붙이기 (작은 화면일 때만). 설정 모니터·자리·크기대로
 func place_window() -> void:
-	_placed_for = DisplayServer.screen_get_usable_rect(DisplayServer.get_primary_screen())
 	var r := small_rect()
+	_placed_for = r
 	var win := get_window()
 	win.size = r.size
 	win.position = r.position
@@ -193,7 +223,7 @@ func _process(_delta: float) -> void:
 	var now := Time.get_ticks_usec()   # 배속(F2)과 상관없는 진짜 시간
 	if now >= _next_recheck_usec:
 		_next_recheck_usec = now + int(Feel.WINDOW_RECHECK_SECONDS * 1e6)
-		if DisplayServer.screen_get_usable_rect(DisplayServer.get_primary_screen()) != _placed_for:
+		if small_rect() != _placed_for:   # 작업표시줄·해상도가 바뀌었거나 고른 모니터를 뽑음
 			place_window()
 	_update_region(now)
 

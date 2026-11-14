@@ -813,7 +813,7 @@ func _set_stars_for_rank(b: Balance, s: GameState, cond: Callable) -> void:
 
 
 ## 준비: 트럭 전부 최대 단계 + 부품 전부 최고 등급 + 내 트럭 매출 능력치(상하차·친절·협상) 최대 (시내 1위가 되게.
-## json 0.17: 3대 +30 전부 최대 ≈ 4,125만은 1위 라이벌 4,000만과 3% 차이라 능력치까지 ≈ 5,518만 (+38%). 노선은 시내 그대로)
+## json 0.19: 3대 +30 전부 최대 ≈ 4,125만은 1위 라이벌 4,830만보다 낮아서 능력치까지 ≈ 5,518만 (1위보다 +14%). 노선은 시내 그대로)
 func _max_out(b: Balance, s: GameState) -> void:
 	for id in ["unload", "kind", "nego"]:
 		s.ability_points += Ability.max_points(b, id) - Ability.points(s, id)

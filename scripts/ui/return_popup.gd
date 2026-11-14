@@ -6,6 +6,7 @@ const Feel = preload("res://scripts/ui/feel.gd")
 
 var _main_label: Label
 var _note_label: Label
+var _ok: Button
 
 
 func _ready() -> void:
@@ -35,11 +36,17 @@ func _ready() -> void:
 	box.add_child(_note_label)
 
 	var ok := Button.new()
-	ok.text = tr("POPUP_OK")
+	_ok = ok
 	ok.focus_mode = Control.FOCUS_NONE
 	ok.add_theme_font_size_override("font_size", Feel.PANEL_BUTTON_SIZE)
 	ok.pressed.connect(func(): visible = false)
 	box.add_child(ok)
+	retranslate()
+
+
+## 한 번만 넣는 글자 (언어를 바꾸면 main.gd가 다시 부름)
+func retranslate() -> void:
+	_ok.text = tr("POPUP_OK")
 
 
 func open(main_text: String, note: String) -> void:

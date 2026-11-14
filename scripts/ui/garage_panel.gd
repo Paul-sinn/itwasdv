@@ -13,6 +13,7 @@
 ##      U2: 창업하면 건물 줄에 [사무실] (office_tab.gd: 보조 트럭·순위표·장부). 대리점 전(F3 처음부터 포함)에는 버튼을 숨기고 튜닝숍으로
 ## v7-bal: [보험] 켜기·쿠폰 지움 (보험은 보험사 날 [예]로 가입 → 계산 쪽 state). 가입한 날 +18 이상은 "보험 가입 중 · 보험료 +N · 합계" 줄,
 ##      제휴 할인 날은 비용 옆 "(제휴 할인 N%)", 복구 보험 날은 퍼짐 설명에 한 줄. 고급 스페어가 있으면 개수 + [고급 스페어 쓰기] 켜기/끄기
+## v8a: 튜닝숍 네 번째 칸 [랩핑] (wrap_tab.gd). 트럭 탭에서 고른 트럭에 입힘
 ## 보여주기만 한다. 버튼을 누르면 신호만 보내고, 실제 강화·구매·돌리기는 main.gd → scripts/core 가 한다.
 extends PanelContainer
 
@@ -30,13 +31,14 @@ const SettingTab = preload("res://scripts/ui/setting_tab.gd")
 const DriverTab = preload("res://scripts/ui/driver_tab.gd")
 const MasterTab = preload("res://scripts/ui/master_tab.gd")
 const OfficeTab = preload("res://scripts/ui/office_tab.gd")
+const WrapTab = preload("res://scripts/ui/wrap_tab.gd")
 
 signal enhance_pressed
 signal spare_pressed
 signal premium_toggled(on: bool)   ## [고급 스페어 쓰기] (main이 state.use_premium에 넣고 저장)
 
 
-enum Tab { ENGINE, SETTING, MASTER }   ## 튜닝숍 안 세 칸
+enum Tab { ENGINE, SETTING, MASTER, WRAP }   ## 튜닝숍 안 네 칸
 ## 건물마다 NPC 이름·인사말 번역 키 (건물 이름은 Town.BUILDING_NAMES)
 const NPC_KEYS := {
 	"tuning": ["NPC_TUNING", "NPC_TUNING_HELLO"],
@@ -52,6 +54,7 @@ var building_buttons := {}       ## 건물 id → 위쪽 줄 버튼
 var engine_tab_button: Button    ## 튜닝숍 [엔진 강화]
 var setting_tab_button: Button   ## 튜닝숍 [세팅]
 var master_tab_button: Button    ## 튜닝숍 [명장]
+var wrap_tab_button: Button      ## 튜닝숍 [랩핑]
 var premium_button: Button       ## [강화] 옆 [고급 스페어 쓰기] 켜기/끄기 (고급 스페어가 있을 때만 보임. 눌린 모양 = state.use_premium)
 var now_local := 0               ## 현지 시각 (main.now_local()을 매 프레임 넣음. [명장] 칸이 방문 중인지 볼 때)
 var master: MasterTab            ## 튜닝숍 [명장] 칸
@@ -59,6 +62,7 @@ var to_car_button: Button        ## 스페어가 없어 강화가 막혔을 때 
 var setting: SettingTab          ## 튜닝숍 [세팅] 칸
 var driver: DriverTab            ## 물류센터 화면
 var office: OfficeTab            ## 사무실 화면 (창업 뒤)
+var wrap: WrapTab                ## 튜닝숍 [랩핑] 칸
 
 var _style: StyleBoxFlat
 var _building_row: HBoxContainer
@@ -119,7 +123,7 @@ func _ready() -> void:
 	_box.add_child(_building_row)
 	var bgroup := ButtonGroup.new()
 	for id: String in Town.BUILDINGS + [Town.OFFICE]:
-		var bb := _toggle(_building_row, tr(Town.BUILDING_NAMES[id]), bgroup)
+		var bb := _toggle(_building_row, "", bgroup)
 		bb.pressed.connect(func(): show_building(id))
 		building_buttons[id] = bb
 
@@ -145,12 +149,14 @@ func _ready() -> void:
 	_tabs = HBoxContainer.new()
 	_box.add_child(_tabs)
 	var group := ButtonGroup.new()
-	engine_tab_button = _toggle(_tabs, tr("GARAGE_TAB_ENGINE"), group)
-	setting_tab_button = _toggle(_tabs, tr("GARAGE_TAB_SETTING"), group)
-	master_tab_button = _toggle(_tabs, tr("GARAGE_TAB_MASTER"), group)
+	engine_tab_button = _toggle(_tabs, "", group)
+	setting_tab_button = _toggle(_tabs, "", group)
+	master_tab_button = _toggle(_tabs, "", group)
+	wrap_tab_button = _toggle(_tabs, "", group)
 	engine_tab_button.pressed.connect(func(): show_tab(Tab.ENGINE))
 	setting_tab_button.pressed.connect(func(): show_tab(Tab.SETTING))
 	master_tab_button.pressed.connect(func(): show_tab(Tab.MASTER))
+	wrap_tab_button.pressed.connect(func(): show_tab(Tab.WRAP))
 
 	var e := VBoxContainer.new()
 	_engine_box = e
@@ -180,14 +186,14 @@ func _ready() -> void:
 	# [강화] [고급 스페어 쓰기] [카센터로] 한 줄 (칸이 길어지지 않게). [카센터로]는 스페어가 없어 막혔을 때만
 	_enhance_row = HBoxContainer.new()
 	e.add_child(_enhance_row)
-	_enhance_button = _button(_enhance_row, tr("GARAGE_ENHANCE"))
+	_enhance_button = _button(_enhance_row, "")
 	_enhance_button.pressed.connect(func(): enhance_pressed.emit())
-	premium_button = _button(_enhance_row, tr("GARAGE_USE_PREMIUM"))
+	premium_button = _button(_enhance_row, "")
 	premium_button.toggle_mode = true
 	premium_button.add_theme_color_override("font_pressed_color", Feel.COLOR_SPARE)
 	premium_button.add_theme_color_override("font_hover_pressed_color", Feel.COLOR_SPARE)
 	premium_button.toggled.connect(func(on: bool): premium_toggled.emit(on))
-	to_car_button = _button(_enhance_row, tr("GARAGE_TO_CAR"))
+	to_car_button = _button(_enhance_row, "")
 	to_car_button.pressed.connect(func(): show_building("car_center"))
 	for btn in [_enhance_button, premium_button, to_car_button]:
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -205,6 +211,8 @@ func _ready() -> void:
 	_box.add_child(master)
 	office = OfficeTab.new()
 	_box.add_child(office)
+	wrap = WrapTab.new()
+	_box.add_child(wrap)
 	building_buttons[Town.OFFICE].visible = false   # 창업 뒤에 refresh가 켬
 
 	# 카센터: 스페어 엔진 (들고 있는 개수, 설명, [사기], 모자란 금액, 산 결과)
@@ -224,7 +232,30 @@ func _ready() -> void:
 	_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_flash)
 	show_tab(Tab.ENGINE)
+	retranslate()
 	set_ui_scale(_scale)
+
+
+## 한 번만 넣는 글자 (언어를 바꾸면 main.gd가 다시 부름). 바뀌는 글자는 refresh가 매 프레임
+func retranslate() -> void:
+	for id: String in building_buttons:
+		building_buttons[id].text = tr(Town.BUILDING_NAMES[id])
+	engine_tab_button.text = tr("GARAGE_TAB_ENGINE")
+	setting_tab_button.text = tr("GARAGE_TAB_SETTING")
+	master_tab_button.text = tr("GARAGE_TAB_MASTER")
+	wrap_tab_button.text = tr("GARAGE_TAB_WRAP")
+	_enhance_button.text = tr("GARAGE_ENHANCING" if _busy else "GARAGE_ENHANCE")
+	premium_button.text = tr("GARAGE_USE_PREMIUM")
+	to_car_button.text = tr("GARAGE_TO_CAR")
+	_npc_name.text = tr(NPC_KEYS[building][0])
+	_npc_hello.text = tr(NPC_KEYS[building][1])
+	for i in truck_buttons.size():
+		truck_buttons[i].text = _truck_tab_name(i)
+
+
+## 트럭 탭 이름: "내 트럭" / "2호차"
+func _truck_tab_name(i: int) -> String:
+	return tr("TRUCK_TAB_MINE") if i == 0 else tr("TRUCK_TAB_HELPER") % (i + 1)
 
 
 ## 크기 배수 (1 = v0 패널). 글자, 폭, 여백, 테두리를 같이 키운다.
@@ -247,6 +278,7 @@ func set_ui_scale(s: float) -> void:
 	driver.set_ui_scale(s)
 	master.set_ui_scale(s)
 	office.set_ui_scale(s)
+	wrap.set_ui_scale(s)
 	reset_size()
 
 
@@ -278,7 +310,7 @@ func pick_truck(i: int) -> void:
 		truck_buttons[j].set_pressed_no_signal(j == i)
 
 
-## 튜닝숍 [엔진 강화] / [세팅] / [명장] 칸 바꾸기 (튜닝숍 화면으로)
+## 튜닝숍 [엔진 강화] / [세팅] / [명장] / [랩핑] 칸 바꾸기 (튜닝숍 화면으로)
 func show_tab(t: Tab) -> void:
 	_tab = t
 	show_building("tuning")
@@ -290,6 +322,7 @@ func _show_parts() -> void:
 	_engine_box.visible = tuning and _tab == Tab.ENGINE
 	setting.visible = tuning and _tab == Tab.SETTING
 	master.visible = tuning and _tab == Tab.MASTER
+	wrap.visible = tuning and _tab == Tab.WRAP
 	driver.visible = building == "depot"
 	office.visible = building == Town.OFFICE
 	_car_box.visible = building == "car_center"
@@ -298,6 +331,7 @@ func _show_parts() -> void:
 	engine_tab_button.set_pressed_no_signal(_tab == Tab.ENGINE)
 	setting_tab_button.set_pressed_no_signal(_tab == Tab.SETTING)
 	master_tab_button.set_pressed_no_signal(_tab == Tab.MASTER)
+	wrap_tab_button.set_pressed_no_signal(_tab == Tab.WRAP)
 
 
 func current_tab() -> Tab:
@@ -428,6 +462,8 @@ func refresh(b: Balance, s: GameState) -> void:
 		master.refresh(b, s, now_local)
 	if office.visible:
 		office.refresh(b, s)
+	if wrap.visible:
+		wrap.refresh(b, s, truck)
 
 
 ## 트럭 탭: 계산 쪽 트럭 수만큼 (모자라면 만들고, F3 처음부터로 줄면 숨김). 1대거나 튜닝숍 [명장] 칸이면 줄째 숨김 (그때는 NPC 이름·인사말)
@@ -436,7 +472,7 @@ func _refresh_trucks(s: GameState) -> void:
 		pick_truck(0)
 	while truck_buttons.size() < s.trucks.size():
 		var i := truck_buttons.size()
-		var tb := _toggle(_truck_row, tr("TRUCK_TAB_MINE") if i == 0 else tr("TRUCK_TAB_HELPER") % (i + 1), _truck_group)
+		var tb := _toggle(_truck_row, _truck_tab_name(i), _truck_group)
 		tb.pressed.connect(func(): pick_truck(i))
 		tb.set_pressed_no_signal(i == truck)
 		truck_buttons.append(tb)

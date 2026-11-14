@@ -5,9 +5,14 @@
 ##     [창고·할 일]: 대리점 창업 한 줄 (v7a: "대리점 창업 3억원 · 2.9억원 모자람" [창업] 두 번 눌러야 / 창업 뒤 "대리점 (시내)".
 ##                   1280x720에 맞게 모자란 금액도 같은 줄, "약 N분 뒤"는 안 붙임: 붙이면 두 줄이 되어 차고가 창 밖),
 ##                   다음 할 일 (끝낸 수 n/25, 이름·설명·진행·보상), 주간 배송 목표 (v6b),
-##                   창고 확장·야간 배송팀 (지금 값 → 다음 값, 가격, [올리기], 모자란 금액)
+##                   창고 확장·야간 배송팀 (지금 값 → 다음 값, 가격, [올리기], 모자란 금액),
+##                   v8a 물류센터 업그레이드 3줄 (이름 Lv N / 5 + [값] / 대리점이면 버튼 대신 "동네에서만 살 수 있어요 (효과는 유지)",
+##                   아래 "지금 효과 → 다음 효과". Upgrade.enabled가 거짓이면 숨김)
+##     [기록] (v8a): 통계·잡옵 도감·업적 (record_tab.gd)
+##   v8a: [창고·할 일]도 [기록]과 같은 높이(DRIVER_PAGE_HEIGHT)의 스크롤 칸 안에 (업그레이드 3줄을 더하면 1280x720에서 창 밖이라).
+##        업그레이드는 맨 아래라 예전 줄들은 스크롤 없이 그 자리에
 ## 숫자는 scripts/core 의 Driver·Quest·Depot·Ability 값을 그대로 보여 준다 (효과를 여기서 계산하지 않음).
-## 버튼은 신호만 → main.gd → Depot.upgrade / Ability.add / Ability.reset / Company.found
+## 버튼은 신호만 → main.gd → Depot.upgrade / Ability.add / Ability.reset / Company.found / Upgrade.buy
 ## 다음 할 일 이름·설명은 번역 파일 QUEST_<ID>, QUEST_<ID>_DESC (Fmt.quest_name / quest_desc)
 extends VBoxContainer
 
@@ -23,13 +28,16 @@ const Weekly = preload("res://scripts/core/weekly.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const Town = preload("res://scripts/ui/town.gd")
+const RecordTab = preload("res://scripts/ui/record_tab.gd")
+const Upgrade = preload("res://scripts/core/upgrade.gd")
 
 signal upgrade_pressed(kind: String)
 signal ability_pressed(id: String)   ## 능력치 [+]
 signal reset_pressed                 ## [초기화]를 두 번째 누름 (첫 번째는 여기서 글만 바꿈)
 signal found_pressed                 ## [창업]을 두 번째 누름 (첫 번째는 여기서 글만 바꿈)
+signal center_upgrade_pressed(id: String)   ## 물류센터 업그레이드 [값] (v8a)
 
-enum Page { ABILITY, DEPOT }
+enum Page { ABILITY, DEPOT, RECORD }
 
 const KINDS := ["warehouse", "night"]
 ## 종류별 번역 키: 이름("창고 확장 Lv.N"), 값("꺼둔 동안 쌓이는 시간 …")
@@ -49,6 +57,13 @@ var buy_buttons := {}   ## kind → [올리기] 버튼
 var page := Page.ABILITY ## 지금 보이는 칸 (처음엔 능력치. 바꾸면 기억)
 var ability_page_button: Button
 var depot_page_button: Button
+var record_page_button: Button
+var record: RecordTab     ## [기록] 칸
+var center_buttons := {}  ## 물류센터 업그레이드 id → [값]
+var center_notes := {}    ## id → 대리점이면 버튼 대신 "동네에서만 살 수 있어요 (효과는 유지)"
+var center_titles := {}   ## id → "배송 구역 확장 Lv.2 / 5"
+var center_values := {}   ## id → "배송 단가 +1% → +2%"
+var _center_rows: Array[Control] = []   ## 업그레이드 줄들 (Upgrade.enabled가 거짓이면 숨김)
 var add_buttons := {}    ## 능력치 id → [+] (처음 refresh 때 balance 순서로 만듦)
 var reset_button: Button
 var found_button: Button  ## 대리점 [창업] (창업 뒤 숨김)
@@ -68,6 +83,7 @@ var _bar_bg: StyleBoxFlat
 var _bar_fill: StyleBoxFlat
 var _ability_box: VBoxContainer
 var _depot_box: VBoxContainer
+var _depot_scroll: ScrollContainer   ## [창고·할 일] 스크롤 칸 (_depot_box를 담음)
 var _ability_lines := {} ## 능력치 id → "협상  7/20 · 단가 +7%"
 var _ability_descs := {} ## 능력치 id → 한 줄 설명
 var _builds: Label       ## 예시 빌드 4줄
@@ -99,10 +115,12 @@ func _ready() -> void:
 	var pages := HBoxContainer.new()
 	add_child(pages)
 	var group := ButtonGroup.new()
-	ability_page_button = _toggle(pages, tr("DRIVER_PAGE_ABILITY"), group)
-	depot_page_button = _toggle(pages, tr("DRIVER_PAGE_DEPOT"), group)
+	ability_page_button = _toggle(pages, "", group)
+	depot_page_button = _toggle(pages, "", group)
+	record_page_button = _toggle(pages, "", group)
 	ability_page_button.pressed.connect(func(): show_page(Page.ABILITY))
 	depot_page_button.pressed.connect(func(): show_page(Page.DEPOT))
+	record_page_button.pressed.connect(func(): show_page(Page.RECORD))
 
 	# [능력치]: 남은 포인트 + [초기화], 능력치 줄 (refresh에서 만듦), 예시 빌드
 	_ability_box = VBoxContainer.new()
@@ -115,9 +133,13 @@ func _ready() -> void:
 	reset_button.pressed.connect(_on_reset_pressed)
 	_builds = _label(_ability_box, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
 
-	# [창고·할 일]
+	# [창고·할 일] (스크롤 칸 안)
+	_depot_scroll = ScrollContainer.new()
+	_depot_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	add_child(_depot_scroll)
 	_depot_box = VBoxContainer.new()
-	add_child(_depot_box)
+	_depot_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_depot_scroll.add_child(_depot_box)
 	# 맨 위: 대리점 창업 줄 (글자 왼쪽, [창업] 오른쪽 끝)
 	var agency_row := HBoxContainer.new()
 	_depot_box.add_child(agency_row)
@@ -147,17 +169,53 @@ func _ready() -> void:
 		btn.pressed.connect(func(): upgrade_pressed.emit(kind))
 		buy_buttons[kind] = btn
 		_waits[kind] = _label(_depot_box, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
+
+	# 물류센터 업그레이드 3줄: [이름 Lv.N / 5] … [값] 또는 대리점 안내, 아래 효과 줄
+	for id: String in Upgrade.IDS:
+		var row := HBoxContainer.new()
+		_depot_box.add_child(row)
+		center_titles[id] = _label(row, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
+		# 줄바꿈 됨: en 이름 + "Upgrade (₩100K)"가 한 줄이면 1280x720에서 차고가 넓어져 동네와 겹침. 산 순간 왼쪽 기준으로 커짐
+		center_titles[id].size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		center_titles[id].size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var btn := _button(row, "")
+		btn.size_flags_horizontal = Control.SIZE_SHRINK_END   # 오른쪽 끝에
+		btn.pressed.connect(func(): center_upgrade_pressed.emit(id))
+		center_buttons[id] = btn
+		center_notes[id] = _label(row, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
+		center_notes[id].size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		center_notes[id].size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		center_notes[id].horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		center_values[id] = _label(_depot_box, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
+		_center_rows.append_array([row, center_values[id]])
+
+	record = RecordTab.new()
+	add_child(record)
 	show_page(page)
+	retranslate()
 	set_ui_scale(_scale)
 
 
 ## 크기 배수 (1 = v0 패널). garage_panel.gd가 같이 부른다
+## 한 번만 넣는 글자 (언어를 바꾸면 main.gd가 다시 부름). 바뀌는 글자는 refresh가 매 프레임
+func retranslate() -> void:
+	ability_page_button.text = tr("DRIVER_PAGE_ABILITY")
+	depot_page_button.text = tr("DRIVER_PAGE_DEPOT")
+	record_page_button.text = tr("DRIVER_PAGE_RECORD")
+	for id: String in _ability_descs:
+		_ability_descs[id].text = tr("ABILITY_%s_DESC" % id.to_upper())
+	if not _ability_descs.is_empty():
+		_builds.text = _builds_text()
+
+
 func set_ui_scale(s: float) -> void:
 	_scale = s
 	if _xp_bar == null:
 		return
 	for box: BoxContainer in [self, _ability_box, _depot_box]:
 		box.add_theme_constant_override("separation", int(roundf(Feel.PANEL_GAP_SMALL * s)))
+	_depot_scroll.custom_minimum_size.y = Feel.DRIVER_PAGE_HEIGHT * s
+	record.set_ui_scale(s)
 	_xp_bar.custom_minimum_size.y = Feel.XP_BAR_HEIGHT * s
 	for c: Control in _font_sizes:
 		c.add_theme_font_size_override("font_size", _px(_font_sizes[c]))
@@ -168,19 +226,26 @@ func show_bought(kind: String) -> void:
 	Town.pop(_titles[kind], Feel.POP_PIVOT_LEFT)
 
 
+## 물류센터 업그레이드를 산 직후: 그 줄 "Lv.N / 5"가 커졌다 돌아옴
+func show_upgraded(id: String) -> void:
+	Town.pop(center_titles[id], Feel.POP_PIVOT_LEFT)
+
+
 ## 찍은 직후: 그 능력치 줄이 커졌다 돌아옴
 func show_added(id: String) -> void:
 	if _ability_lines.has(id):
 		Town.pop(_ability_lines[id], Feel.POP_PIVOT_LEFT)
 
 
-## [능력치] / [창고·할 일]
+## [능력치] / [창고·할 일] / [기록]
 func show_page(p: Page) -> void:
 	page = p
 	_ability_box.visible = p == Page.ABILITY
-	_depot_box.visible = p == Page.DEPOT
+	_depot_scroll.visible = p == Page.DEPOT
+	record.visible = p == Page.RECORD
 	ability_page_button.set_pressed_no_signal(p == Page.ABILITY)
 	depot_page_button.set_pressed_no_signal(p == Page.DEPOT)
+	record_page_button.set_pressed_no_signal(p == Page.RECORD)
 
 
 ## [초기화]: 첫 번째는 "한 번 더 누르면 초기화"로 바꾸기만, ABILITY_RESET_ARM_SECONDS 안에 또 누르면 reset_pressed
@@ -269,6 +334,43 @@ func refresh(b: Balance, s: GameState) -> void:
 		_waits[kind].visible = short
 		if short:
 			_waits[kind].text = tr("DEPOT_SHORT") % [Fmt.money(price - s.money), Fmt.wait_text(Economy.seconds_to_afford(price, s.money, Company.hourly_net(b, s)))]
+	_refresh_center(b, s)
+	if record.visible:
+		record.refresh(b, s)
+
+
+## 물류센터 업그레이드 줄: 개인 기사면 [값] (못 사면 꺼짐) + "지금 → 다음 효과", 대리점이면 버튼 대신 안내 + 지금 효과만,
+## 다 샀으면 "(최고 단계)". 효과 글은 Upgrade.value(지금)·value_at(다음 레벨) 그대로
+func _refresh_center(b: Balance, s: GameState) -> void:
+	var on := Upgrade.enabled(b)
+	for c in _center_rows:
+		c.visible = on
+	if not on:
+		return
+	var solo := Company.stage(s) < GameState.AGENCY
+	for id: String in Upgrade.IDS:
+		var lv := Upgrade.level(s, id)
+		var top := Upgrade.max_level(b, id)
+		var price := Upgrade.price(b, s, id)
+		var key := "UPGRADE_" + id.to_upper()
+		var now := _center_value(id, Upgrade.value(b, s, id))
+		center_titles[id].text = tr("UPGRADE_TITLE") % [tr(key), lv, top]
+		var value := now   # 대리점: 지금 효과만 (못 사니 다음은 안 보여 줌)
+		if price <= 0:
+			value = tr("DEPOT_TOP") % now
+		elif solo:
+			value = tr("DEPOT_NEXT") % [now, _center_value(id, Upgrade.value_at(b, id, lv + 1))]
+		center_values[id].text = tr(key + "_VALUE") % value
+		center_buttons[id].visible = solo and price > 0
+		center_buttons[id].text = tr("DEPOT_BUY") % Fmt.money(price)
+		center_buttons[id].disabled = not Upgrade.can_buy(b, s, id)
+		center_notes[id].visible = not solo and price > 0
+		center_notes[id].text = tr("UPGRADE_SOLO_ONLY")
+
+
+## 효과 수치 한 개 (번역 키 UPGRADE_<ID>_UNIT): 단가 "+1%", 싣는 시간 "−3%", 기본 적재량 "+0.4건" (소수 그대로, Fmt.num)
+func _center_value(id: String, v: float) -> String:
+	return tr("UPGRADE_%s_UNIT" % id.to_upper()) % (Fmt.num(v) if id == "box" else Fmt.percent(v))
 
 
 ## 대리점 창업 줄: 창업 전 "대리점 창업 3억원" [창업] (돈이 모자라면 꺼짐 + 같은 줄에 모자란 금액), 창업 뒤 "대리점 (시내)"만.
@@ -319,15 +421,19 @@ func _build_abilities(b: Balance) -> void:
 		_ability_lines[id].size_flags_horizontal = Control.SIZE_SHRINK_BEGIN   # 찍은 순간 커질 기준점
 		_ability_lines[id].autowrap_mode = TextServer.AUTOWRAP_OFF
 		_ability_descs[id] = _label(words, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
-		_ability_descs[id].text = tr("ABILITY_%s_DESC" % id.to_upper())
 		var add := _button(row, "+", Feel.ABILITY_ADD_SIZE)
 		add.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		add.pressed.connect(func(): ability_pressed.emit(id))
 		add_buttons[id] = add
+	retranslate()
+
+
+## 예시 빌드 글 (능력치 이름을 번역 파일에서)
+func _builds_text() -> String:
 	var lines := PackedStringArray()
 	for build: Array in BUILDS:
 		lines.append(tr(build[0]) % [tr("ABILITY_" + String(build[1]).to_upper()), tr("ABILITY_" + String(build[2]).to_upper())])
-	_builds.text = "\n".join(lines)
+	return "\n".join(lines)
 
 
 ## 그 레벨의 값: 창고 "4시간", 야간팀 "50%"

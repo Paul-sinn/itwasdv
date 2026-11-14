@@ -377,3 +377,114 @@ QUEST_TURBO_FIRST,첫 터보,First turbo
 QUEST_TURBO_FIRST_DESC,터보 세팅 한 번 돌리기,Roll a turbo setup once
 QUEST_CONTRACT_FIRST,첫 기업 계약,First business contract
 QUEST_CONTRACT_FIRST_DESC,회사 평판을 모아 기업 계약 1개 맺기,Build company reputation to sign 1 business contract
+GARAGE_TAB_WRAP,랩핑,Wraps
+WRAP_NOTE,차체 색·무늬만 바뀌어요 (성능은 그대로),Changes only the truck's paint and pattern (no stat bonus)
+WRAP_BUY,%s원,₩%s
+WRAP_WEAR,입히기,Apply
+WRAP_TAKE_OFF,벗기기,Remove
+WRAP_WORN,입는 중,Wearing
+WRAP_FROM_ACH,업적 '%s' 달성하면 받아요,Unlocked by the achievement '%s'
+WRAP_STRIPE,레이싱 줄무늬,Racing stripes
+WRAP_FLAME,불꽃 무늬,Flames
+WRAP_GOLD18,골드 +18,Gold +18
+WRAP_BANDAGE,반창고,Bandages
+DRIVER_PAGE_RECORD,기록,Records
+RECORD_STATS,통계,Stats
+RECORD_PARCELS,%s건,%s
+RECORD_MONEY,%s원,₩%s
+RECORD_STAR,+%d,+%d
+RECORD_TIMES,%s번,%s
+RECORD_BOOK,잡옵 도감 · %d / %d칸,Junk option log · %d / %d
+RECORD_BOOK_SEEN,%d번,%dx
+RECORD_ACH,업적 · %d / %d,Achievements · %d / %d
+RECORD_ACH_DONE,달성,Done
+RECORD_ACH_PROGRESS,%s / %s,%s / %s
+RECORD_ACH_REWARD,보상: 랩핑 '%s',Reward: '%s' wrap
+STAT_PARCELS,총 배달 수,Parcels delivered
+STAT_MONEY_EARNED,총 번 돈,Total earned
+STAT_SECONDS_ON,켜 둔 시간,Time on
+STAT_BEST_STAR,최고 강화 단계,Best engine level
+STAT_TRIES,강화 시도,Upgrade tries
+STAT_SUCCESSES,강화 성공,Upgrade successes
+STAT_FAILS,강화 실패 (단계 유지),Upgrade fails (level kept)
+STAT_DESTROYS,엔진 퍼짐,Engine blow-ups
+STAT_INSURED_SAVES,보험이 막은 퍼짐,Blow-ups saved by insurance
+STAT_SETTING_ROLLS,세팅 돌린 수,Setup rolls
+STAT_TIPS,받은 팁,Tips received
+STAT_MASTER_VISITS,명장 방문,Master visits
+ACH_FIRST_PARCEL,첫 배달,First delivery
+ACH_FIRST_PARCEL_DESC,택배 %s건 배달,Deliver %s parcel
+ACH_PARCELS_10K,동네 단골 기사,Neighborhood regular
+ACH_PARCELS_10K_DESC,택배 %s건 배달,Deliver %s parcels
+ACH_PARCELS_1M,백만 개의 상자,A million boxes
+ACH_PARCELS_1M_DESC,택배 %s건 배달,Deliver %s parcels
+ACH_STAR_10,쓸 만한 엔진,A decent engine
+ACH_STAR_10_DESC,엔진 +%s 달성,Reach engine +%s
+ACH_STAR_15,튜닝에 빠지다,Hooked on tuning
+ACH_STAR_15_DESC,엔진 +%s 달성,Reach engine +%s
+ACH_STAR_18,꿈의 +18,The dream +18
+ACH_STAR_18_DESC,엔진 +%s 첫 성공,First success to engine +%s
+ACH_STAR_20,굉음의 엔진,Roaring engine
+ACH_STAR_20_DESC,엔진 +%s 달성,Reach engine +%s
+ACH_STAR_25,괴물 엔진,Monster engine
+ACH_STAR_25_DESC,엔진 +%s 달성,Reach engine +%s
+ACH_FIRST_DESTROY,"괜찮아, 다시 하면 돼","It's okay, try again"
+ACH_FIRST_DESTROY_DESC,엔진이 처음 퍼짐,Blow up an engine for the first time
+ACH_INSURED_SAVE,들어 두길 잘했다,Glad I had insurance
+ACH_INSURED_SAVE_DESC,보험으로 퍼짐을 처음 막음,Insurance saves your engine for the first time
+ACH_SETTING_RACING,레이싱 세팅,Racing setup
+ACH_SETTING_RACING_DESC,세팅 등급 %s 달성,Get a %s-grade setup
+ACH_SETTING_PROTOTYPE,프로토타입 세팅,Prototype setup
+ACH_SETTING_PROTOTYPE_DESC,세팅 등급 %s 달성,Get a %s-grade setup
+ACH_JUNK_TRIPLE,쓸데없이 완벽,Perfectly pointless
+ACH_JUNK_TRIPLE_DESC,세팅 3줄이 전부 같은 잡옵,All 3 setup lines roll the same junk option
+ACH_JUNK_BOOK_15,잡옵 수집가,Junk collector
+ACH_JUNK_BOOK_15_DESC,잡옵 도감 %s칸 채우기,Fill %s slots in the junk option log
+ACH_LEVEL_MAX,베테랑 기사,Veteran driver
+ACH_LEVEL_MAX_DESC,기사 Lv.%s 달성,Reach driver Lv.%s
+ACH_FOUND_AGENCY,사장님,The boss
+ACH_FOUND_AGENCY_DESC,대리점 창업,Open your own agency
+ACH_HELPERS_2,우리 회사 트럭들,Company fleet
+ACH_HELPERS_2_DESC,보조 트럭 %s대,Own %s extra trucks
+ACH_CONTRACTS_3,거래처 부자,Client magnet
+ACH_CONTRACTS_3_DESC,기업 계약 %s개 맺기,Sign %s business contracts
+ACH_MASTER_10,명장의 단골,The Master's regular
+ACH_MASTER_10_DESC,명장 방문 %s번,Get %s visits from the Master
+ACH_RANK_FIRST,시내 1등,Top of the city
+ACH_RANK_FIRST_DESC,시내 순위 1위,Reach #1 in the city ranking
+UPGRADE_TITLE,%s Lv.%d / %d,%s Lv.%d / %d
+UPGRADE_ZONE,배송 구역 확장,Wider delivery zone
+UPGRADE_SORT,분류 속도,Faster sorting
+UPGRADE_BOX,기본 적재함,Bigger base cargo
+UPGRADE_ZONE_VALUE,배송 단가 %s,Pay per parcel %s
+UPGRADE_SORT_VALUE,물류센터에서 싣는 시간 %s,Loading time at the depot %s
+UPGRADE_BOX_VALUE,한 바퀴 기본 적재량 %s,Base cargo per trip %s
+UPGRADE_ZONE_UNIT,+%s,+%s
+UPGRADE_SORT_UNIT,−%s,−%s
+UPGRADE_BOX_UNIT,+%s건,+%s
+UPGRADE_SOLO_ONLY,동네에서만 살 수 있어요 (효과는 유지),Only before your agency (effect stays)
+NOTICE_UPGRADE,물류센터 업그레이드! %s Lv.%d,Depot upgrade! %s Lv.%d
+NOTICE_ACHIEVEMENT,업적 달성: %s,Achievement unlocked: %s
+NOTICE_ACHIEVEMENTS,업적 %d개 달성!,%d achievements unlocked!
+NOTICE_WRAP_GOT,랩핑 '%s' 받음,Got the '%s' wrap
+NOTICE_WRAPS_GOT,랩핑 %d개 받음,Got %d wraps
+SETTINGS_GROUP_GAME,게임,Game
+SETTINGS_GROUP_STRIP,띠,Strip
+SETTINGS_GROUP_BIG,큰 화면,Big screen
+SETTINGS_LANGUAGE,언어,Language
+SETTINGS_LOCALE_KO,한국어,Korean
+SETTINGS_LOCALE_EN,English,English
+SETTINGS_NUMBERS,숫자 표기,Numbers
+SETTINGS_NUMBERS_AUTO,언어 따라,By language
+SETTINGS_NUMBERS_KO,만·억,Korean units
+SETTINGS_NUMBERS_EN,K·M,K·M
+SETTINGS_NOTICES,알림,Notices
+SETTINGS_ON_TOP,항상 위,Always on top
+SETTINGS_OPACITY,투명도,Opacity
+SETTINGS_STRIP_SIZE,크기,Size
+SETTINGS_CORNER,자리,Position
+SETTINGS_CORNER_RIGHT,오른쪽 아래,Bottom right
+SETTINGS_CORNER_LEFT,왼쪽 아래,Bottom left
+SETTINGS_MONITOR,모니터,Monitor
+SETTINGS_MONITOR_PRIMARY,주 모니터,Primary
+SETTINGS_DEFAULTS,기본값으로,Reset to defaults
