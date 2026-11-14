@@ -41,6 +41,7 @@ const Enhance = preload("res://scripts/core/enhance.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Quest = preload("res://scripts/core/quest.gd")
 const Setting = preload("res://scripts/core/setting.gd")
+const Stats = preload("res://scripts/core/stats.gd")
 const TruckState = preload("res://scripts/core/truck_state.gd")
 const Upgrade = preload("res://scripts/core/upgrade.gd")
 
@@ -258,6 +259,7 @@ static func _drive(state: GameState, b: Balance, i: int, dt: float, rng: RandomN
 				events.append({ "type": "spare" })
 			if tip_p > 0.0 and Enhance.random01(rng) < tip_p:
 				_earn(state, m[2], m[3])
+				Stats.add(state, "tips", 1)
 				events.append({ "type": "tip", "pay": m[3][2], "gross": m[2] })
 		elif t.lap_clock >= _lap_from_drive(load_s, n, drive, stop):
 			t.lap_clock -= _lap_from_drive(load_s, n, drive, stop)
@@ -398,8 +400,9 @@ static func _split(b: Balance, s: GameState, i: int, gross: int) -> Array:
 	return [staff, tax, gross - staff - tax]
 
 
-## 번 돈 gross와 그 _split을 상태에: 내 돈 + 오늘 집계
+## 번 돈 gross와 그 _split을 상태에: 내 돈 + 오늘 집계 + 통계 "번 돈"
 static func _earn(s: GameState, gross: int, parts: Array) -> void:
+	Stats.add(s, "money_earned", gross)
 	s.money += parts[2]
 	s.today_sales += gross
 	s.today_staff += parts[0]

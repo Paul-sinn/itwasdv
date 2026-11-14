@@ -10,6 +10,7 @@ const Driver = preload("res://scripts/core/driver.gd")
 const Economy = preload("res://scripts/core/economy.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Master = preload("res://scripts/core/master.gd")
+const Stats = preload("res://scripts/core/stats.gd")
 const TruckState = preload("res://scripts/core/truck_state.gd")
 const Visitor = preload("res://scripts/core/visitor.gd")
 
@@ -116,6 +117,7 @@ static func try_enhance(state: GameState, b: Balance, i: int, rng: RandomNumberG
 				t.star += 1
 				out["double"] = true
 				Driver.on_star_reached(state, b, t.star)
+			Stats.note_star(state, t.star)
 			Master.check_unlock(state, b)
 		Result.FAIL:
 			t.fail_count += 1
@@ -124,6 +126,7 @@ static func try_enhance(state: GameState, b: Balance, i: int, rng: RandomNumberG
 				result = Result.FAIL
 				out["insured"] = true
 				t.fail_count += 1
+				Stats.add(state, "insured_saves", 1)
 			else:
 				var d := force_destroy(state, b, i)
 				out["drop_to"] = d["drop_to"]
