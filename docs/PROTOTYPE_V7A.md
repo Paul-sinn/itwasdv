@@ -74,6 +74,12 @@ static func today(state: GameState) -> Dictionary                 ## { "sales": 
 ## Depot.buyable_level: 대리점이면 창고 Lv4 까지
 ## Driver: 창업 뒤 트럭 0 배송 경험치 = city_xp_per_parcel, 보조 트럭 배송은 경험치 0
 ## Quest: kind "agency"(창업했나), "helpers"(보조 트럭 수), 기존 "part_rolled" 로 tire
+## (2026-11-13 구현 뒤 약속에 넣음. C1·C3가 만든 것)
+## Setting.unlocked(b, state: GameState, i: int, part: String) -> bool   ## 예전 (b, t, part). 회사 단계를 봐야 해서
+## Setting.unlock_stage(b, part: String) -> int                         ## 0 = 처음부터, 1 = 대리점 (타이어)
+## Company.hourly_net(b, state) -> float                                ## 모든 트럭 Trip.hourly_net 합 ("약 N분 뒤" 계산용)
+## Company.check_first(state, b)                                        ## 계산 내부용 (1위 알림)
+## GameState.SOLO = 0, GameState.AGENCY = 1, 이벤트 { "type": "rank_first" }
 ```
 
 - 저장: 형식을 올리고 회사 단계·오늘 집계·1위 달성 여부를 넣는다. 트럭 여러 대는 이미 저장됨. 옛 형식(3~9)은 그대로 읽음.
