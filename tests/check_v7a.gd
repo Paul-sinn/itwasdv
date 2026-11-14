@@ -21,6 +21,7 @@ extends SceneTree
 
 const ErrorWatch = preload("res://tests/error_watch.gd")   ## 실행 중 스크립트 오류가 나면 실패로 끝냄
 const MAIN_SCENE := "res://scenes/main.tscn"
+const Ability = preload("res://scripts/core/ability.gd")
 const Balance = preload("res://scripts/core/balance.gd")
 const Company = preload("res://scripts/core/company.gd")
 const Depot = preload("res://scripts/core/depot.gd")
@@ -811,8 +812,12 @@ func _set_stars_for_rank(b: Balance, s: GameState, cond: Callable) -> void:
 	push_error("조건에 맞는 순위가 되는 단계가 없음")
 
 
-## 준비: 트럭 전부 최대 단계 + 부품 전부 최고 등급 (시내 1위가 되게. v7-bal json: 3대 +30 전부 최대 ≈ 4,080만 > 1위 라이벌 3,600만)
+## 준비: 트럭 전부 최대 단계 + 부품 전부 최고 등급 + 내 트럭 매출 능력치(상하차·친절·협상) 최대 (시내 1위가 되게.
+## json 0.17: 3대 +30 전부 최대 ≈ 4,125만은 1위 라이벌 4,000만과 3% 차이라 능력치까지 ≈ 5,518만 (+38%). 노선은 시내 그대로)
 func _max_out(b: Balance, s: GameState) -> void:
+	for id in ["unload", "kind", "nego"]:
+		s.ability_points += Ability.max_points(b, id) - Ability.points(s, id)
+		s.abilities[id] = Ability.max_points(b, id)
 	for i in s.trucks.size():
 		s.truck(i).star = b.max_star
 		for part: String in Setting.part_ids(b):
@@ -823,7 +828,7 @@ func _max_out(b: Balance, s: GameState) -> void:
 			for k in Setting.line_count(b, Setting.max_grade(b)):
 				pt["lines"].append(line)
 	if Company.rank(b, s) != 1:
-		push_error("전부 최대여도 시내 1위가 아님 (순위 %d)" % Company.rank(b, s))
+		push_error("전부 최대여도 시내 1위가 아님 (순위 %d, 시간당 매출 %d < 1위 라이벌 %d)" % [Company.rank(b, s), Company.hourly_sales(b, s), b.rivals[-1]])
 
 
 ## 글자에 text가 들어간 첫 줄 번호 (없으면 −1)
