@@ -74,6 +74,7 @@ var insured_day: int = -1         ## 보험사가 온 날 [예]를 누른 날짜
 # --- 물류센터 (depot.gd) ---
 var warehouse_level: int = 1
 var night_level: int = 1
+var depot_upgrades: Dictionary = {}   ## 물류센터 업그레이드 (v8a, upgrade.gd) id → 레벨 (없으면 0). 저장
 
 # --- 퀘스트 (quest.gd)와 그 조건에 쓰는 기록 ---
 var quest_index: int = 0          ## 지금 차례인 퀘스트 번호 (목록 길이면 다 끝남)
@@ -82,6 +83,13 @@ var setting_rolls: int = 0        ## 세팅 돌린 횟수
 var spares_bought: int = 0        ## 스페어를 산 개수
 var parts_rolled: Dictionary = {} ## 부품 id → true (돌린 적 있는 부품)
 var milestones_done: Array = []   ## 보너스를 이미 받은 강화 단계들
+
+# --- v8a 랩핑 (wrap.gd), 통계·도감 (stats.gd), 업적 (achievement.gd). 전부 저장 ---
+var wraps: Array = []             ## 가진 랩핑 id (산 것 + 업적 보상). 입힌 랩핑은 TruckState.wrap
+var stats: Dictionary = {}        ## 다른 칸에 없는 통계 (Stats.COUNTERS: money_earned, seconds_on(소수), best_star, insured_saves, tips, master_visits). 없으면 0
+var junk_seen: Dictionary = {}    ## 잡옵 도감: "옵션 id/등급" → 본 횟수 (세팅 결과에 나온 줄 수)
+var junk_triples: Array = []      ## 한 결과에 같은 잡옵 3줄이 나온 칸 ("옵션 id/등급")
+var achievements_done: Array = [] ## 달성한 업적 id (달성 순서)
 
 var _events: Array = []           ## 화면에 띄울 알림 (저장 안 함). add_event로 쌓고 take_events로 꺼냄
 
@@ -131,6 +139,7 @@ func add_event(event: Dictionary) -> void:
 ##   { "type": "long_unlocked" } (v7b: 대리점 + 어느 트럭이 처음 +10 → 장거리·터보 열림. 한 번만)
 ##   { "type": "contract", "index": int, "hourly": int } (v7b: 기업 계약 체결. Contract.tick)
 ##   { "type": "visitor", "who": String, "event": String(보험사 이벤트 id 또는 ""), "gift": int(부품상만) } (v7-bal)
+##   { "type": "achievement", "id": String, "wrap": String(보상 랩핑 id 또는 "") } (v8a: Achievement.check)
 func take_events() -> Array:
 	var out := _events
 	_events = []

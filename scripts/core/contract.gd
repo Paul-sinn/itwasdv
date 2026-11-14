@@ -13,6 +13,7 @@ const Balance = preload("res://scripts/core/balance.gd")
 const Company = preload("res://scripts/core/company.gd")   # company ↔ contract 고리 (trip ↔ company처럼 Godot 4.6.3에서 됨)
 const Economy = preload("res://scripts/core/economy.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
+const Stats = preload("res://scripts/core/stats.gd")
 
 
 ## 맺은 계약 수 0~3
@@ -73,4 +74,5 @@ static func _earn(b: Balance, state: GameState, gross: int) -> int:
 	state.today_sales += gross
 	state.today_tax += tax
 	state.today_contract += gross
+	Stats.add(state, "money_earned", gross)
 	return tax

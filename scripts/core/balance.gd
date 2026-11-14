@@ -3,7 +3,8 @@
 ## "driver"(기사 레벨), "abilities"(기사 능력치), "depot"(창고·야간팀), "quests"(다음 할 일 목록),
 ## "special"(대형·VIP), "rush"(급송 전화), "weekly"(주간 배송 목표), "master"(명장 방문일·보너스),
 ## "company"(회사 단계·세금·대리점·보조 트럭·순위 v7a), "visitors"(특별 NPC: 보험사·마술사·중고 부품상 v7-bal),
-## "routes"(노선: 동네·시내 v7-bal C2, 장거리 v7b), "contracts"(기업 계약 v7b).
+## "routes"(노선: 동네·시내 v7-bal C2, 장거리 v7b), "contracts"(기업 계약 v7b),
+## "depot_upgrades"(물류센터 업그레이드 v8a: 없어도 됨 → 기능 꺼짐), "wraps"(랩핑 v8a), "achievements"(업적 v8a).
 ##
 ## 쓰는 법:
 ##   var b := Balance.load_file()
@@ -30,6 +31,11 @@ const SPECIAL_IDS := ["large", "vip"]
 const MASTER_BONUS_IDS := ["destroy_cut", "success_mult", "double_step"]
 ## 노선 id (v7-bal C2, v7b "long"). trip.gd가 이 id로 읽어서 json에 다 있어야 함
 const ROUTE_IDS := ["town", "city", "long"]
+## 물류센터 업그레이드 id (v8a, upgrade.gd IDS와 같음). trip.gd가 이 id로 읽어서 묶음이 있으면 다 있어야 함
+const UPGRADE_IDS := ["zone", "sort", "box"]
+## 업적 조건 종류 (v8a). achievement.gd가 이 kind로 지금 값을 읽음
+const ACHIEVEMENT_KINDS := ["parcels", "best_star", "destroys", "insured_saves", "setting_grade", "junk_triples", "junk_book", "level",
+		"agency", "helpers", "contracts", "master_visits", "rank_first"]
 
 ## 읽기/검사에서 나온 문제들. 비어 있으면 정상.
 var errors: PackedStringArray = PackedStringArray()
@@ -107,6 +113,14 @@ var premium_drop_to: int                ## 고급 스페어를 쓰고 퍼지면 
 ## 노선 id → { "price_mult": 단가 ×, "road_mult": 도로 길이 ×, "stops_mult": 한 바퀴 싣는 수(집 수)·싣는 시간 × } (모두 > 0)
 ## json에 있을 때만 (v7b): "xp_per_parcel" 내 트럭 배송 1건 경험치 (없으면 동네·시내 규칙), "unlock_star" 그 트럭이 이 단계부터 (없으면 0)
 var routes: Dictionary = {}
+
+## 물류센터 업그레이드 (v8a: upgrade.gd). id → { "per_level": float, "prices": PackedInt64Array (길이 = 최고 레벨) }. 묶음이 없으면 {} (꺼짐)
+var depot_upgrades: Dictionary = {}
+
+## 랩핑 (v8a: wrap.gd). json 순서. { "id": String, "price": int (보상용이면 -1), "achievement": String (구매용이면 "") }
+var wraps: Array = []
+## 업적 (v8a: achievement.gd). json 순서. { "id": String, "kind": String, "target": int }
+var achievements: Array = []
 
 # --- contracts (기업 계약 v7b: contract.gd). [k] = k번째 계약 (길이 = 맺을 수 있는 계약 수) ---
 var contract_reputation: PackedInt64Array   ## 그 계약이 맺어지는 회사 평판 (오름차순)
@@ -255,6 +269,14 @@ static func from_dict(d: Dictionary) -> RefCounted:
 		for k in ["xp_per_parcel", "unlock_star"]:
 			if r.has(k):
 				b.routes[id][k] = int(r[k])
+	if d.has("depot_upgrades"):
+		for id in UPGRADE_IDS:
+			var u: Dictionary = d["depot_upgrades"][id]
+			b.depot_upgrades[id] = { "per_level": float(u["per_level"]), "prices": PackedInt64Array(u["prices"]) }
+	for a in d["achievements"]:
+		b.achievements.append({ "id": a["id"], "kind": a["kind"], "target": int(a["target"]) })
+	for w in d["wraps"]:
+		b.wraps.append({ "id": w["id"], "price": int(w.get("price", -1)), "achievement": w.get("achievement", "") })
 	b.contract_reputation = PackedInt64Array(d["contracts"]["reputation"])
 	b.contract_shares = PackedFloat64Array(d["contracts"]["sales_share"])
 	var company: Dictionary = d["company"]
@@ -316,6 +338,9 @@ static func validate(d: Dictionary) -> PackedStringArray:
 			errs.append("\"%s\" 묶음이 없음" % pair[0])
 	if typeof(d.get("quests")) != TYPE_ARRAY or d["quests"].is_empty():
 		errs.append("\"quests\" 목록이 없거나 비어 있음")
+	for key in ["wraps", "achievements"]:
+		if typeof(d.get(key)) != TYPE_ARRAY:
+			errs.append("\"%s\" 목록이 없음" % key)
 	if not errs.is_empty():
 		return errs
 
@@ -387,6 +412,9 @@ static func validate(d: Dictionary) -> PackedStringArray:
 			_check_number(d["routes"][id], "routes." + id, "unlock_star", errs, "0~%d 정수여야 함" % max_star,
 					func(x): return x >= 0.0 and x <= max_star and x == floorf(x))
 	var contract_count := _validate_contracts(d["contracts"], errs)
+	if d.has("depot_upgrades"):
+		_validate_upgrades(d["depot_upgrades"], errs)
+	_validate_wraps(d["wraps"], _validate_achievements(d["achievements"], errs), errs)
 	var max_level := _validate_driver(driver, max_star, errs)
 	_validate_quests(d["quests"], max_star, max_level, setting, depot, d["company"], contract_count, errs)
 	return errs
@@ -404,6 +432,74 @@ static func _validate_contracts(c: Dictionary, errs: PackedStringArray) -> int:
 	_check_list(c, "contracts", "sales_share", n, "contracts.reputation %d개와 같아야 함" % n, errs, "0~1 사이여야 함",
 			func(v): return v >= 0.0 and v <= 1.0)
 	return n
+
+
+## "depot_upgrades" 묶음 검사 (물류센터 업그레이드 v8a). id 3개 다 있고 그 밖은 없음, per_level > 0 (box 소수 건도 됨: 적재량 소수는 바퀴마다 확률, v8a C4),
+## sort는 최고 레벨에서 1 이하 (싣는 시간이 0 아래로 안 감), prices는 1개 이상·0 이상 정수·오를수록 줄지 않음
+static func _validate_upgrades(u, errs: PackedStringArray) -> void:
+	if typeof(u) != TYPE_DICTIONARY:
+		errs.append("depot_upgrades 가 { } 묶음이 아님")
+		return
+	for id in u:
+		if not UPGRADE_IDS.has(id):
+			errs.append("depot_upgrades 에 모르는 업그레이드: %s (%s 중 하나여야 함)" % [id, "/".join(UPGRADE_IDS)])
+	for id in UPGRADE_IDS:
+		var where := "depot_upgrades.%s" % id
+		var one = u.get(id)
+		if typeof(one) != TYPE_DICTIONARY:
+			errs.append("%s 이 없거나 { } 묶음이 아님" % where)
+			continue
+		var per_ok := _check_number(one, where, "per_level", errs, "0보다 커야 함", func(v): return v > 0.0)
+		var prices = one.get("prices")
+		if typeof(prices) != TYPE_ARRAY or prices.is_empty():
+			errs.append("%s.prices 가 없거나 빈 목록" % where)
+			continue
+		if _check_list(one, where, "prices", prices.size(), "", errs, "0 이상의 정수여야 함", func(v): return v >= 0.0 and v == floorf(v)):
+			_check_not_decreasing(prices, where + ".prices", errs)
+		if id == "sort" and per_ok and float(one["per_level"]) * prices.size() > 1.0 + SUM_EPSILON:
+			errs.append("%s: per_level × 레벨 수 = %s (1 이하여야 함. 싣는 시간이 0 아래로 감)" % [where, float(one["per_level"]) * prices.size()])
+
+
+## "achievements" 목록 검사 (업적 v8a): 칸마다 { id(빈 글자 아님, 겹치지 않음), kind(ACHIEVEMENT_KINDS), target(1 이상 정수) }. 맞는 id들을 돌려줌
+static func _validate_achievements(list: Array, errs: PackedStringArray) -> Array:
+	var ids := []
+	for i in list.size():
+		var a = list[i]
+		var where := "achievements[%d]" % i
+		if typeof(a) != TYPE_DICTIONARY:
+			errs.append("%s 가 { } 묶음이 아님" % where)
+			continue
+		var id = a.get("id")
+		if typeof(id) != TYPE_STRING or id == "" or ids.has(id):
+			errs.append("%s.id = %s (빈 글자가 아니고 앞과 겹치지 않는 글자여야 함)" % [where, id])
+		else:
+			ids.append(id)
+		if not ACHIEVEMENT_KINDS.has(a.get("kind")):
+			errs.append("%s.kind = %s (%s 중 하나여야 함)" % [where, a.get("kind"), "/".join(ACHIEVEMENT_KINDS)])
+		_check_number(a, where, "target", errs, "1 이상의 정수여야 함", func(v): return v >= 1.0 and v == floorf(v))
+	return ids
+
+
+## "wraps" 목록 검사 (랩핑 v8a): 칸마다 { id(빈 글자 아님, 겹치지 않음) } + price(0 이상 정수: 구매용) 또는 achievement(있는 업적 id: 보상용) 중 하나만
+static func _validate_wraps(list: Array, achievement_ids: Array, errs: PackedStringArray) -> void:
+	var ids := []
+	for i in list.size():
+		var w = list[i]
+		var where := "wraps[%d]" % i
+		if typeof(w) != TYPE_DICTIONARY:
+			errs.append("%s 가 { } 묶음이 아님" % where)
+			continue
+		var id = w.get("id")
+		if typeof(id) != TYPE_STRING or id == "" or ids.has(id):
+			errs.append("%s.id = %s (빈 글자가 아니고 앞과 겹치지 않는 글자여야 함)" % [where, id])
+		else:
+			ids.append(id)
+		if w.has("price") == w.has("achievement"):
+			errs.append("%s: price(구매용)와 achievement(보상용) 중 하나만 있어야 함" % where)
+		elif w.has("price"):
+			_check_number(w, where, "price", errs, "0 이상의 정수여야 함", func(v): return v >= 0.0 and v == floorf(v))
+		elif not achievement_ids.has(w["achievement"]):
+			errs.append("%s.achievement = %s (achievements 에 있는 id여야 함)" % [where, w["achievement"]])
 
 
 ## "driver" 묶음 검사 (기사 레벨 v5). 만렙을 돌려준다 (틀렸으면 0)

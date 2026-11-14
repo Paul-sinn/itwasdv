@@ -10,6 +10,7 @@ extends RefCounted
 const Balance = preload("res://scripts/core/balance.gd")
 const Enhance = preload("res://scripts/core/enhance.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
+const Stats = preload("res://scripts/core/stats.gd")
 const TruckState = preload("res://scripts/core/truck_state.gd")
 const Visitor = preload("res://scripts/core/visitor.gd")
 
@@ -131,6 +132,7 @@ static func try_roll(state: GameState, b: Balance, i: int, part: String, rng: Ra
 	for k in line_count(b, new_grade):
 		lines.append(_draw(chances, rng))
 	p["pending"] = { "grade": new_grade, "lines": lines }
+	Stats.see_lines(b, state, new_grade, lines)   # 잡옵 도감 (고르기 전에)
 	state.setting_rolls += 1
 	state.parts_rolled[part] = true
 	return { "ok": true, "grade_up": up, "pity": pity }
