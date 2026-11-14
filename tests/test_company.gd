@@ -281,6 +281,22 @@ func test_hourly_net() -> void:
 	check_near(Trip.hourly_net(b, solo, 0), Trip.hourly_income(b, solo, 0), 1e-9, "개인 기사 hourly_net = hourly_income")
 
 
+## C3: Company.hourly_net = 모든 트럭 hourly_net 합 (개인 기사면 트럭 0 것), 오래 돌린 내 돈과 1% 안
+func test_company_hourly_net() -> void:
+	var solo := _game([12], false)
+	check_eq(Company.hourly_net(b, solo), Trip.hourly_net(b, solo, 0), "개인 기사 = 트럭 0 hourly_net")
+	var s := _game([5, 12, 18], true)
+	var sum := Trip.hourly_net(b, s, 0) + Trip.hourly_net(b, s, 1) + Trip.hourly_net(b, s, 2)
+	check_near(Company.hourly_net(b, s), sum, 1e-6, "대리점 3대 = 세 값의 합")
+	var hours := 100
+	var rng := _rng(15)
+	for i in 3:
+		_run(s, i, hours, rng)
+	var per_hour := float(s.money) / hours
+	check_near(per_hour, sum, sum * 0.01, "3대 %d시간 내 돈 / 시간 vs Company.hourly_net" % hours)
+	note("대리점 3대 [+5, +12, +18]: Company.hourly_net %.0f, 돌린 내 돈 %.0f" % [sum, per_hour])
+
+
 ## ⑨ 오늘 집계: 켜 둔·꺼둔 돈이 들어가고 날짜가 바뀌면 0
 func test_today() -> void:
 	var s := _game([9, 9], true)

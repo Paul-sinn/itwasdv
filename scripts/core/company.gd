@@ -75,6 +75,15 @@ static func hourly_sales(b: Balance, state: GameState) -> float:
 	return sum
 
 
+## 켜 둔 동안 시간당 내 돈: 모든 트럭 Trip.hourly_net 합 (직원 몫·세금 뗀 뒤, 급송 뺌).
+## "N원 모자람 · 약 N분 뒤"는 이 값을 Economy.seconds_to_afford(price, money, hourly)에 넘긴다
+static func hourly_net(b: Balance, state: GameState) -> float:
+	var sum := 0.0
+	for i in state.trucks.size():
+		sum += Trip.hourly_net(b, state, i)
+	return sum
+
+
 ## 순위 1~(라이벌 수 + 1). 나보다 매출이 큰 라이벌 수 + 1 (같으면 내가 앞). 대리점 전이면 0
 static func rank(b: Balance, state: GameState) -> int:
 	if state.company_stage < GameState.AGENCY:
