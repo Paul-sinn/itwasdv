@@ -366,6 +366,22 @@ func test_dealer_and_premium() -> void:
 	check_eq([both.truck(0).star, both.premium_spares], [17, 0], "복구 보험 + 고급: +17")
 
 
+## 화면 안내용 Enhance.drop_to: 아무것도 안 바꾸고, 바로 뒤 force_destroy가 내려가는 단계와 같음
+func test_drop_to() -> void:
+	# [오늘 온 NPC, 보험사 이벤트, 단계, 고급 쓰기, 고급 수, 기대 단계]
+	for c in [["magician", "", 20, false, 0, 15], ["magician", "", 20, true, 1, 17], ["magician", "", 20, true, 0, 15],
+			["magician", "", 20, false, 1, 15], ["insurer", "recovery", 22, false, 0, 17], ["insurer", "recovery", 22, true, 1, 17],
+			["insurer", "partner_discount", 22, false, 0, 15], ["insurer", "recovery", 16, false, 0, 16], ["magician", "", 16, true, 1, 16]]:
+		var s := _day_with(c[0], c[2], c[1], false)
+		s.use_premium = c[3]
+		s.premium_spares = c[4]
+		s.spares = 2
+		var what := "%s %s +%d 고급 쓰기 %s 고급 %d" % c.slice(0, 5)
+		check_eq(Enhance.drop_to(s, b, 0), c[5], what)
+		check_eq([s.truck(0).star, s.spares, s.premium_spares], [c[2], 2, c[4]], what + ": 상태 그대로")
+		check_eq(Enhance.force_destroy(s, b, 0)["drop_to"], c[5], what + ": force_destroy와 같음")
+
+
 ## 마술사 날: 세팅 등급업 확률 × 2 (최대 1), 천장 카운터는 그대로 쌓임. 다른 날은 그대로
 func test_magician() -> void:
 	var m := _day_with("magician", 10)
