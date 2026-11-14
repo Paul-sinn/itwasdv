@@ -154,6 +154,8 @@ const FULL_UI_SCALE_MAX := 2.0
 const FULL_MARGIN := 28.0         ## 창 가장자리·동네·차고 사이 간격 (높이 900 기준)
 const GARAGE_SCALE := 1.5         ## 전체 화면 차고 = v0 패널의 몇 배 (높이 900 기준)
 const SETTINGS_WIDTH := 300.0     ## [설정] 화면 폭 (v0 패널 크기 기준, 차고와 같은 배수로 키움)
+const SETTINGS_PANEL_WIDTH := 440.0   ## v8b [설정] 세 묶음 화면 폭 (같은 기준. 요일 고르기·NPC 창은 SETTINGS_WIDTH 그대로)
+const SETTINGS_ROW_GAP := 3.0          ## v8b [설정] 표 줄 사이 (1280x720에 세 묶음이 다 들어가게 촘촘히)
 const FULL_TOWN_TEXT_MAX := 2.5   ## 동네를 확대해도 동네 글자("+N"·돈·+금액)는 이 배수(× 화면 배수)까지만
 
 

@@ -23,6 +23,9 @@ signal quit_pressed
 signal menu_requested
 
 enum Item { FULL = 1, SMALL = 2, QUIT = 3 }
+## 메뉴 줄 순서: 번역 키 ("" = 구분선)와 항목
+const MENU_KEYS := ["TRAY_FULL", "TRAY_SMALL", "", "TRAY_QUIT"]
+const MENU_ITEMS := [Item.FULL, Item.SMALL, 0, Item.QUIT]
 
 var indicator: StatusIndicator
 ## false면 메뉴를 진짜로 띄우지 않고 menu_requested만 보낸다 (확인 스크립트가 끔. 띄우면 메뉴가 닫힐 때까지 멈춤)
@@ -41,16 +44,25 @@ static func supported() -> bool:
 func _ready() -> void:
 	if NativeMenu.has_feature(NativeMenu.FEATURE_POPUP_MENU):
 		_menu_rid = NativeMenu.create_menu()
-		NativeMenu.add_item(_menu_rid, tr("TRAY_FULL"), choose, Callable(), Item.FULL)
-		NativeMenu.add_item(_menu_rid, tr("TRAY_SMALL"), choose, Callable(), Item.SMALL)
-		NativeMenu.add_separator(_menu_rid)
-		NativeMenu.add_item(_menu_rid, tr("TRAY_QUIT"), choose, Callable(), Item.QUIT)
+		for i in MENU_KEYS.size():
+			if MENU_KEYS[i] == "":
+				NativeMenu.add_separator(_menu_rid)
+			else:
+				NativeMenu.add_item(_menu_rid, tr(MENU_KEYS[i]), choose, Callable(), MENU_ITEMS[i])
 
 	indicator = StatusIndicator.new()
 	indicator.icon = make_icon()
 	indicator.tooltip = str(ProjectSettings.get_setting("application/config/name"))
 	indicator.pressed.connect(_on_pressed)
 	add_child(indicator)
+
+
+## 메뉴 글자 (언어를 바꾸면 main.gd가 다시 부름)
+func retranslate() -> void:
+	if _menu_rid.is_valid():
+		for i in MENU_KEYS.size():
+			if MENU_KEYS[i] != "":
+				NativeMenu.set_item_text(_menu_rid, i, tr(MENU_KEYS[i]))
 
 
 func _exit_tree() -> void:

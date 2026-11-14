@@ -36,6 +36,9 @@
 ##      업적 알림은 그 프레임에 달성한 것을 한 알림으로: 1개면 "업적 달성: 이름", 여러 개(옛 저장 첫 프레임 등)면 "업적 N개 달성!",
 ##      보상 랩핑이 있으면 아래 줄 "랩핑 '…' 받음" (여러 개면 "랩핑 N개 받음")
 ##      물류센터 업그레이드 [값] → Upgrade.buy → 알림·저장, 튜닝숍 [랩핑] [값] → Wrap.buy, [입히기]/[벗기기] → Wrap.wear (고른 트럭) → 저장
+## v8b: 설정 값은 Prefs (prefs.gd). 켤 때 읽고, 고른 언어가 있으면 화면을 만들기 전에 적용.
+##      [설정] 고르기 → Prefs.set_value → 적용 (언어: 번역 바꾸기 → 언어가 바뀌면 화면 글자를 retranslate로 다시),
+##      [기본값으로] → Prefs.reset + 큰 화면 방식도 전체 화면으로 (게임 저장은 안 건드림)
 extends Control
 
 const Ability = preload("res://scripts/core/ability.gd")
@@ -67,6 +70,7 @@ const SettingsPanel = preload("res://scripts/ui/settings_panel.gd")
 const DayPicker = preload("res://scripts/ui/day_picker.gd")
 const NpcDialog = preload("res://scripts/ui/npc_dialog.gd")
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
+const Prefs = preload("res://scripts/ui/prefs.gd")
 
 const AUTOSAVE_SECONDS := 30.0        ## 30초마다 저장 (배속과 상관없이 진짜 30초)
 const TRUCK := 0   ## 내 트럭 번호 (구석 줄 "+N", 치트 키). 강화·세팅은 panel.truck (튜닝숍 트럭 탭)
@@ -134,6 +138,9 @@ var suspense_scale := 1.0
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE   # 빈 곳 클릭은 _unhandled_input에서 처리
+	Prefs.read_file()
+	if Prefs.get_value("ui/locale") != "":   # 안 골랐으면 Godot이 이미 PC 언어 (한국어가 아니면 en)
+		TranslationServer.set_locale(Prefs.locale())
 	rng.randomize()
 	balance = Balance.load_file()
 	if not balance.is_ok():
@@ -200,6 +207,8 @@ func _ready() -> void:
 	settings.style_picked.connect(_on_style_picked)
 	settings.close_pressed.connect(close_settings)
 	settings.rush_picked.connect(_on_rush_picked)
+	settings.pref_picked.connect(_on_pref_picked)
+	settings.defaults_pressed.connect(_on_defaults_pressed)
 	town.rush_accept_pressed.connect(_on_rush_accept)
 	screen.full_style_changed.connect(func(style): settings.show_style(style))
 
@@ -583,6 +592,18 @@ func _notification(what: int) -> void:
 		_save()
 	elif what == NOTIFICATION_WM_MOUSE_EXIT and town != null:
 		town.set_hover("")   # 마우스가 창(작은 화면은 보이는 곳) 밖으로 나가면 빛남·이름표 끔
+	elif what == NOTIFICATION_TRANSLATION_CHANGED and is_node_ready() and state != null:
+		# 언어가 바뀜 (설정 또는 확인 스크립트): 한 번만 만든 글자들을 다시 쓰고 글자 폭이 바뀌었으니 다시 배치
+		propagate_call("retranslate")
+		_layout()
+
+
+## 언어를 바꾸면 (propagate_call): 한 번만 넣은 글자. 열린 NPC 대화 창은 새 언어로 다시 염
+func retranslate() -> void:
+	small_button.text = tr("SMALL_ESC")
+	settings_button.text = tr("SETTINGS")
+	if npc_dialog.visible:
+		npc_dialog.open(balance, _visitor_info())
 
 
 ## 지금 보이는 것들의 사각형 (창 좌표). 투명 창에서는 이것만 그려지고 클릭을 받는다.
@@ -616,6 +637,7 @@ func open_settings() -> void:
 		return
 	settings.show_style(screen.full_style)
 	settings.show_rush(state.rush_enabled)
+	settings.show_prefs()
 	settings.visible = true
 
 
@@ -628,6 +650,22 @@ func _on_rush_picked(on: bool) -> void:
 	state.rush_enabled = on
 	settings.show_rush(on)
 	_save()
+
+
+## [설정] Prefs 값 고름 → 저장 → 적용. 언어는 번역을 바꾸면 NOTIFICATION_TRANSLATION_CHANGED로 글자를 다시 씀,
+## 숫자 표기·알림은 다음 그리기부터 (Fmt.money·town.notify가 Prefs를 봄)
+func _on_pref_picked(key: String, value: Variant) -> void:
+	if Prefs.set_value(key, value) and key == "ui/locale":
+		TranslationServer.set_locale(Prefs.locale())
+	settings.show_prefs()
+
+
+## [기본값으로] → 설정 파일의 [ui]·[strip]을 기본값으로 + 큰 화면 방식도 전체 화면 (게임 저장·급송 전화는 그대로)
+func _on_defaults_pressed() -> void:
+	Prefs.reset()
+	screen.set_full_style(ScreenMode.FullStyle.FULLSCREEN)
+	TranslationServer.set_locale(Prefs.locale())
+	open_settings()
 
 
 ## 급송 전화 [받기] → Rush.accept (벨이 울릴 때만) → 저장

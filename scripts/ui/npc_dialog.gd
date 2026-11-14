@@ -53,16 +53,24 @@ func _ready() -> void:
 	_effect = _label(_box, Feel.PANEL_TEXT_SIZE, Feel.COLOR_STAR)
 	_rule = _label(_box, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
 	_status = _label(_box, Feel.PANEL_TEXT_SIZE, Feel.COLOR_INSURED)
-	_status.text = tr("NPC_INSURED")
 	_row = HBoxContainer.new()
 	_box.add_child(_row)
-	yes_button = _button(_row, tr("NPC_YES"))
+	yes_button = _button(_row, "")
 	yes_button.pressed.connect(yes_pressed.emit)
-	no_button = _button(_row, tr("NPC_NO"))
+	no_button = _button(_row, "")
 	no_button.pressed.connect(no_pressed.emit)
-	close_button = _button(_box, tr("SETTINGS_CLOSE"))
+	close_button = _button(_box, "")
 	close_button.pressed.connect(close_pressed.emit)
+	retranslate()
 	set_ui_scale(_scale)
+
+
+## 한 번만 넣는 글자 (언어를 바꾸면 main.gd가 다시 부름. 열려 있으면 main이 open을 다시 불러 나머지도)
+func retranslate() -> void:
+	_status.text = tr("NPC_INSURED")
+	yes_button.text = tr("NPC_YES")
+	no_button.text = tr("NPC_NO")
+	close_button.text = tr("SETTINGS_CLOSE")
 
 
 ## info = main.gd _visitor_info(): { who, event(보험사 이벤트 id), insured, bonus(명장 보너스 id) }

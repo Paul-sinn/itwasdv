@@ -16,6 +16,7 @@
 ##      (띠에서도 → 보이는 곳), 큰 화면은 하늘·바닥 색. 창업 전에는 동네 그대로 (집 TOWN_HOUSES채)
 ## v7b: 장거리 바퀴인 트럭은 왼쪽 화면 밖으로 나갔다 돌아옴 (truck.far). 그 "+금액"은 나간 쪽 가장자리 (show_payout(EDGE, …)),
 ##      나가 있는 동안 왼쪽 아래 구석 "장거리 배송 중 · N분 N초" (여러 대면 대수 + 가장 빨리 돌아오는 시간. set_long)
+## v8b: 설정 알림 끄기(Prefs ui/notices)면 notify가 아무것도 안 띄움 (편지봉투·전화 아이콘·"+금액"은 그대로)
 ## 동네 설계 좌표(feel.gd TOWN_SIZE = 작은 화면 크기)로 만들고, 전체 화면에서는 같은 동네를 통째로 확대한다.
 ## 길·집·트럭은 확대해서 그리고(선명함), 글자는 확대 배수에 맞춘 글자 크기로 따로 놓는다.
 ## 그리기만 한다. 돈·배송은 main.gd → scripts/core/trip.gd (배송 이벤트가 오면 show_payout)
@@ -26,6 +27,7 @@ const Fmt = preload("res://scripts/ui/fmt.gd")
 const Truck = preload("res://scripts/ui/truck.gd")
 const Route = preload("res://scripts/ui/route.gd")
 const TownIcon = preload("res://scripts/ui/town_icon.gd")
+const Prefs = preload("res://scripts/ui/prefs.gd")
 
 ## 건물 id (큰 화면 위쪽 줄 순서)와 이름 번역 키. 사무실(OFFICE)은 창업 뒤에만 있어서 BUILDINGS에 안 넣음
 const BUILDINGS := ["tuning", "depot", "car_center"]
@@ -120,7 +122,6 @@ func _ready() -> void:
 	_rank_label.visible = false
 	_hud.add_child(_rank_label)
 	tuning_button = Button.new()
-	tuning_button.text = tr("TOWN_TUNING_BUTTON")
 	tuning_button.focus_mode = Control.FOCUS_NONE
 	tuning_button.add_theme_color_override("font_color", Feel.COLOR_TEXT)
 	tuning_button.add_theme_color_override("font_hover_color", Feel.COLOR_TEXT)
@@ -142,7 +143,6 @@ func _ready() -> void:
 
 	for id: String in BUILDING_SPOTS:
 		var board := make_label(Feel.LABEL_FONT_SIZE, Feel.COLOR_TEXT)
-		board.text = tr(BUILDING_NAMES[id])
 		board.visible = id != OFFICE
 		add_child(board)
 		_signs[id] = board
@@ -150,7 +150,6 @@ func _ready() -> void:
 	_name_tag.visible = false
 	add_child(_name_tag)
 	hint = Label.new()
-	hint.text = tr("TOWN_HINT_BUILDING")
 	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE   # 말풍선을 눌러도 아무 일 없음 (건물·작은 버튼만)
 	hint.add_theme_color_override("font_color", Feel.COLOR_HINT_TEXT)
 	hint.visible = false
@@ -161,7 +160,18 @@ func _ready() -> void:
 	letter_button = TownIcon.new("letter")
 	letter_button.pressed.connect(func(): letter_pressed.emit())
 	add_child(letter_button)
+	retranslate()
 	layout(Vector2.ZERO, 1.0, 1.0)
+
+
+## 한 번만 넣는 글자 (언어를 바꾸면 main.gd가 다시 부름. 자리는 그 뒤 main이 layout으로)
+func retranslate() -> void:
+	tuning_button.text = tr("TOWN_TUNING_BUTTON")
+	for id: String in _signs:
+		_signs[id].text = tr(BUILDING_NAMES[id])
+	hint.text = tr("TOWN_HINT_BUILDING")
+	if hovered != "":
+		_name_tag.text = tr(BUILDING_NAMES[hovered])
 
 
 ## 동네를 어디에 얼마나 크게 놓을지. top_left = 동네 왼쪽 위 (이 노드 좌표), z = 확대 배수
@@ -480,6 +490,8 @@ func set_quest(text: String) -> void:
 
 ## 알림을 줄 세운다. 앞의 알림이 사라진 뒤에 하나씩 뜬다 (진짜 시간)
 func notify(text: String) -> void:
+	if not Prefs.get_value("ui/notices"):
+		return
 	_notice_queue.append(text)
 	if not _notice.visible:
 		_next_notice()

@@ -115,9 +115,9 @@ func _ready() -> void:
 	var pages := HBoxContainer.new()
 	add_child(pages)
 	var group := ButtonGroup.new()
-	ability_page_button = _toggle(pages, tr("DRIVER_PAGE_ABILITY"), group)
-	depot_page_button = _toggle(pages, tr("DRIVER_PAGE_DEPOT"), group)
-	record_page_button = _toggle(pages, tr("DRIVER_PAGE_RECORD"), group)
+	ability_page_button = _toggle(pages, "", group)
+	depot_page_button = _toggle(pages, "", group)
+	record_page_button = _toggle(pages, "", group)
 	ability_page_button.pressed.connect(func(): show_page(Page.ABILITY))
 	depot_page_button.pressed.connect(func(): show_page(Page.DEPOT))
 	record_page_button.pressed.connect(func(): show_page(Page.RECORD))
@@ -192,10 +192,22 @@ func _ready() -> void:
 	record = RecordTab.new()
 	add_child(record)
 	show_page(page)
+	retranslate()
 	set_ui_scale(_scale)
 
 
 ## 크기 배수 (1 = v0 패널). garage_panel.gd가 같이 부른다
+## 한 번만 넣는 글자 (언어를 바꾸면 main.gd가 다시 부름). 바뀌는 글자는 refresh가 매 프레임
+func retranslate() -> void:
+	ability_page_button.text = tr("DRIVER_PAGE_ABILITY")
+	depot_page_button.text = tr("DRIVER_PAGE_DEPOT")
+	record_page_button.text = tr("DRIVER_PAGE_RECORD")
+	for id: String in _ability_descs:
+		_ability_descs[id].text = tr("ABILITY_%s_DESC" % id.to_upper())
+	if not _ability_descs.is_empty():
+		_builds.text = _builds_text()
+
+
 func set_ui_scale(s: float) -> void:
 	_scale = s
 	if _xp_bar == null:
@@ -409,15 +421,19 @@ func _build_abilities(b: Balance) -> void:
 		_ability_lines[id].size_flags_horizontal = Control.SIZE_SHRINK_BEGIN   # 찍은 순간 커질 기준점
 		_ability_lines[id].autowrap_mode = TextServer.AUTOWRAP_OFF
 		_ability_descs[id] = _label(words, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
-		_ability_descs[id].text = tr("ABILITY_%s_DESC" % id.to_upper())
 		var add := _button(row, "+", Feel.ABILITY_ADD_SIZE)
 		add.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		add.pressed.connect(func(): ability_pressed.emit(id))
 		add_buttons[id] = add
+	retranslate()
+
+
+## 예시 빌드 글 (능력치 이름을 번역 파일에서)
+func _builds_text() -> String:
 	var lines := PackedStringArray()
 	for build: Array in BUILDS:
 		lines.append(tr(build[0]) % [tr("ABILITY_" + String(build[1]).to_upper()), tr("ABILITY_" + String(build[2]).to_upper())])
-	_builds.text = "\n".join(lines)
+	return "\n".join(lines)
 
 
 ## 그 레벨의 값: 창고 "4시간", 야간팀 "50%"

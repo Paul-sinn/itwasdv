@@ -42,6 +42,7 @@ var _chances: Label         ## "한 줄에 나올 확률: …"
 var _cost: Label
 var _wait: Label            ## 못 돌리는 이유 (돈 모자람 / 고르는 중)
 var _choose: HBoxContainer  ## 고르는 화면 (두 칸)
+var _old_title: Label       ## "지금 쓰는 것"
 var _old_grade: Label
 var _old_lines: VBoxContainer
 var _new_title: Label
@@ -66,7 +67,7 @@ func _ready() -> void:
 	_chances = _label(self, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
 	_cost = _label(self, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
 	_wait = _label(self, Feel.PANEL_TEXT_SIZE, Feel.COLOR_DIM)
-	roll_button = _button(self, tr("SETTING_ROLL"))
+	roll_button = _button(self, "")
 	roll_button.pressed.connect(func(): roll_pressed.emit(selected))
 
 	# 고르는 화면: 왼쪽 = 지금 쓰는 것, 오른쪽 = 새로 나온 것
@@ -77,7 +78,7 @@ func _ready() -> void:
 	for col in [old_col, new_col]:
 		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		col.size_flags_stretch_ratio = 1.0
-	_label(old_col, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM).text = tr("SETTING_OLD")
+	_old_title = _label(old_col, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
 	_new_title = _label(new_col, Feel.PANEL_SMALL_SIZE, Feel.COLOR_SETTING_NEW)
 	_old_grade = _label(old_col, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
 	_new_grade = _label(new_col, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
@@ -85,15 +86,24 @@ func _ready() -> void:
 	_new_grade.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_old_lines = _box(old_col)
 	_new_lines = _box(new_col)
-	keep_button = _button(old_col, tr("SETTING_KEEP"))
-	take_button = _button(new_col, tr("SETTING_TAKE"))
+	keep_button = _button(old_col, "")
+	take_button = _button(new_col, "")
 	keep_button.pressed.connect(func(): choose_pressed.emit(selected, false))
 	take_button.pressed.connect(func(): choose_pressed.emit(selected, true))
 	_choose.visible = false
 
 	_result = _label(self, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
 	clear_result()
+	retranslate()
 	set_ui_scale(_scale)
+
+
+## 한 번만 넣는 글자 (언어를 바꾸면 main.gd가 다시 부름). 부품 버튼·줄·확률은 refresh가 매 프레임
+func retranslate() -> void:
+	roll_button.text = tr("SETTING_ROLLING" if _busy else "SETTING_ROLL")
+	_old_title.text = tr("SETTING_OLD")
+	keep_button.text = tr("SETTING_KEEP")
+	take_button.text = tr("SETTING_TAKE")
 
 
 ## 크기 배수 (1 = v0 패널). garage_panel.gd가 같이 부른다

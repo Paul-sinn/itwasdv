@@ -468,3 +468,23 @@ NOTICE_ACHIEVEMENT,업적 달성: %s,Achievement unlocked: %s
 NOTICE_ACHIEVEMENTS,업적 %d개 달성!,%d achievements unlocked!
 NOTICE_WRAP_GOT,랩핑 '%s' 받음,Got the '%s' wrap
 NOTICE_WRAPS_GOT,랩핑 %d개 받음,Got %d wraps
+SETTINGS_GROUP_GAME,게임,Game
+SETTINGS_GROUP_STRIP,띠,Strip
+SETTINGS_GROUP_BIG,큰 화면,Big screen
+SETTINGS_LANGUAGE,언어,Language
+SETTINGS_LOCALE_KO,한국어,Korean
+SETTINGS_LOCALE_EN,English,English
+SETTINGS_NUMBERS,숫자 표기,Numbers
+SETTINGS_NUMBERS_AUTO,언어 따라,By language
+SETTINGS_NUMBERS_KO,만·억,Korean units
+SETTINGS_NUMBERS_EN,K·M,K·M
+SETTINGS_NOTICES,알림,Notices
+SETTINGS_ON_TOP,항상 위,Always on top
+SETTINGS_OPACITY,투명도,Opacity
+SETTINGS_STRIP_SIZE,크기,Size
+SETTINGS_CORNER,자리,Position
+SETTINGS_CORNER_RIGHT,오른쪽 아래,Bottom right
+SETTINGS_CORNER_LEFT,왼쪽 아래,Bottom left
+SETTINGS_MONITOR,모니터,Monitor
+SETTINGS_MONITOR_PRIMARY,주 모니터,Primary
+SETTINGS_DEFAULTS,기본값으로,Reset to defaults

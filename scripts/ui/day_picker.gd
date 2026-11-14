@@ -16,6 +16,8 @@ var _style: StyleBoxFlat
 var _box: VBoxContainer
 var _row: HBoxContainer
 var _font_sizes := {}   ## 글자 → 배수 곱하기 전 크기
+var _texts: Array[Control] = []   ## TEXT_KEYS 순 글자 (제목, 물음, 안내, [나중에])
+const TEXT_KEYS := ["MASTER_PICKER_TITLE", "MASTER_PICKER_ASK", "MASTER_PICK_FIRST", "MASTER_PICKER_LATER"]
 var _scale := 1.0
 
 
@@ -27,19 +29,29 @@ func _ready() -> void:
 
 	_box = VBoxContainer.new()
 	add_child(_box)
-	_label(tr("MASTER_PICKER_TITLE"), Feel.PANEL_TITLE_SIZE, Feel.COLOR_MASTER)
-	_label(tr("MASTER_PICKER_ASK"), Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
+	_texts.append(_label("", Feel.PANEL_TITLE_SIZE, Feel.COLOR_MASTER))
+	_texts.append(_label("", Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT))
 	_row = HBoxContainer.new()
 	_box.add_child(_row)
 	for d in 7:
-		var b := _button(_row, Fmt.day_name(d, true), Feel.MASTER_DAY_BUTTON_SIZE)
+		var b := _button(_row, "", Feel.MASTER_DAY_BUTTON_SIZE)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.pressed.connect(day_picked.emit.bind(d))
 		day_buttons.append(b)
-	_label(tr("MASTER_PICK_FIRST"), Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
-	later_button = _button(_box, tr("MASTER_PICKER_LATER"), Feel.PANEL_BUTTON_SIZE)
+	_texts.append(_label("", Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM))
+	later_button = _button(_box, "", Feel.PANEL_BUTTON_SIZE)
 	later_button.pressed.connect(close_pressed.emit)
+	_texts.append(later_button)
+	retranslate()
 	set_ui_scale(_scale)
+
+
+## 한 번만 넣는 글자 (언어를 바꾸면 main.gd가 다시 부름)
+func retranslate() -> void:
+	for i in TEXT_KEYS.size():
+		_texts[i].text = tr(TEXT_KEYS[i])
+	for d in day_buttons.size():
+		day_buttons[d].text = Fmt.day_name(d, true)
 
 
 ## 크기 배수 (1 = v0 패널 크기 기준. [설정] 화면과 같은 폭)

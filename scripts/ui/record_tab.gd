@@ -47,8 +47,26 @@ func _ready() -> void:
 	scroll.add_child(_list)
 	_boxes.append(_list)
 	_stats_head = _label(_list, Feel.RECORD_HEAD_SIZE, Feel.COLOR_STAR)
-	_stats_head.text = tr("RECORD_STATS")
+	retranslate()
 	set_ui_scale(_scale)
+
+
+## 언어를 바꾸면 main.gd가 부름: 제목, 그리고 _build가 만든 줄(이름·설명이 한 번만 들어감)을 지워 다음 refresh에서 새 언어로 다시 만듦
+func retranslate() -> void:
+	_stats_head.text = tr("RECORD_STATS")
+	if stat_values.is_empty():
+		return
+	for c in _list.get_children():
+		if c != _stats_head:
+			_list.remove_child(c)
+			c.queue_free()
+	stat_values.clear()
+	cells.clear()
+	ach_rights.clear()
+	ach_names.clear()
+	ach_notes.clear()
+	_boxes.resize(1)   # _list만
+	_font_sizes = { _stats_head: _font_sizes[_stats_head] }
 
 
 func set_ui_scale(s: float) -> void:

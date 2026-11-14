@@ -31,8 +31,15 @@ var _font_sizes := {}   ## 글자 → 배수 곱하기 전 크기
 
 func _ready() -> void:
 	_note = _label(self, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
-	_note.text = tr("WRAP_NOTE")
+	retranslate()
 	set_ui_scale(_scale)
+
+
+## 한 번만 넣는 글자 (언어를 바꾸면 main.gd가 다시 부름). 바뀌는 글자는 refresh가 매 프레임
+func retranslate() -> void:
+	_note.text = tr("WRAP_NOTE")
+	for id: String in names:
+		names[id].text = tr("WRAP_" + id.to_upper())
 
 
 func set_ui_scale(s: float) -> void:
@@ -95,7 +102,6 @@ func _build(b: Balance) -> void:
 		words.add_theme_constant_override("separation", 0)
 		row.add_child(words)
 		names[id] = _label(words, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
-		names[id].text = tr("WRAP_" + id.to_upper())
 		notes[id] = _label(words, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
 		var btn := Button.new()
 		_font_sizes[btn] = Feel.PANEL_TEXT_SIZE
@@ -104,6 +110,7 @@ func _build(b: Balance) -> void:
 		btn.pressed.connect(_on_button.bind(id))
 		row.add_child(btn)
 		buttons[id] = btn
+	retranslate()
 	set_ui_scale(_scale)
 
 
