@@ -289,3 +289,46 @@ TRUCK_TAB_MINE,내 트럭,My truck
 TRUCK_TAB_HELPER,%d호차,Truck %d
 RETURN_STAFF_TAX,직원 몫 −%s원 · 세금 −%s원,Staff share −₩%s · tax −₩%s
 AGENCY_SHORT,%s원 모자람,₩%s short
+BUILDING_OFFICE,사무실,Office
+NPC_OFFICE,사무실 실장,Office manager
+NPC_OFFICE_HELLO,"사장님, 오늘 장부 보실래요?","Boss, want to check today's books?"
+OFFICE_PAGE_TRUCKS,트럭,Trucks
+OFFICE_PAGE_RANK,순위표,Rankings
+OFFICE_PAGE_BOOKS,장부,Books
+OFFICE_TRUCK_LINE,%s  +%d · 시간당 %s원,%s  +%d · ₩%s/h
+OFFICE_NO_HELPER,아직 보조 트럭이 없어요,No extra trucks yet
+OFFICE_BUY_HELPER,보조 트럭 사기 (%s원),Buy an extra truck (₩%s)
+OFFICE_HELPER_FULL,더 살 수 없어요,You can't buy any more
+RANK_LOCKED,%s 순위표 · 잠김,%s rankings · locked
+RANK_SCOPE_REGIONAL,지역,Regional
+RANK_SCOPE_NATIONAL,전국,National
+RANK_SCOPE_GLOBAL,세계,World
+RANK_HEAD,시내 순위표 (시간당 매출),City rankings (sales per hour)
+RANK_NEXT,다음 순위까지 시간당 %s원,₩%s/h more to the next rank
+RANK_TOP,시내 1위! 다음 업데이트에서 지역 진출,#1 in the city! Regional comes in a future update
+RANK_ROW,%d. %s · 시간당 %s원,%d. %s · ₩%s/h
+RANK_ME,우리 대리점,Our agency
+RIVAL_0,거북이특송,Turtle Express
+RIVAL_1,다람쥐배송,Squirrel Delivery
+RIVAL_2,초록상자,Green Box
+RIVAL_3,큰바위운송,Big Rock Freight
+RIVAL_4,두루미택배,Crane Parcel
+RIVAL_5,나래물류,Narae Logistics
+RIVAL_6,해오름택배,Sunrise Parcel
+RIVAL_7,별빛로지스,Starlight Logis
+RIVAL_8,바람길물류,Windway Logistics
+RIVAL_9,번개특송,Lightning Courier
+BOOKS_HEAD,오늘 장부,Today's books
+BOOKS_SALES,매출 %s원,Sales ₩%s
+BOOKS_STAFF,직원 몫 −%s원,Staff share −₩%s
+BOOKS_TAX,세금 −%s원,Tax −₩%s
+BOOKS_PROFIT,순이익 %s원,Net profit ₩%s
+TAX_HEAD,세율표 (번 돈에서 자동으로 뗌),Tax rates (taken automatically from earnings)
+TAX_ROW,%s · %s,%s · %s
+STAGE_SOLO,개인 기사,Solo driver
+STAGE_AGENCY,대리점,Agency
+STAGE_REGIONAL,지역 택배사,Regional courier
+STAGE_NATIONAL,전국 택배사,National courier
+STAGE_GLOBAL,글로벌,Global
+TOWN_RANK,시내 %d위,City #%d
+NOTICE_RANK_FIRST,시내 1위 대리점이 됐어요! 다음 업데이트에서 지역 진출,You're the #1 agency in the city! Regional expansion comes in a future update

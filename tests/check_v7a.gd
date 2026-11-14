@@ -9,6 +9,9 @@
 ## ⑥ en: 위 글자들에 한글·키 없음
 ## ⑦ 창 크기: 큰 화면 5가지에서 물류센터 [창고·할 일](창업 전·뒤), 튜닝숍 트럭 탭 + [엔진 강화](가장 길 때)·[세팅](고르는 화면)이
 ##    창 안, 동네·[작게]·[설정]과 안 겹침 / 작은 화면 3가지에서 트럭 3대가 보이는 곳 안, 글자 10개 떠도 사각형 30개 이하
+## U2 (사무실): ① 창업 전 사무실 건물 없음, 뒤에는 띠·큰 화면 건물 줄에 있고 클릭하면 사무실 화면, 작은 화면 3가지에서 다른 건물·집·말풍선과 안 겹침
+##    ② [트럭] 사기 → 돈 −값·트럭 +1·저장, 다 사면 "더 살 수 없어요"   ③ [순위표] 내 줄 = Company.rank, "다음 순위까지" = next_gap, 잠긴 줄 3개
+##    ④ [장부] 숫자 = Company.today, 세율표 5줄·지금 단계 강조   ⑤ 구석 줄 "시내 N위"   ⑥ 1위 알림 한 번   ⑦ en, 창 크기
 ## 현지 시각은 main.now_local_override로 고정 (2026-11-18 수요일 낮 12시). 진짜 저장·설정 파일은 건드리지 않는다.
 ##
 ## 실행:
@@ -29,6 +32,7 @@ const Trip = preload("res://scripts/core/trip.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
+const Town = preload("res://scripts/ui/town.gd")
 const TEST_SAVE := "user://test_v7a.json"
 const TEST_SETTINGS := "user://test_v7a_settings.cfg"
 const HOUR := 3600
@@ -306,6 +310,8 @@ func _run() -> void:
 			"⑦ ko·en 큰 화면 %d가지: 물류센터 [창고·할 일](창업 전 모자람·뒤), 튜닝숍 트럭 탭 3개 + [엔진 강화](명장 방문·퍼짐·스페어 없음·결과 두 줄)·[세팅](고르는 화면)이 창 안, 동네·[작게]·[설정]과 안 겹침 / 작은 화면 %d가지: 트럭 3대가 동네 안·보이는 곳 안, 글자 10개에도 사각형 30개 이하 %s %s" % [
 			FIT_SIZES.size(), SMALL_SIZES.size(), fit["ko"], fit["en"]])
 
+	await _u2(b)
+
 	Engine.time_scale = 1.0
 	Save.delete_file(TEST_SAVE)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SETTINGS))
@@ -343,6 +349,8 @@ func _check_fits(m: Node, b: Balance) -> Array:
 	Master.set_day(s, Master.weekday(now), now)
 	m._want_day_picker = false
 	m.day_picker.visible = false
+	await _frames(1)
+	s.master_bonus = _longest_bonus(b)   # 준비: 방문 줄이 가장 길 때 (보너스는 main이 난수로 굴려서 고정)
 	var t2 = s.truck(2)
 	t2.star = 18
 	s.spares = 0
@@ -361,7 +369,7 @@ func _check_fits(m: Node, b: Balance) -> Array:
 		_click(p.engine_tab_button.get_global_rect().get_center())
 		p.show_result(tr("RESULT_DESTROY"), Feel.COLOR_DANGER, Feel.DESTROY_TEXT_SIZE, tr("RESULT_DESTROY_NOTE") % [b.broken_drop_to, 0])   # 준비: 결과 두 줄
 		await _frames(3)
-		_fit(m, bad, "강화 칸", size, p._truck_row.is_visible_in_tree() and p._master_line.is_visible_in_tree() and p._danger_note.visible \
+		_fit(m, bad, "강화 칸", size, p._truck_row.is_visible_in_tree() and p._master_line.is_visible_in_tree() and s.active_bonus == _longest_bonus(b) and p._danger_note.visible \
 				and p._wait.visible and p.to_car_button.visible and p._title.text == tr("GARAGE_TITLE") % 18)
 		_click(p.setting_tab_button.get_global_rect().get_center())
 		await _frames(1)
@@ -388,6 +396,15 @@ func _check_fits(m: Node, b: Balance) -> Array:
 	root.size = Vector2i(1600, 900)
 	await _frames(2)
 	return bad
+
+
+## 지금 언어에서 글자가 가장 긴 명장 보너스 id
+func _longest_bonus(b: Balance) -> String:
+	var longest := ""
+	for id: String in b.master_bonuses:
+		if longest == "" or Fmt.master_bonus(b.master_bonuses, id).length() > Fmt.master_bonus(b.master_bonuses, longest).length():
+			longest = id
+	return longest
 
 
 ## 큰 화면 한 칸이 창 안이고 동네·[작게]·[설정]과 안 겹치나. shown = 그 칸에서 꼭 보여야 하는 것들이 보이나
@@ -505,3 +522,335 @@ func _check(ok: bool, what: String) -> void:
 	checks += 1
 	if not ok:
 		fails.append(what)
+
+
+# ---------------- U2: 사무실 건물·사무실 화면·구석 줄 "시내 N위"·1위 알림 ----------------
+
+func _u2(b: Balance) -> void:
+	TranslationServer.set_locale("ko")
+	Save.delete_file(TEST_SAVE)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SETTINGS))
+	var m := await _launch(b)
+	var town = m.town
+	var p = m.panel
+	var o = p.office
+	m.state.quest_index = Quest.count(b)   # 할 일 보상 돈이 안 끼게
+	var spot: Vector2 = town.global_position + town.view_rect(Feel.TOWN_OFFICE_RECT).get_center()
+
+	# ① 창업 전: 띠에 사무실 없음 (그 자리를 눌러도 그대로), 큰 화면 건물 줄에도 없음, 구석 줄 순위 없음
+	_click(spot)
+	await _frames(2)
+	var none_ok: bool = not m.is_full() and not town.building_rects().has(Town.OFFICE) and not town._signs[Town.OFFICE].visible \
+			and town.building_at(spot - town.global_position) == "" and not town._rank_label.visible
+	_click(town.building_rects()["depot"].get_center())
+	await _frames(3)
+	none_ok = none_ok and m.is_full() and not p.building_buttons[Town.OFFICE].is_visible_in_tree()
+	m.screen.enter_small()
+	await _frames(2)
+	_agency_with_helpers(b, m.state, 0)   # 준비: 창업 (창업 클릭은 U1 ①)
+	await _frames(3)
+	var r_office: Rect2 = town.building_rects().get(Town.OFFICE, Rect2())
+	var shown_ok: bool = town._signs[Town.OFFICE].visible and town._signs[Town.OFFICE].text == "사무실" \
+			and _enclosed(m.visible_rects(), Rect2(r_office.position + town.global_position, r_office.size))
+	_click(spot)
+	await _frames(3)
+	var open_ok: bool = m.is_full() and p.building == Town.OFFICE and o.is_visible_in_tree() and p._npc_name.text == "사무실 실장"
+	_click(p.building_buttons["tuning"].get_global_rect().get_center())
+	await _frames(2)
+	_click(p.building_buttons[Town.OFFICE].get_global_rect().get_center())
+	await _frames(2)
+	open_ok = open_ok and p.building_buttons[Town.OFFICE].is_visible_in_tree() and p.building_buttons[Town.OFFICE].text == "사무실" \
+			and o.is_visible_in_tree() and not p.driver.visible
+	m.screen.enter_small()
+	await _frames(2)
+	var overlap: Array = await _office_overlaps(m)
+	_report(none_ok and shown_ok and open_ok and overlap.is_empty(),
+			"U2 ① 창업 전: 띠·큰 화면 건물 줄에 사무실 없음 (그 자리 눌러도 그대로) / 창업 뒤: 띠에 '사무실' (보이는 곳 안), 띠 클릭·건물 줄 [사무실] → 사무실 화면, 작은 화면 %d가지에서 다른 건물·집·급송 말풍선·처음 말풍선·구석 줄과 안 겹침 %s" % [
+			SMALL_SIZES.size(), overlap])
+
+	# ② [트럭] 칸: 모자라면 꺼짐 + 모자란 금액 → 사기 → 돈 −값·트럭 +1·저장·띠에 트럭 → 다 사면 "더 살 수 없어요"
+	_click(spot)
+	await _frames(3)
+	_click(o.page_buttons[o.Page.TRUCKS].get_global_rect().get_center())
+	var price1 := Company.helper_price(b, m.state)
+	m.state.money = price1 - 1
+	await _frames(2)
+	var empty_text: String = o._no_helper.text
+	var short_note: String = o._buy_note.text
+	var buy_text: String = o.buy_button.text
+	_click(o.buy_button.get_global_rect().get_center())
+	await _frames(2)
+	var short_ok: bool = o.buy_button.disabled and o._no_helper.is_visible_in_tree() and empty_text == "아직 보조 트럭이 없어요" \
+			and short_note == "%s원 모자람" % Fmt.money(1) and buy_text == "보조 트럭 사기 (%s원)" % Fmt.money(price1) and m.state.trucks.size() == 1
+	m.state.money = price1 + 777
+	await _frames(2)
+	_click(o.buy_button.get_global_rect().get_center())
+	await _frames(3)
+	var saved = _saved_state(b)
+	var line1: String = o.truck_lines[0].text if o.truck_lines.size() > 0 else ""
+	var buy1_ok: bool = m.state.trucks.size() == 2 and m.state.money == 777 and saved != null and saved.trucks.size() == 2 and saved.money == 777 \
+			and town.trucks.size() == 2 and not o._no_helper.visible \
+			and line1 == "2호차  +0 · 시간당 %s원" % Fmt.money(int(Trip.hourly_income(b, m.state, 1)))
+	var price2 := Company.helper_price(b, m.state)
+	m.state.money = price2
+	await _frames(2)
+	_click(o.buy_button.get_global_rect().get_center())
+	await _frames(3)
+	saved = _saved_state(b)
+	var full_ok: bool = m.state.trucks.size() == 3 and m.state.money == 0 and saved != null and saved.trucks.size() == 3 and town.trucks.size() == 3 \
+			and not o.buy_button.visible and o._buy_note.is_visible_in_tree() and o._buy_note.text == "더 살 수 없어요" \
+			and o.truck_lines[1].text.begins_with("3호차  +0")
+	_report(short_ok and buy1_ok and full_ok,
+			"U2 ② [트럭]: '%s', 모자라면 [%s] 꺼짐 + '%s' / 사기 → 돈 −%s원·트럭 2대·저장·띠 2대, '%s' / 한 대 더 (−%s원) → 3대, 버튼 없어지고 '%s'" % [
+			empty_text, buy_text, short_note, Fmt.money(price1), line1, Fmt.money(price2), o._buy_note.text])
+
+	# ③ [순위표]: 잠긴 줄 3개, 내 줄 = Company.rank, "다음 순위까지" = next_gap, 라이벌은 매출이 큰 순서. 시작(꼴찌 쪽)과 중간 두 경우
+	_click(o.page_buttons[o.Page.RANK].get_global_rect().get_center())
+	await _frames(2)
+	var locked: Array = o.locked_rows.map(func(l): return l.text)
+	var ranks_seen := []
+	var rank_ok: bool = locked == ["세계 순위표 · 잠김", "전국 순위표 · 잠김", "지역 순위표 · 잠김"] and o.locked_rows[0].is_visible_in_tree()
+	for target in ["start", "middle"]:
+		if target == "middle":
+			_set_stars_for_rank(b, m.state, func(r): return r > 2 and r < b.rivals.size())   # 준비: 중간 순위가 되는 단계
+		await _frames(2)
+		var rank := Company.rank(b, m.state)
+		var row := _row_with(o.rank_rows, "우리 대리점")
+		var amounts := []
+		for l: Label in o.rank_rows:
+			amounts.append(l.text)
+		ranks_seen.append([rank, row + 1, o._rank_next.text])
+		rank_ok = rank_ok and o.rank_rows.size() == b.rivals.size() + 1 and row == rank - 1 \
+				and o.rank_rows[row].get_theme_color("font_color") == Feel.COLOR_STAR \
+				and o.rank_rows[row].text == "%d. 우리 대리점 · 시간당 %s원" % [rank, Fmt.money(int(Company.hourly_sales(b, m.state)))] \
+				and o._rank_next.text == "다음 순위까지 시간당 %s원" % Fmt.money(ceili(Company.next_gap(b, m.state))) \
+				and _rivals_in_order(o.rank_rows, b, row)
+	_report(rank_ok and ranks_seen[0][0] != ranks_seen[1][0],
+			"U2 ③ [순위표]: 잠긴 줄 %s, 내 줄 위치·Company.rank·다음 순위까지 %s, 라이벌 %d곳은 매출 큰 순서 (이름·금액 balance 순서대로)" % [locked, ranks_seen, b.rivals.size()])
+
+	# ④ [장부]: 게임 시간을 돌린 뒤 숫자 = Company.today, 세율표 5줄·지금 단계(대리점) 강조
+	Engine.time_scale = Feel.CHEAT_TIME_SCALE
+	await _wait(3.0)
+	Engine.time_scale = 0.0
+	await _frames(1)
+	_click(o.page_buttons[o.Page.BOOKS].get_global_rect().get_center())
+	await _frames(2)
+	var d := Company.today(m.state)
+	var books := [o._sales.text, o._staff.text, o._tax.text, o._profit.text]
+	var taxes: Array = o.tax_rows.map(func(l): return l.text)
+	var lit := []
+	for i in o.tax_rows.size():
+		if o.tax_rows[i].get_theme_color("font_color") == Feel.COLOR_STAR:
+			lit.append(i)
+	var books_ok: bool = d["staff"] > 0 and d["tax"] > 0 and d["profit"] == d["sales"] - d["staff"] - d["tax"] and books == [
+			"매출 %s원" % Fmt.money(d["sales"]), "직원 몫 −%s원" % Fmt.money(d["staff"]), "세금 −%s원" % Fmt.money(d["tax"]),
+			"순이익 %s원" % Fmt.money(d["profit"])] \
+			and taxes == ["개인 기사 · 0%", "대리점 · 3%", "지역 택배사 · 5%", "전국 택배사 · 7%", "글로벌 · 10%"] and lit == [1]
+	_report(books_ok, "U2 ④ [장부]: %s = Company.today, 세율표 %s, 강조 줄 %s (대리점)" % [books, taxes, lit])
+
+	# ⑤ 구석 줄 "시내 N위" = Company.rank, 작은 화면 보이는 곳 안 (창업 전 없음은 ①)
+	m.screen.enter_small()
+	await _frames(3)
+	var rl: Rect2 = town._rank_label.get_global_rect()
+	_report(town._rank_label.is_visible_in_tree() and town._rank_label.text == "시내 %d위" % Company.rank(b, m.state) and _enclosed(m.visible_rects(), rl) \
+			and town.area().encloses(Rect2(town._hud.position, town._hud.size)),
+			"U2 ⑤ 구석 줄 '%s' = Company.rank %d, 동네 안·보이는 곳 안" % [town._rank_label.text, Company.rank(b, m.state)])
+
+	# ⑥ 1위: 매출이 라이벌을 다 넘으면(준비: 트럭 3대 전부 최대) 알림 한 번, 순위표 맨 위 내 줄 1위 색, 껐다 켜도 다시 안 뜸
+	var first_text := "시내 1위 대리점이 됐어요! 다음 업데이트에서 지역 진출"
+	_max_out(b, m.state)
+	await _frames(3)
+	Engine.time_scale = 1.0
+	await _wait(0.5)
+	Engine.time_scale = 0.0
+	var count1 := _count_notice(town, first_text)
+	_click(town.building_rects()[Town.OFFICE].get_center())
+	await _frames(2)
+	_click(o.page_buttons[o.Page.RANK].get_global_rect().get_center())
+	await _frames(2)
+	var top_ok: bool = _row_with(o.rank_rows, "우리 대리점") == 0 and o.rank_rows[0].get_theme_color("font_color") == Feel.COLOR_RANK_FIRST \
+			and o._rank_next.text == "시내 1위! 다음 업데이트에서 지역 진출" and town._rank_label.text == "시내 1위"
+	var top_next: String = o._rank_next.text
+	var top_hud: String = town._rank_label.text
+	m.notification(Node.NOTIFICATION_WM_CLOSE_REQUEST)   # 창을 닫을 때처럼 (main이 저장)
+	saved = _saved_state(b)
+	var saved_first: bool = saved != null and saved.rank_first_done
+	await _close(m)
+	m = await _launch(b, false)
+	Engine.time_scale = 1.0
+	await _wait(0.5)
+	Engine.time_scale = 0.0
+	var count2 := _count_notice(m.town, first_text)
+	_report(count1 == 1 and top_ok and saved_first and count2 == 0 and Company.rank(b, m.state) == 1,
+			"U2 ⑥ 처음 1위 → 알림 '%s' %d번, 순위표 맨 위 내 줄 1위 색·'%s', 구석 줄 '%s', 저장 / 다시 켜면 알림 %d번" % [
+			first_text, count1, top_next, top_hud, count2])
+	await _close(m)
+
+	# ⑦ en 글자 + 창 크기 (ko·en 큰 화면 5가지 × 세 칸, 작은 화면 3가지)
+	var fit := {}
+	var texts := []
+	for loc in ["ko", "en"]:
+		TranslationServer.set_locale(loc)
+		Save.delete_file(TEST_SAVE)
+		m = await _launch(b)
+		m.state.quest_index = Quest.count(b)
+		_agency_with_helpers(b, m.state, 1)
+		m.state.money = 0
+		await _frames(3)
+		_click(m.town.building_rects()[Town.OFFICE].get_center())
+		await _frames(3)
+		fit[loc] = await _check_fits_u2(m, b)
+		if loc == "en":   # 큰 화면 사무실을 다시 열고 세 칸 글자
+			_click(m.town.building_rects()[Town.OFFICE].get_center())
+			await _frames(3)
+			o = m.panel.office
+			for pg in [o.Page.TRUCKS, o.Page.RANK, o.Page.BOOKS]:
+				_click(o.page_buttons[pg].get_global_rect().get_center())
+				await _frames(2)
+				texts.append_array(_visible_texts(o))
+			texts.append_array([m.panel._npc_name.text, m.panel._npc_hello.text, m.panel.building_buttons[Town.OFFICE].text,
+					m.town._signs[Town.OFFICE].text, m.town._rank_label.text])
+			_max_out(b, m.state)
+			Engine.time_scale = 1.0
+			await _wait(0.3)
+			Engine.time_scale = 0.0
+			texts.append_array(m.town.notices_shown + m.town._notice_queue)
+			_click(o.page_buttons[o.Page.RANK].get_global_rect().get_center())
+			await _frames(2)
+			texts.append(o._rank_next.text)
+		await _close(m)
+	TranslationServer.set_locale("ko")
+	var bad := texts.filter(func(x): return _untranslated(String(x)) or String(x).contains("RIVAL_") or String(x).contains("STAGE_") \
+			or String(x).contains("OFFICE_") or String(x).contains("RANK_") or String(x).contains("BOOKS_") or String(x).contains("TAX_"))
+	_report(bad.is_empty() and texts.has("Office") and texts.any(func(x): return String(x).contains("Lightning Courier")) and texts.size() > 30,
+			"U2 ⑦ en 사무실 세 칸·건물·구석 줄·1위 알림 글자 %d개에 한글·키 없음 %s" % [texts.size(), bad])
+	print("    en: %s" % [texts])
+	_report(fit["ko"].is_empty() and fit["en"].is_empty(),
+			"U2 ⑦ ko·en 큰 화면 %d가지: 사무실 [트럭]·[순위표]·[장부]가 창 안, 동네·[작게]·[설정]과 안 겹침 / 작은 화면 %d가지: 사무실·'시내 N위'가 동네 안·보이는 곳 안, 트럭 3대 + 글자 10개에도 사각형 30개 이하 %s %s" % [
+			FIT_SIZES.size(), SMALL_SIZES.size(), fit["ko"], fit["en"]])
+
+
+## U2 ①: 작은 화면 3가지에서 사무실(빛남·간판 포함)이 동네 안이고 다른 건물·집·급송 말풍선·처음 말풍선·구석 줄과 안 겹치나. 문제 목록
+func _office_overlaps(m: Node) -> Array:
+	var town = m.town
+	var bad := []
+	town.set_rush(true, 1.0, 0)   # 준비: 급송 말풍선·처음 말풍선을 띄운 채로 (자리만 봄)
+	town.set_hint(true)
+	for size: Vector2i in SMALL_SIZES:
+		root.size = size
+		await _frames(3)
+		var sign: Label = town._signs[Town.OFFICE]
+		var r: Rect2 = town.building_rects()[Town.OFFICE].grow(Feel.BUILDING_GLOW_PX * town.zoom).merge(Rect2(sign.position, sign.size))
+		var others := [["말풍선", Rect2(town.rush_bubble.position, town.rush_bubble.size)], ["처음 말풍선", Rect2(town.hint.position, town.hint.size)],
+				["구석 줄", Rect2(town._hud.position, town._hud.size).merge(Rect2(town._quest_label.position, town._quest_label.size))]]
+		for id: String in Town.BUILDINGS:
+			others.append([id, town.building_rects()[id].grow(Feel.BUILDING_GLOW_PX * town.zoom)])
+		for h in town._houses:
+			others.append(["집", town.view_rect(town._house_rect(h))])
+		if not town.area().encloses(r):
+			bad.append("%s 사무실 %s 동네 밖" % [size, r])
+		for o in others:
+			if r.intersects(o[1]):
+				bad.append("%s 사무실 ↔ %s" % [size, o[0]])
+	town.set_rush(false, 0.0, 0)
+	town.set_hint(false)
+	root.size = Feel.SMALL_SIZE
+	await _frames(2)
+	return bad
+
+
+## U2 ⑦: 큰 화면 5가지 × 사무실 세 칸 + 작은 화면 3가지 (사무실·"시내 N위", 트럭 3대 + 글자 10개). 문제 목록
+func _check_fits_u2(m: Node, b: Balance) -> Array:
+	var p = m.panel
+	var o = p.office
+	var town = m.town
+	var bad := []
+	for size: Vector2i in FIT_SIZES:
+		root.size = size
+		await _frames(3)
+		for pg in [o.Page.TRUCKS, o.Page.RANK, o.Page.BOOKS]:
+			_click(o.page_buttons[pg].get_global_rect().get_center())
+			await _frames(3)
+			var shown: bool = o._buy_note.is_visible_in_tree() if pg == o.Page.TRUCKS else (o.rank_rows.size() == b.rivals.size() + 1 \
+					and o.rank_rows[-1].is_visible_in_tree() and o.locked_rows[0].is_visible_in_tree() if pg == o.Page.RANK \
+					else o.tax_rows.size() == 5 and o.tax_rows[-1].is_visible_in_tree())
+			_fit(m, bad, "사무실 %s" % ["트럭", "순위표", "장부"][pg], size, shown)
+	_agency_with_helpers(b, m.state, 2)
+	m.state.money = 0
+	m.screen.enter_small()
+	for size: Vector2i in SMALL_SIZES:
+		root.size = size
+		await _frames(3)
+		for i in 10:
+			town.show_payout(i % Feel.TOWN_HOUSES, 1875 * (i + 1), ["normal", "large", "vip"][i % 3], i % 2 == 0, i % 3)
+		await _frames(1)
+		var rects: Array = m.visible_rects()
+		var r: Rect2 = town.building_rects()[Town.OFFICE]
+		var rl: Rect2 = town._rank_label.get_global_rect()
+		if not _enclosed(rects, Rect2(r.position + town.global_position, r.size)) or not town._rank_label.is_visible_in_tree() \
+				or not _enclosed(rects, rl) or not town.area().encloses(Rect2(town._hud.position, town._hud.size)):
+			bad.append("%s 사무실 %s·구석 줄 %s 동네 밖이거나 보이는 곳 밖" % [size, r, rl])
+		if rects.size() > 30:
+			bad.append("%s 사무실 + 트럭 3대 + 글자 10개: 보이는 곳 사각형 %d개 (30개 이하)" % [size, rects.size()])
+	root.size = Feel.SMALL_SIZE
+	await _frames(2)
+	return bad
+
+
+## 준비: 모든 트럭 단계를 0부터 올려 cond(순위)를 처음 만족하는 단계로 (순위는 Company.rank로만 봄)
+func _set_stars_for_rank(b: Balance, s: GameState, cond: Callable) -> void:
+	for star in b.max_star + 1:
+		for i in s.trucks.size():
+			s.truck(i).star = star
+		if cond.call(Company.rank(b, s)):
+			return
+	push_error("조건에 맞는 순위가 되는 단계가 없음")
+
+
+## 준비: 트럭 전부 최대 단계 + 부품 전부 최고 등급 (지금 json 라이벌로는 이래야 시내 1위: 3대 +30 전부 최대 ≈ 3,047만 > 3,040만)
+func _max_out(b: Balance, s: GameState) -> void:
+	for i in s.trucks.size():
+		s.truck(i).star = b.max_star
+		for part: String in Setting.part_ids(b):
+			var pt: Dictionary = s.truck(i).part(part)
+			pt["grade"] = Setting.max_grade(b)
+			var line := "cargo" if part == "cargo_box" else "speed"
+			pt["lines"] = []
+			for k in Setting.line_count(b, Setting.max_grade(b)):
+				pt["lines"].append(line)
+	if Company.rank(b, s) != 1:
+		push_error("전부 최대여도 시내 1위가 아님 (순위 %d)" % Company.rank(b, s))
+
+
+## 글자에 text가 들어간 첫 줄 번호 (없으면 −1)
+func _row_with(rows: Array, text: String) -> int:
+	for i in rows.size():
+		if rows[i].text.contains(text):
+			return i
+	return -1
+
+
+## 내 줄을 뺀 순위 줄이 라이벌 이름·매출을 큰 순서로 보여 주나 (balance rivals는 오름차순)
+func _rivals_in_order(rows: Array, b: Balance, mine: int) -> bool:
+	var rival := b.rivals.size() - 1
+	for row in rows.size():
+		if row == mine:
+			continue
+		if rows[row].text != "%d. %s · 시간당 %s원" % [row + 1, tr("RIVAL_%d" % rival), Fmt.money(int(b.rivals[rival]))]:
+			return false
+		rival -= 1
+	return rival == -1
+
+
+## 동네 알림에 text가 몇 번 떴나 (떠 있던 것 + 차례를 기다리는 것)
+func _count_notice(town: Node, text: String) -> int:
+	return town.notices_shown.count(text) + town._notice_queue.count(text)
+
+
+## node 아래 보이는 Label·Button 글자 전부
+func _visible_texts(node: Node) -> Array:
+	var out := []
+	for n in node.find_children("*", "", true, false):
+		if (n is Label or n is Button) and n.is_visible_in_tree() and n.text != "":
+			out.append(n.text)
+	return out

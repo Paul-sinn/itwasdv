@@ -223,6 +223,7 @@ const TOWN_BUTTON_RADIUS := 3
 const NPC_FACE_SIZE := 34.0
 const NPC_FACE_COLORS := {
 	"tuning": Color(0.85, 0.62, 0.45), "depot": Color(0.55, 0.70, 0.90), "car_center": Color(0.75, 0.80, 0.55),
+	"office": Color(0.80, 0.70, 0.95),
 }
 
 # --- v6-bal: 처음 켰을 때 말풍선 "건물을 눌러보세요" (작은 화면에서만, 건물·작은 버튼을 한 번 누를 때까지) ---
@@ -273,3 +274,12 @@ const MASTER_DAY_BUTTON_SIZE := 14                    ## 요일 버튼 7개 글�
 const AGENCY_FOUND_ARM_SECONDS := 3.0      ## [창업]을 한 번 누른 뒤 이 시간 안에 또 눌러야 창업 (진짜 시간)
 ## 보조 트럭 짐칸 색 (2호차, 3호차 순. 내 트럭은 COLOR_TRUCK_BOX). 그림은 내 트럭과 같고 색만 다름
 const HELPER_TRUCK_COLORS := [Color(0.45, 0.75, 0.95), Color(0.95, 0.55, 0.45)]
+
+# --- v7a U2: 대리점 사무실 (띠의 네 번째 건물 + 큰 화면 사무실 화면), 구석 줄 "시내 N위" ---
+## 사무실 자리 (동네 설계 좌표): 가운데 길(y 134)과 아래 길(y 200) 사이, 아래 길 집 두 채(x 200·360) 사이. 창업 뒤에만
+const TOWN_OFFICE_RECT := Rect2(262, 146, 64, 44)
+const COLOR_OFFICE := Color(0.72, 0.56, 0.22)
+const COLOR_RANK := Color(1.0, 0.72, 0.45)            ## 구석 줄 "시내 N위"
+const COLOR_RANK_FIRST := Color(1.0, 0.55, 0.20)      ## 순위표 내 줄이 1위일 때 (보통 내 줄은 COLOR_STAR)
+const COLOR_LOCKED := Color(0.45, 0.47, 0.50)         ## 잠긴 순위표 줄 (지역·전국·세계)
+const OFFICE_ROW_SIZE := 12                           ## 순위표·세율표 한 줄 글자 (v0 패널 기준. 11줄이 1280x720에 들어가게)

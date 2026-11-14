@@ -22,6 +22,8 @@
 ## v7a: 매 프레임 모든 트럭을 Trip.advance (보조 트럭도 띠에서 달리고 "+금액" = 내 돈으로 들어온 금액).
 ##      강화·세팅·보험은 튜닝숍 트럭 탭에서 고른 트럭(panel.truck). 능력치·급송·구석 줄 "+N"은 늘 내 트럭(트럭 0).
 ##      물류센터 [창업] 두 번째 누름 → Company.found → 알림·저장. 꺼둔 동안 요약에 대리점이면 직원 몫·세금 줄
+##      U2: 대리점이면 띠에 사무실 건물·구석 줄 "시내 N위"(Company.rank), 사무실 [보조 트럭 사기] → Company.buy_helper → 저장,
+##      처음 1위(rank_first 이벤트) → 알림
 extends Control
 
 const Ability = preload("res://scripts/core/ability.gd")
@@ -144,6 +146,7 @@ func _ready() -> void:
 	panel.driver.ability_pressed.connect(_on_ability_pressed)
 	panel.driver.reset_pressed.connect(_on_ability_reset)
 	panel.driver.found_pressed.connect(_on_found_pressed)
+	panel.office.buy_pressed.connect(_on_helper_buy_pressed)
 	panel.master.day_pressed.connect(_on_day_picked)
 	town.tuning_pressed.connect(func(): open_building("tuning"))
 	_open_pending_setting()
@@ -279,6 +282,8 @@ func _process(delta: float) -> void:
 	town.set_rush(Rush.is_ringing(state), state.rush_ring / balance.rush_ring_seconds, Rush.parcels_left(state))
 	town.set_quest(_quest_line())
 	town.set_master_visit(Master.is_visiting(state, now))
+	town.set_office(Company.stage(state) >= GameState.AGENCY)
+	town.set_rank(Company.rank(balance, state))
 	panel.now_local = now
 	if _want_day_picker and is_full() and panel.building == "tuning" and not enhancing:
 		_want_day_picker = false
@@ -436,6 +441,9 @@ func _show_events(events: Array) -> void:
 			"agency_founded":   # 창업 할 일 끝 알림은 다음 Quest.check에서 따로
 				_notify(cur)
 				cur = { "head": tr("NOTICE_AGENCY") }
+			"rank_first":   # 시내 1위 (계산 쪽이 한 번만 보냄)
+				_notify(cur)
+				cur = { "head": tr("NOTICE_RANK_FIRST") }
 	_notify(cur)
 
 
@@ -675,6 +683,17 @@ func _on_upgrade_pressed(kind: String) -> void:
 		Quest.check(state, balance)
 		panel.driver.show_bought(kind)
 		_save()   # 산 직후 저장
+	panel.refresh(balance, state)
+
+
+## 사무실 [보조 트럭 사기] → Company.buy_helper (돈이 모자라거나 다 샀으면 그대로) → 다음 할 일 바로 확인 → 저장.
+## 띠의 트럭은 다음 프레임 set_truck_count가 늘림
+func _on_helper_buy_pressed() -> void:
+	if Company.buy_helper(balance, state):
+		panel.office.refresh(balance, state)   # 새 줄을 만든 뒤 커지게
+		panel.office.show_bought(Company.helper_count(state))
+		Quest.check(state, balance)
+		_save()
 	panel.refresh(balance, state)
 
 

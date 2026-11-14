@@ -8,6 +8,8 @@
 ## v6b: 대형·VIP·급송 "+금액"은 앞 글자·색이 다름 (show_payout), 급송 전화 말풍선 [받기] + 남은 시간 막대,
 ##      받은 뒤 구석 줄 "급송 N건 남음" (set_rush. 언제 울리나는 main.gd → Rush)
 ## v7a: 보조 트럭도 같은 길을 같은 그림(짐칸 색만 다르게)으로 달림 (trucks, set_truck_count. 0 = 내 트럭 = truck)
+##      U2: 창업하면 네 번째 건물 사무실 (set_office. 창업 전에는 그리지도, building_rects에 넣지도 않음),
+##      구석 줄 "시내 N위" (set_rank. 누르면 아무 일 없음)
 ## 동네 설계 좌표(feel.gd TOWN_SIZE = 작은 화면 크기)로 만들고, 전체 화면에서는 같은 동네를 통째로 확대한다.
 ## 길·집·트럭은 확대해서 그리고(선명함), 글자는 확대 배수에 맞춘 글자 크기로 따로 놓는다.
 ## 그리기만 한다. 돈·배송은 main.gd → scripts/core/trip.gd (배송 이벤트가 오면 show_payout)
@@ -18,9 +20,13 @@ const Fmt = preload("res://scripts/ui/fmt.gd")
 const Truck = preload("res://scripts/ui/truck.gd")
 const Route = preload("res://scripts/ui/route.gd")
 
-## 건물 id (큰 화면 위쪽 줄 순서)와 이름 번역 키
+## 건물 id (큰 화면 위쪽 줄 순서)와 이름 번역 키. 사무실(OFFICE)은 창업 뒤에만 있어서 BUILDINGS에 안 넣음
 const BUILDINGS := ["tuning", "depot", "car_center"]
-const BUILDING_NAMES := { "tuning": "BUILDING_TUNING", "depot": "TOWN_DEPOT", "car_center": "BUILDING_CAR_CENTER" }
+const OFFICE := "office"
+const BUILDING_NAMES := { "tuning": "BUILDING_TUNING", "depot": "TOWN_DEPOT", "car_center": "BUILDING_CAR_CENTER", "office": "BUILDING_OFFICE" }
+## 건물 자리 (동네 설계 좌표)와 색. 사무실은 창업 뒤에만
+const BUILDING_SPOTS := { "tuning": Feel.TOWN_TUNING_RECT, "depot": Feel.TOWN_DEPOT_RECT, "car_center": Feel.TOWN_CAR_CENTER_RECT, "office": Feel.TOWN_OFFICE_RECT }
+const BUILDING_COLORS := { "tuning": Feel.COLOR_TUNING, "depot": Feel.COLOR_DEPOT, "car_center": Feel.COLOR_CAR_CENTER, "office": Feel.COLOR_OFFICE }
 
 signal tuning_pressed   ## 구석 작은 버튼 [강화]
 signal rush_accept_pressed   ## 급송 전화 말풍선 [받기]
@@ -49,6 +55,7 @@ var hovered := ""            ## 마우스가 올라가 있는 건물 id ("" = �
 var tuning_button: Button    ## 구석 줄 끝 작은 버튼 [강화]
 var hint: Label              ## 처음 켰을 때 말풍선 "건물을 눌러보세요" (켜고 끄기는 main.gd → set_hint)
 var master_visit := false    ## 명장 방문 중 → 튜닝숍에 색 테두리 (set_master_visit)
+var office_open := false     ## 사무실 건물이 있나 (창업 뒤. set_office)
 
 var _houses: Array[Vector2] = []     ## 집 자리 (길 가운데 선 위, 설계 좌표)
 var _stops := PackedFloat64Array()   ## 집마다 길 위 거리 (트럭이 서는 곳)
@@ -68,6 +75,7 @@ var _rush_text: Label
 var _rush_bar: ProgressBar
 var _rush_style: StyleBoxFlat
 var _rush_left: Label     ## 구석 줄 끝 "급송 N건 남음" (받은 급송이 남아 있을 때)
+var _rank_label: Label    ## 구석 줄 "시내 N위" (창업 뒤)
 
 
 func _ready() -> void:
@@ -100,6 +108,9 @@ func _ready() -> void:
 	point_dot.add_theme_stylebox_override("panel", _dot_style)
 	point_dot.visible = false
 	_hud.add_child(point_dot)
+	_rank_label = make_label(Feel.HUD_FONT_SIZE, Feel.COLOR_RANK)
+	_rank_label.visible = false
+	_hud.add_child(_rank_label)
 	tuning_button = Button.new()
 	tuning_button.text = tr("TOWN_TUNING_BUTTON")
 	tuning_button.focus_mode = Control.FOCUS_NONE
@@ -118,9 +129,10 @@ func _ready() -> void:
 	_notice.visible = false
 	add_child(_notice)
 
-	for id: String in BUILDINGS:
+	for id: String in BUILDING_SPOTS:
 		var board := make_label(Feel.LABEL_FONT_SIZE, Feel.COLOR_TEXT)
 		board.text = tr(BUILDING_NAMES[id])
+		board.visible = id != OFFICE
 		add_child(board)
 		_signs[id] = board
 	_name_tag = make_label(Feel.NAME_TAG_FONT_SIZE, Feel.COLOR_NAME_TAG)
@@ -187,7 +199,7 @@ func layout(top_left: Vector2, z: float, text_k: float) -> void:
 		t.set_view(origin, zoom)
 
 	_hud.add_theme_constant_override("separation", int(roundf(10.0 * text_scale)))
-	for l in [_star_label, _money_label, _level_label, _rush_left]:
+	for l in [_star_label, _money_label, _level_label, _rush_left, _rank_label]:
 		_set_font(l, Feel.HUD_FONT_SIZE)
 	_style_button()
 	var d := Feel.POINT_DOT_SIZE * text_scale
@@ -201,13 +213,12 @@ func layout(top_left: Vector2, z: float, text_k: float) -> void:
 	_set_font(_notice, Feel.NOTICE_FONT_SIZE)
 	_place_notice()
 
-	# 간판: 건물 위쪽 가운데
-	var rects := building_rects()
+	# 간판: 건물 위쪽 가운데 (사무실은 창업 전에도 자리만 잡아 둠)
 	for id: String in _signs:
 		var board: Label = _signs[id]
 		_set_font(board, Feel.LABEL_FONT_SIZE)
 		board.reset_size()
-		var r: Rect2 = rects[id]
+		var r := view_rect(BUILDING_SPOTS[id])
 		board.position = Vector2(r.get_center().x - board.size.x / 2.0, r.position.y + Feel.SIGN_TOP * zoom)
 	_set_font(_name_tag, Feel.NAME_TAG_FONT_SIZE)
 	_place_name_tag()
@@ -251,13 +262,32 @@ func area() -> Rect2:
 	return view_rect(Rect2(Vector2.ZERO, Feel.TOWN_SIZE))
 
 
-## 건물 id → 건물 사각형 (이 노드 좌표. 작은 화면에서는 창 좌표와 같음). 클릭·마우스 올림·보이는 곳이 같이 씀
+## 건물 id → 건물 사각형 (이 노드 좌표. 작은 화면에서는 창 좌표와 같음). 클릭·마우스 올림·보이는 곳이 같이 씀.
+## 사무실은 창업 뒤에만 (office_open)
 func building_rects() -> Dictionary:
-	return {
-		"tuning": view_rect(Feel.TOWN_TUNING_RECT),
-		"depot": view_rect(Feel.TOWN_DEPOT_RECT),
-		"car_center": view_rect(Feel.TOWN_CAR_CENTER_RECT),
-	}
+	var out := {}
+	for id: String in BUILDING_SPOTS:
+		if id != OFFICE or office_open:
+			out[id] = view_rect(BUILDING_SPOTS[id])
+	return out
+
+
+## 사무실 건물 켜고 끄기 (main.gd: 대리점이면 켬. F3 처음부터면 꺼짐)
+func set_office(on: bool) -> void:
+	if office_open == on:
+		return
+	office_open = on
+	_signs[OFFICE].visible = on
+	if not on and hovered == OFFICE:
+		set_hover("")
+	queue_redraw()
+
+
+## 구석 줄 "시내 N위" (rank 0 = 대리점 전 → 숨김)
+func set_rank(rank: int) -> void:
+	_rank_label.visible = rank > 0
+	if rank > 0:
+		_rank_label.text = tr("TOWN_RANK") % rank
 
 
 ## p(이 노드 좌표)에 있는 건물 id. 없으면 ""
@@ -533,7 +563,7 @@ func visible_rects(truck_pad: float) -> Array:
 	# 처음 말풍선(+ 꼬리)도 꼬리 끝이 튜닝숍에 닿아서 그 사각형에 합쳐짐 (글자가 가장 많이 떴을 때도 30개 이하로)
 	var rects := building_rects()
 	var pieces: Array[Rect2] = []
-	for id: String in BUILDINGS:
+	for id: String in rects:
 		var r: Rect2 = rects[id].grow(Feel.BUILDING_GLOW_PX * zoom + 1.0)
 		pieces.append(r.merge(Rect2(_signs[id].position, _signs[id].size).grow(o)))
 	if hint.visible:
@@ -605,15 +635,16 @@ func _draw() -> void:
 	if show_ground:
 		draw_rect(Rect2(Vector2.ZERO, Feel.TOWN_SIZE), Feel.COLOR_TOWN_GROUND)
 
-	# 건물 (물류센터는 길 시작점 뒤): 사각형 + 문. 마우스를 올리면 밝게 + 둘레 빛
-	var colors := { "tuning": Feel.COLOR_TUNING, "depot": Feel.COLOR_DEPOT, "car_center": Feel.COLOR_CAR_CENTER }
-	var spots := { "tuning": Feel.TOWN_TUNING_RECT, "depot": Feel.TOWN_DEPOT_RECT, "car_center": Feel.TOWN_CAR_CENTER_RECT }
-	for id: String in BUILDINGS:
-		var d: Rect2 = spots[id]
+	# 건물 (물류센터는 길 시작점 뒤): 사각형 + 문. 마우스를 올리면 밝게 + 둘레 빛. 사무실은 창업 뒤에만
+	for id: String in BUILDING_SPOTS:
+		if id == OFFICE and not office_open:
+			continue
+		var d: Rect2 = BUILDING_SPOTS[id]
+		var color: Color = BUILDING_COLORS[id]
 		var lit := id == hovered
 		if lit:
 			draw_rect(d.grow(Feel.BUILDING_GLOW_PX), Feel.COLOR_BUILDING_GLOW)
-		draw_rect(d, colors[id].lightened(Feel.BUILDING_GLOW_LIGHTEN) if lit else colors[id])
+		draw_rect(d, color.lightened(Feel.BUILDING_GLOW_LIGHTEN) if lit else color)
 		var door := Feel.BUILDING_DOOR_SIZE
 		draw_rect(Rect2(d.end.x - d.size.x * Feel.BUILDING_DOOR_RIGHT, d.end.y - d.size.y * door.y, d.size.x * door.x, d.size.y * door.y), Feel.COLOR_ROAD_EDGE)
 		if id == "tuning" and master_visit:   # 건물 가장자리를 가운데로: 바깥 절반 = 빛남 두께

@@ -10,10 +10,12 @@
 ## v7a: 튜닝숍 위쪽 트럭 탭 ("내 트럭", "2호차", "3호차". 트럭이 1대거나 [명장] 칸이면 숨김). 고른 트럭(truck)의 강화·세팅을 보여 주고
 ##      (1280x720에 맞게 탭은 NPC 줄 안, 얼굴 옆 이름·인사말 자리에. 탭이 보이는 동안 이름·인사말은 숨김)
 ##      main이 강화·돌리기·보험을 그 트럭에. "모자란 금액 · 약 N분 뒤"는 내 트럭 시간당 수입 기준 그대로
+##      U2: 창업하면 건물 줄에 [사무실] (office_tab.gd: 보조 트럭·순위표·장부). 대리점 전(F3 처음부터 포함)에는 버튼을 숨기고 튜닝숍으로
 ## 보여주기만 한다. 버튼을 누르면 신호만 보내고, 실제 강화·구매·돌리기는 main.gd → scripts/core 가 한다.
 extends PanelContainer
 
 const Balance = preload("res://scripts/core/balance.gd")
+const Company = preload("res://scripts/core/company.gd")
 const Economy = preload("res://scripts/core/economy.gd")
 const Enhance = preload("res://scripts/core/enhance.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
@@ -24,6 +26,7 @@ const Town = preload("res://scripts/ui/town.gd")
 const SettingTab = preload("res://scripts/ui/setting_tab.gd")
 const DriverTab = preload("res://scripts/ui/driver_tab.gd")
 const MasterTab = preload("res://scripts/ui/master_tab.gd")
+const OfficeTab = preload("res://scripts/ui/office_tab.gd")
 
 signal enhance_pressed
 signal spare_pressed
@@ -35,9 +38,10 @@ const NPC_KEYS := {
 	"tuning": ["NPC_TUNING", "NPC_TUNING_HELLO"],
 	"depot": ["NPC_DEPOT", "NPC_DEPOT_HELLO"],
 	"car_center": ["NPC_CAR_CENTER", "NPC_CAR_CENTER_HELLO"],
+	"office": ["NPC_OFFICE", "NPC_OFFICE_HELLO"],
 }
 
-var building := "tuning"         ## 지금 보는 건물 (Town.BUILDINGS 중 하나)
+var building := "tuning"         ## 지금 보는 건물 (Town.BUILDINGS 중 하나 또는 Town.OFFICE)
 var truck := 0                   ## 튜닝숍 트럭 탭에서 고른 트럭 (0 = 내 트럭). 강화·세팅·보험이 이 트럭에
 var truck_buttons: Array[Button] = []   ## 트럭 탭 (계산 쪽 트럭 수만큼 refresh에서 만듦)
 var building_buttons := {}       ## 건물 id → 위쪽 줄 버튼
@@ -51,6 +55,7 @@ var master: MasterTab            ## 튜닝숍 [명장] 칸
 var to_car_button: Button        ## 스페어가 없어 강화가 막혔을 때 [카센터로]
 var setting: SettingTab          ## 튜닝숍 [세팅] 칸
 var driver: DriverTab            ## 물류센터 화면
+var office: OfficeTab            ## 사무실 화면 (창업 뒤)
 
 var _style: StyleBoxFlat
 var _building_row: HBoxContainer
@@ -109,7 +114,7 @@ func _ready() -> void:
 	_building_row = HBoxContainer.new()
 	_box.add_child(_building_row)
 	var bgroup := ButtonGroup.new()
-	for id: String in Town.BUILDINGS:
+	for id: String in Town.BUILDINGS + [Town.OFFICE]:
 		var bb := _toggle(_building_row, tr(Town.BUILDING_NAMES[id]), bgroup)
 		bb.pressed.connect(func(): show_building(id))
 		building_buttons[id] = bb
@@ -157,7 +162,8 @@ func _ready() -> void:
 	_spares.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_spares.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_spares.autowrap_mode = TextServer.AUTOWRAP_OFF
-	_master_line = _label(e, Feel.PANEL_TEXT_SIZE, Feel.COLOR_MASTER)
+	# 작은 글자: 가장 긴 보너스(영어 "… chance of one extra level on success")도 한 줄이라 1280x720에서 차고가 [설정]과 안 겹침 (v7a)
+	_master_line = _label(e, Feel.PANEL_SMALL_SIZE, Feel.COLOR_MASTER)
 	_income = _label(e, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
 	_chances = _label(e, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
 	_danger = _label(e, Feel.PANEL_DANGER_SIZE, Feel.COLOR_DANGER)
@@ -192,6 +198,9 @@ func _ready() -> void:
 	_box.add_child(driver)
 	master = MasterTab.new()
 	_box.add_child(master)
+	office = OfficeTab.new()
+	_box.add_child(office)
+	building_buttons[Town.OFFICE].visible = false   # 창업 뒤에 refresh가 켬
 
 	# 카센터: 스페어 엔진 (들고 있는 개수, 설명, [사기], 모자란 금액, 산 결과)
 	_car_box = VBoxContainer.new()
@@ -232,6 +241,7 @@ func set_ui_scale(s: float) -> void:
 	setting.set_ui_scale(s)
 	driver.set_ui_scale(s)
 	master.set_ui_scale(s)
+	office.set_ui_scale(s)
 	reset_size()
 
 
@@ -276,6 +286,7 @@ func _show_parts() -> void:
 	setting.visible = tuning and _tab == Tab.SETTING
 	master.visible = tuning and _tab == Tab.MASTER
 	driver.visible = building == "depot"
+	office.visible = building == Town.OFFICE
 	_car_box.visible = building == "car_center"
 	for id: String in building_buttons:
 		building_buttons[id].set_pressed_no_signal(id == building)
@@ -323,6 +334,10 @@ func flash(color: Color, seconds: float) -> void:
 
 ## 상태에 맞게 글자와 버튼을 고친다 (열려 있는 동안 매 프레임)
 func refresh(b: Balance, s: GameState) -> void:
+	var agency := Company.stage(s) >= GameState.AGENCY
+	building_buttons[Town.OFFICE].visible = agency
+	if building == Town.OFFICE and not agency:   # F3 처음부터
+		show_building("tuning")
 	_refresh_trucks(s)
 	var t := s.truck(truck)
 	var at_max := t.star >= b.max_star
@@ -407,6 +422,8 @@ func refresh(b: Balance, s: GameState) -> void:
 		driver.refresh(b, s)
 	if master.visible:
 		master.refresh(b, s, now_local)
+	if office.visible:
+		office.refresh(b, s)
 
 
 ## 트럭 탭: 계산 쪽 트럭 수만큼 (모자라면 만들고, F3 처음부터로 줄면 숨김). 1대거나 튜닝숍 [명장] 칸이면 줄째 숨김 (그때는 NPC 이름·인사말)
