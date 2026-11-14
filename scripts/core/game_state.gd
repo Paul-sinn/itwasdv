@@ -74,6 +74,7 @@ var insured_day: int = -1         ## 보험사가 온 날 [예]를 누른 날짜
 # --- 물류센터 (depot.gd) ---
 var warehouse_level: int = 1
 var night_level: int = 1
+var depot_upgrades: Dictionary = {}   ## 물류센터 업그레이드 (v8a, upgrade.gd) id → 레벨 (없으면 0). 저장
 
 # --- 퀘스트 (quest.gd)와 그 조건에 쓰는 기록 ---
 var quest_index: int = 0          ## 지금 차례인 퀘스트 번호 (목록 길이면 다 끝남)

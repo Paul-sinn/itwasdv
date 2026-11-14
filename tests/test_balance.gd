@@ -34,9 +34,9 @@ func test_real_file_shape() -> void:
 	var d := real_balance_dict()
 	var keys := d.keys()
 	keys.sort()
-	check_eq(keys, ["abilities", "company", "contracts", "depot", "driver", "engine", "master", "offline", "quests", "routes", "rush", "setting", "special",
-			"trip", "version", "visitors", "weekly"], "json 묶음 (v5b: abilities, v6b: special·rush·weekly·master, v7a: company, v7-bal: visitors·routes, v7b: contracts)")
-	check_eq(d["version"], "0.17", "version")
+	check_eq(keys, ["abilities", "company", "contracts", "depot", "depot_upgrades", "driver", "engine", "master", "offline", "quests", "routes", "rush", "setting", "special",
+			"trip", "version", "visitors", "weekly"], "json 묶음 (v5b: abilities, v6b: special·rush·weekly·master, v7a: company, v7-bal: visitors·routes, v7b: contracts, v8a: depot_upgrades)")
+	check_eq(d["version"], "0.18", "version")
 	check(not d["engine"].has("cost_hours"), "engine.cost_hours 가 남아 있음")
 	check_eq(d["offline"].keys(), ["ignore_under_seconds"], "offline 묶음에는 ignore_under_seconds만 (cap_hours·rate는 depot 표로)")
 
