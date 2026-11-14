@@ -240,7 +240,7 @@ func _notices(b: Balance) -> void:
 	_clean()
 	var m := await _launch()
 	var s: GameState = m.state
-	s.money = Upgrade.price(b, s, "zone") * 10   # 준비: 몇 번 살 수 있게
+	s.money = Upgrade.price(b, s, "zone") * 2   # 준비: 첫 레벨을 살 수 있게
 	var d = await _open_zone(m)
 	var before: int = _notice_count(m)
 	_click(d.center_buttons["zone"].get_global_rect().get_center())
@@ -255,6 +255,8 @@ func _notices(b: Balance) -> void:
 	await _frames(2)
 	var off_pressed: bool = m.settings.pref_buttons["ui/notices"][false].button_pressed and Prefs.get_value("ui/notices") == false
 	var lv: int = Upgrade.level(s, "zone")
+	s.money = Upgrade.price(b, s, "zone") * 2   # 준비: 다음 레벨도 살 수 있게
+	await _frames(2)
 	before = _notice_count(m)
 	_click(d.center_buttons["zone"].get_global_rect().get_center())
 	await _frames(2)

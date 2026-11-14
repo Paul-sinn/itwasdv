@@ -393,7 +393,7 @@ func _upgrades(b: Balance) -> void:
 	Save.delete_file(TEST_SAVE)
 	var m := await _launch(b)
 	var s: GameState = m.state
-	s.money = Upgrade.price(b, s, "zone") * 3 / 2   # 준비: 첫 레벨만 살 수 있게
+	s.money = Upgrade.price(b, s, "box") * 3 / 2   # 준비: 첫 레벨 셋은 다 살 수 있고 구역 Lv1을 산 뒤엔 Lv2가 모자람 (json 0.19: Lv1 중 적재함이 가장 비쌈)
 	await _frames(2)
 	_click(m.town.building_rects()["depot"].get_center())
 	await _frames(3)
@@ -406,9 +406,9 @@ func _upgrades(b: Balance) -> void:
 	var rows := []
 	var first_ok := true
 	var want := {
-		"zone": ["배송 구역 확장 Lv.0 / 5", "배송 단가 +0% → +2%"],
-		"sort": ["분류 속도 Lv.0 / 5", "물류센터에서 싣는 시간 −0% → −6%"],
-		"box": ["기본 적재함 Lv.0 / 5", "한 바퀴 기본 적재량 +0건 → +1건"],
+		"zone": ["배송 구역 확장 Lv.0 / 5", "배송 단가 +0% → +1%"],
+		"sort": ["분류 속도 Lv.0 / 5", "물류센터에서 싣는 시간 −0% → −3%"],
+		"box": ["기본 적재함 Lv.0 / 5", "한 바퀴 기본 적재량 +0건 → +0.4건"],   # 적재함은 소수 (Upgrade.value_at 그대로)
 	}
 	for id: String in want:
 		var btn: Button = d.center_buttons[id]
@@ -426,7 +426,7 @@ func _upgrades(b: Balance) -> void:
 	var notice := "물류센터 업그레이드! 배송 구역 확장 Lv.1"
 	var saved = _saved_state(b)
 	var bought_ok: bool = Upgrade.level(s, "zone") == 1 and saved != null and Upgrade.level(saved, "zone") == 1 and s.money == money0 - price1 and d.center_titles["zone"].text == "배송 구역 확장 Lv.1 / 5" \
-			and d.center_values["zone"].text == "배송 단가 +2% → +4%" and _count_notice(m.town, notice) == 1 \
+			and d.center_values["zone"].text == "배송 단가 +1% → +2%" and _count_notice(m.town, notice) == 1 \
 			and zone.disabled and zone.text == "올리기 (%s원)" % Fmt.money(Upgrade.price(b, s, "zone"))
 	var money1 := s.money
 	_click(zone.get_global_rect().get_center())   # 꺼짐 (돈 모자람)
@@ -435,7 +435,7 @@ func _upgrades(b: Balance) -> void:
 	s.depot_upgrades["sort"] = Upgrade.max_level(b, "sort")   # 준비: 다 삼
 	await _frames(2)
 	var top_text: String = d.center_values["sort"].text
-	var top_ok: bool = top_text == "물류센터에서 싣는 시간 −30% (최고 단계)" and not d.center_buttons["sort"].visible and not d.center_notes["sort"].visible \
+	var top_ok: bool = top_text == "물류센터에서 싣는 시간 −15% (최고 단계)" and not d.center_buttons["sort"].visible and not d.center_notes["sort"].visible \
 			and d.center_titles["sort"].text == "분류 속도 Lv.5 / 5"
 	_report(bought_ok and short_ok and top_ok,
 			"④ [값] 클릭 → Upgrade.buy·저장 (돈 −%s, Lv.1, '%s' → 알림 '%s'), 모자라면 꺼짐·눌러도 그대로, 다 사면 '%s' 버튼 없음" % [
@@ -447,7 +447,7 @@ func _upgrades(b: Balance) -> void:
 	var agency_ok: bool = Company.stage(s) == GameState.AGENCY and not zone.visible and not d.center_buttons["box"].visible \
 			and d.center_notes["zone"].is_visible_in_tree() and solo_text == "동네에서만 살 수 있어요 (효과는 유지)" \
 			and d.center_notes["box"].is_visible_in_tree() and not d.center_notes["sort"].visible \
-			and d.center_values["zone"].text == "배송 단가 +2%" and d.center_values["box"].text == "한 바퀴 기본 적재량 +0건"
+			and d.center_values["zone"].text == "배송 단가 +1%" and d.center_values["box"].text == "한 바퀴 기본 적재량 +0건"
 	_report(agency_ok, "④ 대리점: 버튼 대신 '%s', 효과는 지금 값 '%s' (다 산 줄은 '최고 단계' 그대로)" % [solo_text, d.center_values["zone"].text])
 
 	m.balance.depot_upgrades = {}   # 준비: json에 depot_upgrades 묶음이 없음 (main이 읽은 숫자에서 뺌)
@@ -496,6 +496,8 @@ func _upgrade_lap(b: Balance) -> void:
 	await _frames(3)
 	var cargo1 := Trip.cargo(b, s, 0)
 	var cargo_text1: String = st._effect.text
+	# json 0.19: 적재함 Lv1 = +0.4건 → 소수 적재량도 지금 규칙대로 소수 한 자리 ("20.4건", 정수로 안 자름)
+	var frac_ok: bool = not is_equal_approx(cargo1, roundf(cargo1)) and _effect_has(cargo_text1, "한 바퀴 적재량 %.1f건" % cargo1)
 	var cargo_ok: bool = st.is_visible_in_tree() and _effect_has(cargo_text0, "한 바퀴 적재량 %s건" % Fmt.num(cargo0, 1)) 			and _effect_has(cargo_text1, "한 바퀴 적재량 %s건" % Fmt.num(cargo1, 1)) 			and is_equal_approx(cargo1, cargo0 + Upgrade.value(b, s, "box")) and cargo1 > cargo0
 	_click(p.engine_tab_button.get_global_rect().get_center())
 	await _frames(2)
@@ -503,8 +505,8 @@ func _upgrade_lap(b: Balance) -> void:
 	var hour1: String = p._income.text
 	var want1 := "시간당 %s원 → 성공하면 %s원" % [Fmt.money(int(hourly1)), Fmt.money(int(Trip.hourly_income_at(b, s, 0, 1)))]
 	var hour_ok: bool = hour1 == want1 and hour1 != hour0 and hourly1 > hourly0
-	_report(bought and cargo_ok and hour_ok,
-			"④ 업그레이드 3개 (클릭) 산 뒤 화면 = 계산: [세팅] 적재함 '%s' → '%s' (Trip.cargo %s → %s), 튜닝숍 '%s' → '%s' (Trip.hourly_income)" % [
+	_report(bought and cargo_ok and frac_ok and hour_ok,
+			"④ 업그레이드 3개 (클릭) 산 뒤 화면 = 계산: [세팅] 적재함 '%s' → '%s' (Trip.cargo %s → %s, 소수 한 자리), 튜닝숍 '%s' → '%s' (Trip.hourly_income)" % [
 			cargo_text0.get_slice("\n", 0), cargo_text1.get_slice("\n", 0), Fmt.num(cargo0, 1), Fmt.num(cargo1, 1), hour0, hour1])
 
 	# 대리점 뒤: 시내 정차할 곳 = ceil(Trip.cargo) (기본 적재함 +1이 시내 배수만큼 남음)

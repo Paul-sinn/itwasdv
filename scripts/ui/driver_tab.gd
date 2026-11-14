@@ -62,7 +62,7 @@ var record: RecordTab     ## [기록] 칸
 var center_buttons := {}  ## 물류센터 업그레이드 id → [값]
 var center_notes := {}    ## id → 대리점이면 버튼 대신 "동네에서만 살 수 있어요 (효과는 유지)"
 var center_titles := {}   ## id → "배송 구역 확장 Lv.2 / 5"
-var center_values := {}   ## id → "단가 +4% → +6%"
+var center_values := {}   ## id → "배송 단가 +1% → +2%"
 var _center_rows: Array[Control] = []   ## 업그레이드 줄들 (Upgrade.enabled가 거짓이면 숨김)
 var add_buttons := {}    ## 능력치 id → [+] (처음 refresh 때 balance 순서로 만듦)
 var reset_button: Button
@@ -368,7 +368,7 @@ func _refresh_center(b: Balance, s: GameState) -> void:
 		center_notes[id].text = tr("UPGRADE_SOLO_ONLY")
 
 
-## 효과 수치 한 개 (번역 키 UPGRADE_<ID>_UNIT): 단가 "+4%", 싣는 시간 "−12%", 기본 적재량 "+2건"
+## 효과 수치 한 개 (번역 키 UPGRADE_<ID>_UNIT): 단가 "+1%", 싣는 시간 "−3%", 기본 적재량 "+0.4건" (소수 그대로, Fmt.num)
 func _center_value(id: String, v: float) -> String:
 	return tr("UPGRADE_%s_UNIT" % id.to_upper()) % (Fmt.num(v) if id == "box" else Fmt.percent(v))
 
