@@ -19,6 +19,8 @@
 ## v7-bal 노선 (route_id, balance.json routes): 트럭마다 노선 하나. 지금은 회사 단계로만 (개인 기사 = 동네 "town", 대리점 = 시내 "city", 모든 트럭).
 ##   단가 × price_mult (협상·팁·대형·VIP·급송은 그 단가 기준), 도로 길이 × road_mult,
 ##   한 바퀴 싣는 수 = 적재량 × stops_mult (소수는 바퀴마다 확률), 싣는 시간 × stops_mult (집이 는 만큼), 정차는 실은 건수만큼
+## v7b 장거리: 대리점 + 그 트럭 +10이면 스위치(TruckState.route)로 "long". 바꾸면 다음 바퀴부터 (바퀴 출발 때 lap_route로 옮김).
+##   장거리 바퀴는 routes.long 숫자 + 경험치 xp_per_parcel, 터보 "장거리 속도"(long_speed)가 이동 속도 %에 더해짐. 꺼둔 동안은 스위치 노선으로
 ## v7a 회사: 번 돈(배송 1건 돈·팁)마다 직원 몫(보조 트럭만, × staff_share)·세금(× 세율)을 반올림해 떼고 나머지가 내 돈 (_split).
 ##   오늘 집계(state.today_*)에 번 돈·직원 몫·세금을 더함. 배송 경험치는 내 트럭만 (대리점이면 시내 경험치), 보조 트럭 0
 extends RefCounted
@@ -53,9 +55,40 @@ static func speed(b: Balance, t: TruckState) -> float:
 	return _speed_at(b, t, t.star)
 
 
-## 트럭 i가 달리는 노선 id ("town" / "city", v7b에서 "long"). 지금은 회사 단계로만: 개인 기사 = 동네, 대리점 = 시내 (모든 트럭)
-static func route_id(s: GameState, _i: int) -> String:
+## 트럭 i의 이번 바퀴 노선 "town" / "city" / "long" (계산·화면 모두 이것). 장거리 바퀴가 아니면 회사 단계로:
+## 개인 기사 = 동네, 대리점 = 시내 (창업하면 그 바퀴부터 시내: v7-bal 그대로)
+static func route_id(s: GameState, i: int) -> String:
+	if s.truck(i).lap_route == "long":
+		return "long"
 	return "city" if s.company_stage >= GameState.AGENCY else "town"
+
+
+## 트럭 i의 노선 스위치 "city" / "long" (다음 바퀴부터 적용될 노선. 개인 기사면 "city"지만 스위치는 대리점부터)
+static func route_choice(s: GameState, i: int) -> String:
+	return "long" if s.truck(i).route == "long" else "city"
+
+
+## 트럭 i가 장거리를 갈 수 있나: 대리점 + 그 트럭 지금 단계 ≥ routes.long.unlock_star
+static func can_long(b: Balance, s: GameState, i: int) -> bool:
+	return s.company_stage >= GameState.AGENCY and s.truck(i).star >= b.routes["long"].get("unlock_star", 0)
+
+
+## 스위치를 "city" / "long"으로 (다음 바퀴부터). 개인 기사이거나 장거리가 잠겼거나 모르는 id면 false (안 바꿈)
+static func set_route(b: Balance, s: GameState, i: int, id: String) -> bool:
+	if s.company_stage < GameState.AGENCY or not (id == "city" or (id == "long" and can_long(b, s, i))):
+		return false
+	s.truck(i).route = "long" if id == "long" else ""
+	return true
+
+
+## 트럭 i가 노선 id로 돌 때 시간당 번 돈 (hourly_income과 같은 식. 스위치 옆 비교 표시용). "long" 말고는 기본 노선 (대리점이면 시내)
+static func hourly_income_on(b: Balance, s: GameState, i: int, id: String) -> float:
+	return _as_route(s, i, "long" if id == "long" else "", func(): return hourly_income(b, s, i))
+
+
+## 트럭 i의 이번 바퀴 남은 초 ("장거리 배송 중 · 남은 시간"). 0 이상
+static func lap_seconds_left(b: Balance, s: GameState, i: int) -> float:
+	return maxf(0.0, lap_seconds(b, s, i) - s.truck(i).lap_clock)
 
 
 ## 트럭 i의 평균 한 바퀴 싣는 수 = 기본 적재량 × (1 + 적재량 % 합) × 노선 stops_mult. 소수점 그대로 (예: 21.6, 시내 32.4).
@@ -160,11 +193,15 @@ static func hourly_net(b: Balance, s: GameState, i: int) -> float:
 ##   { "type": "boost" } (새 바퀴를 출발할 때 오버부스트가 걸림)
 ## 바퀴 중간에 단계·세팅이 바뀌면 남은 집은 새 속도로 계산한다 (이미 지난 집은 바로 배송). 실은 건수는 다음 바퀴부터.
 ## 배송마다 parcels_total +1, 기사 경험치. 부를 때마다 끝에 Quest.check 한 번, 트럭 0이면 Company.check_first 한 번 (알림은 state.take_events)
+## 새 바퀴는 스위치 노선으로 출발 (장거리면 long_laps +1). 대리점 + 어느 트럭이 처음 장거리를 갈 수 있게 되면 알림 { "type": "long_unlocked" } 한 번
 static func advance(state: GameState, b: Balance, i: int, dt: float, rng: RandomNumberGenerator) -> Array:
 	var events := []
 	if dt > 0.0:
 		_drive(state, b, i, dt, rng, events)
 	Quest.check(state, b)
+	if not state.long_unlocked and can_long(b, state, i):
+		state.long_unlocked = true
+		state.add_event({ "type": "long_unlocked" })
 	if i == 0:   # 순위는 모든 트럭 시간당 매출을 다시 계산해서, 프레임마다 트럭 수만큼 하지 않게 내 트럭 진행 때만
 		Company.check_first(state, b)
 	return events
@@ -174,7 +211,7 @@ static func _drive(state: GameState, b: Balance, i: int, dt: float, rng: RandomN
 	var t := state.truck(i)
 	t.lap_clock += dt
 	if t.lap_cargo <= 0:
-		t.lap_cargo = _roll_cargo(b, state, i, rng)
+		_start_lap(state, b, i, rng)
 	var n := t.lap_cargo
 	var stop := _stop(b, state, i)
 	var load_s := _load(b, state, i)
@@ -221,12 +258,15 @@ static func _drive(state: GameState, b: Balance, i: int, dt: float, rng: RandomN
 		elif t.lap_clock >= _lap_from_drive(load_s, n, drive, stop):
 			t.lap_clock -= _lap_from_drive(load_s, n, drive, stop)
 			t.lap_delivered = 0
-			t.lap_cargo = _roll_cargo(b, state, i, rng)
+			_start_lap(state, b, i, rng)
 			n = t.lap_cargo
 			t.boost_lap = boost_chance > 0.0 and Enhance.random01(rng) < boost_chance
 			if t.boost_lap:
 				events.append({ "type": "boost" })
 			drive = _drive_at(b, state, i, t.star, t.boost_lap)
+			load_s = _load(b, state, i)   # 노선이 바뀌었을 수 있음 (싣는 시간·단가·경험치)
+			xp = _xp_per_parcel(b, state, i)
+			money_of = {}
 		else:
 			break
 
@@ -239,9 +279,10 @@ static func _drive(state: GameState, b: Balance, i: int, dt: float, rng: RandomN
 ##   → 트럭마다 직원 몫·세금을 켜 둔 때와 같은 비율로 떼고(_split) 합. money = 내 돈 합, staff·tax = 뗀 합. 오늘 집계에도 더함
 ##   배송 = 트럭마다 floor(평균 적재량 × 3600 ÷ 평균 한 바퀴 초 × 시간 × 야간팀 비율)의 합 → parcels_total에도 더함
 ##   스페어 = 트럭마다 배송 × 그 트럭 드랍 확률(spare_chance)을 spare_drop_carry에 더하고 정수 부분만큼 (나머지는 다음에 이어짐)
-##   경험치 = floor(트럭 0 배송 × 배송 1건 경험치(대리점이면 시내) × 노하우) → Driver.add_xp (만렙이면 평판으로). 노하우 0이면 0
+##   경험치 = floor(트럭 0 배송 × 배송 1건 경험치(노선 경험치) × 노하우) → Driver.add_xp (만렙이면 평판으로). 노하우 0이면 0
 ##   주간 배송 목표에 배송 합을 더함 (Weekly.add_parcels. 주가 바뀐 뒤 켰으면 Master.tick을 먼저 불러 새 주에)
-## 트럭의 바퀴 진행(lap_clock)은 그대로 둔다.
+##   노선은 트럭마다 스위치 노선 (v7b: 장거리로 바꿔 두고 껐으면 장거리 숫자로. 이번 바퀴가 무엇이었든)
+## 트럭의 바퀴 진행(lap_clock·이번 바퀴 노선)은 그대로 둔다.
 static func apply_offline(state: GameState, b: Balance, seconds_away: float) -> Dictionary:
 	if seconds_away < b.offline_ignore_under_seconds:
 		return { "money": 0, "staff": 0, "tax": 0, "parcels": 0, "spares": 0, "hours": 0.0, "xp": 0, "full": false, "ignored": true }
@@ -254,17 +295,19 @@ static func apply_offline(state: GameState, b: Balance, seconds_away: float) -> 
 	var parcels := 0
 	var xp := 0
 	for i in state.trucks.size():
-		var gross := floori(hourly_income(b, state, i) * hours * rate)
+		var v: Array = _as_route(state, i, _next_lap_route(b, state, i), func(): return [hourly_income(b, state, i),
+				cargo(b, state, i) * Economy.SECONDS_PER_HOUR / avg_lap_seconds(b, state, i), _xp_per_parcel(b, state, i)])
+		var gross := floori(v[0] * hours * rate)
 		var parts := _split(b, state, i, gross)
 		_earn(state, gross, parts)
 		staff += parts[0]
 		tax += parts[1]
 		money += parts[2]
-		var n := floori(cargo(b, state, i) * Economy.SECONDS_PER_HOUR / avg_lap_seconds(b, state, i) * hours * rate)
+		var n := floori(v[1] * hours * rate)
 		parcels += n
 		state.spare_drop_carry += n * spare_chance(b, state, i)
 		if i == 0:   # 1e-9: 1080 × 10 × 0.175처럼 딱 떨어져야 할 곱이 1889.999…로 1 모자라지 않게 (실수 찌꺼기만 막음)
-			xp = floori(n * _xp_per_parcel(b, state, 0) * Ability.value(b, state, "knowhow") + 1e-9)
+			xp = floori(n * v[2] * Ability.value(b, state, "knowhow") + 1e-9)
 	var spares := floori(state.spare_drop_carry)
 	state.spare_drop_carry -= spares
 	state.spares += spares
@@ -275,13 +318,14 @@ static func apply_offline(state: GameState, b: Balance, seconds_away: float) -> 
 			"full": hours >= cap, "ignored": false }
 
 
-static func _speed_at(b: Balance, t: TruckState, star: int) -> float:
-	return power(b, star) * (1.0 + Setting.total(b, t, "speed"))
+## 속도 = 출력 × (1 + 이동 속도 % [+ 장거리 속도 %: 장거리 바퀴만]). %끼리 더함
+static func _speed_at(b: Balance, t: TruckState, star: int, long := false) -> float:
+	return power(b, star) * (1.0 + Setting.total(b, t, "speed") + (Setting.total(b, t, "long_speed") if long else 0.0))
 
 
 ## 트럭 i의 달리는 초 = 도로(× 노선 road_mult) ÷ 속도. 오버부스트가 걸린 바퀴는 ÷ overboost_mult (바퀴 내내 운전 속도 overboost_mult배)
 static func _drive_at(b: Balance, s: GameState, i: int, star: int, boosted: bool) -> float:
-	var drive: float = b.road_length * _route(b, s, i)["road_mult"] / _speed_at(b, s.truck(i), star)
+	var drive: float = b.road_length * _route(b, s, i)["road_mult"] / _speed_at(b, s.truck(i), star, route_id(s, i) == "long")
 	return drive / b.overboost_mult if boosted else drive
 
 
@@ -352,11 +396,38 @@ static func _earn(s: GameState, gross: int, parts: Array) -> void:
 	s.today_tax += parts[1]
 
 
-## 배송 1건 경험치: 내 트럭만 (보조 트럭 0). 대리점이면 시내 경험치
+## 배송 1건 경험치: 내 트럭만 (보조 트럭 0). 노선에 xp_per_parcel이 있으면 그것 (장거리), 없으면 대리점이면 시내 경험치
 static func _xp_per_parcel(b: Balance, s: GameState, i: int) -> int:
 	if i > 0:
 		return 0
+	var r := _route(b, s, i)
+	if r.has("xp_per_parcel"):
+		return r["xp_per_parcel"]
 	return b.city_xp_per_parcel if s.company_stage >= GameState.AGENCY else b.driver_xp_per_parcel
+
+
+## 다음 바퀴가 탈 lap_route: 스위치가 장거리이고 갈 수 있으면 "long", 아니면 "" (기본)
+static func _next_lap_route(b: Balance, s: GameState, i: int) -> String:
+	return "long" if s.truck(i).route == "long" and can_long(b, s, i) else ""
+
+
+## 새 바퀴 출발: 이번 바퀴 노선을 정하고(장거리면 long_laps +1) 실을 건수를 굴림 (건수는 노선 stops_mult를 따름)
+static func _start_lap(s: GameState, b: Balance, i: int, rng: RandomNumberGenerator) -> void:
+	var t := s.truck(i)
+	t.lap_route = _next_lap_route(b, s, i)
+	if t.lap_route == "long":
+		s.long_laps += 1
+	t.lap_cargo = _roll_cargo(b, s, i, rng)
+
+
+## 트럭 i의 이번 바퀴 노선을 잠깐 lap_route(""/"long")로 바꿔 f를 부르고 되돌림 (다른 노선으로 돌 때의 평균 계산용. 상태는 그대로)
+static func _as_route(s: GameState, i: int, lap_route: String, f: Callable) -> Variant:
+	var t := s.truck(i)
+	var keep := t.lap_route
+	t.lap_route = lap_route
+	var v = f.call()
+	t.lap_route = keep
+	return v
 
 
 ## 시간당 수입 (hourly_income·hourly_net). net = 배송 1건 돈·팁마다 직원 몫·세금을 뗀 내 돈으로

@@ -57,6 +57,7 @@ func test_json_matches_spec() -> void:
 		"engine_guard": ["own", 10.0, [0.0, 0.0, 0.04, 0.06, 0.10]],
 		"overboost": ["own", 10.0, [0.03, 0.06, 0.09, 0.15, 0.24]],
 		"maint_cut": ["own", 10.0, [0.18, 0.30, 0.45, 0.55, 0.60]],   # v7-bal C4 시뮬 (순정 15 → 18%)
+		"long_speed": ["own", 10.0, [0.05, 0.08, 0.12, 0.20, 0.30]],   # v7b 터보 (스냅샷 5번)
 	}
 	for j in JUNK:
 		want[j] = ["junk", 12.0, [0.0, 0.0, 0.0, 0.0, 0.0]]
@@ -66,7 +67,7 @@ func test_json_matches_spec() -> void:
 		check_eq([o["kind"], o["weight"], o["values"]], [want[id][0], want[id][1], PackedFloat64Array(want[id][2])], "옵션 %s" % id)
 		check_eq(Setting.option_kind(b, id), want[id][0], "option_kind %s" % id)
 		note("%s: %s, 가중치 %s, 수치 %s" % [id, o["kind"], o["weight"], o["values"]])
-	check_eq(Setting.part_ids(b), ["cargo_box", "ecu", "tire"], "부품 (json 순서)")
+	check_eq(Setting.part_ids(b), ["cargo_box", "ecu", "tire", "turbo"], "부품 (json 순서)")
 	check_eq([Setting.unlock_star(b, "cargo_box"), Setting.unlock_star(b, "ecu")], [0, 5], "열리는 단계")
 	check_eq(b.setting_parts["cargo_box"]["options"], PackedStringArray(["speed", "fuel_cut", "cargo"] + JUNK), "적재함 옵션")
 	check_eq(b.setting_parts["ecu"]["options"], PackedStringArray(["speed", "fuel_cut", "engine_guard", "overboost"] + JUNK), "ECU 옵션")

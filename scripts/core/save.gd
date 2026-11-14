@@ -17,6 +17,7 @@
 ##   (형식 10) company_stage, today_day, today_sales, today_staff, today_tax, rank_first_done
 ##   (형식 11) premium_spares, use_premium, visitor_next { NPC id: 날짜 번호 }, visitor_day, insurer_event, insured_day
 ##            (visitor_today는 저장 안 함: Visitor.tick이 채움)
+##   (형식 12) trucks[].route, trucks[].lap_route (""/"long"), long_laps, long_unlocked
 ## 모르는 키는 버리고 범위 밖 값은 자른다. 음수 돈·스페어, 빠진 칸, 틀린 모양은 깨진 저장.
 ## 세팅: 모르는 부품·그 부품에 없는 옵션 id는 버리고, 등급·카운터는 범위로 자르고, 줄은 그 등급 줄 수까지 (앞에서부터).
 ## 형식 5 칸: 숫자가 아니면 깨진 저장, 숫자는 범위로 자름 (레벨 1~만렙, 경험치 0~다음 레벨 필요량−1, 창고·야간팀 1~표 끝,
@@ -29,10 +30,12 @@
 ##   트럭은 1 + company.helper_prices 길이(3대)까지 (넘으면 뒤를 버림).
 ## 형식 11 칸: 숫자·참거짓·글자·{ } 묶음이 아니면 깨진 저장. 고급 스페어 0 이상, 모르는 NPC id는 버리고, 모르는 보험사 이벤트는 "".
 ##   날짜 번호는 정수면 그대로 (시계 조작 허용: 너무 먼 다음 방문은 Visitor.tick이 다시 굴림).
+## 형식 12 칸: 글자·숫자·참거짓이 아니면 깨진 저장. 노선은 "long" 말고는 "" (기본), 장거리를 못 가는 트럭(대리점 전·+10 아래)은 ""로.
+##   장거리 바퀴 수 0 이상으로 자름.
 ## 형식 3~9 파일은 그대로 읽는다 (없는 칸은 처음 값: 세팅 없음, 오버부스트 안 걸린 바퀴, 레벨 1, 창고·야간팀 Lv1, 퀘스트 처음부터,
 ##   lap_cargo 0 = 지금 바퀴 건수를 다음 진행 때 굴림, 능력치 없음, 쿠폰 0, 주간 진행 0·주 모름, 급송 켜짐·벨 시계 새로,
 ##   명장 안 열림 → 이미 +10을 넘었으면 다음 Master.tick에서 열림, 개인 기사·오늘 집계 0·날짜 모름·1위 알림 안 보냄,
-##   고급 스페어 0·특별 NPC 다음 방문은 첫 tick에서 굴림). 형식 10까지의 coupons(보험 쿠폰)는 버림 (출시 전이라 바꿔 주지 않음).
+##   고급 스페어 0·특별 NPC 다음 방문은 첫 tick에서 굴림, 노선 기본·장거리 0바퀴·장거리 알림 안 보냄). 형식 10까지의 coupons(보험 쿠폰)는 버림 (출시 전이라 바꿔 주지 않음).
 ##
 ## 백업: 쓸 때마다 지금 파일을 path.bak1(가장 최근) → bak2 → bak3 으로 돌린다.
 ## 본 파일이 깨졌으면 path.broken 으로 옮기고 bak1 → bak2 → bak3 중 읽히는 첫 파일로 살린다.
@@ -46,14 +49,15 @@ const Driver = preload("res://scripts/core/driver.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Quest = preload("res://scripts/core/quest.gd")
 const Setting = preload("res://scripts/core/setting.gd")
+const Trip = preload("res://scripts/core/trip.gd")
 const TruckState = preload("res://scripts/core/truck_state.gd")
 const Visitor = preload("res://scripts/core/visitor.gd")
 
 const DEFAULT_PATH := "user://save.json"
-const FORMAT_VERSION := 11  ## 1: v0·v1 / 2: 튜닝(v2) / 3: 한 바퀴 경제·트럭 여러 대(v3) / 4: 세팅 돌리기(v4) / 5: 기사 레벨·퀘스트·창고(v5)
+const FORMAT_VERSION := 12  ## 1: v0·v1 / 2: 튜닝(v2) / 3: 한 바퀴 경제·트럭 여러 대(v3) / 4: 세팅 돌리기(v4) / 5: 기사 레벨·퀘스트·창고(v5)
                             ## 6: 트럭 lap_cargo (지금 바퀴에 실은 건수, v6-bal) / 7: 기사 능력치 abilities (v5b)
                             ## 8: 쿠폰·주간 배송 목표·급송 전화 (v6b C1) / 9: 명장 방문일 (v6b C2) / 10: 회사·오늘 집계 (v7a)
-                            ## 11: 고급 스페어·특별 NPC·보험, 쿠폰 지움 (v7-bal)
+                            ## 11: 고급 스페어·특별 NPC·보험, 쿠폰 지움 (v7-bal) / 12: 노선 스위치·장거리 (v7b)
 const OLDEST_READABLE := 3  ## 이보다 옛 형식은 변환하지 않고 옮겨 둔다
 
 enum Status { OK, NONE, BROKEN }   ## 읽음 / 저장 파일 없음(새 게임) / 깨짐(새 게임)
@@ -72,6 +76,8 @@ const MASTER_FIELDS := ["master_unlocked", "master_day", "master_next_day", "mas
 const COMPANY_FIELDS := ["company_stage", "today_day", "today_sales", "today_staff", "today_tax", "rank_first_done"]
 ## 형식 11에 더한 칸 (GameState 변수 이름 그대로, visitor_next 빼고). 읽기는 _v11_from
 const VISITOR_FIELDS := ["premium_spares", "use_premium", "visitor_day", "insurer_event", "insured_day"]
+## 형식 12에 더한 트럭 칸 (TruckState 변수 이름 그대로, 글자 ""/"long")
+const TRUCK_ROUTES := ["route", "lap_route"]
 const MAX_WHOLE := 1 << 53   # JSON 숫자가 정확한 정수로 왕복하는 한계
 const MAX_MONEY := 999_999_999_999_999_999   ## 돈 글자 18자리까지. 넘으면 이 값으로 자름 (to_int가 넘치면 음수로 돌아감)
 
@@ -86,6 +92,8 @@ static func to_dict(s: GameState, saved_at_unix: int) -> Dictionary:
 			"lap_delivered": t.lap_delivered,
 			"boost_lap": t.boost_lap,
 			"lap_cargo": t.lap_cargo,
+			"route": t.route,
+			"lap_route": t.lap_route,
 			"success_count": t.success_count,
 			"fail_count": t.fail_count,
 			"destroy_count": t.destroy_count,
@@ -108,6 +116,8 @@ static func to_dict(s: GameState, saved_at_unix: int) -> Dictionary:
 		"rush_next": s.rush_next,
 		"rush_ring": s.rush_ring,
 		"rush_left": s.rush_left,
+		"long_laps": s.long_laps,
+		"long_unlocked": s.long_unlocked,
 	}
 	for key in MASTER_FIELDS + COMPANY_FIELDS + VISITOR_FIELDS:
 		d[key] = s.get(key)
@@ -167,6 +177,11 @@ static func from_dict(d, b: Balance) -> Dictionary:
 		if not _is_finite_number(lap_cargo):
 			return _broken("trucks[%d].lap_cargo 가 숫자가 아님: %s" % [k, lap_cargo])
 		t.lap_cargo = clampi(floori(lap_cargo), 0, 1 << 30)
+		for key in TRUCK_ROUTES:   # 형식 11까지는 없음 → 기본
+			var route = td.get(key, "")
+			if typeof(route) != TYPE_STRING:
+				return _broken("trucks[%d].%s 가 글자가 아님: %s" % [k, key, route])
+			t.set(key, "long" if route == "long" else "")
 		var settings = _settings_from(td.get("settings", {}), b)   # 형식 3에는 없음
 		if settings == null:
 			return _broken("trucks[%d].settings 모양이 틀림" % k)
@@ -184,6 +199,8 @@ static func from_dict(d, b: Balance) -> Dictionary:
 		why = _v10_from(d, b, s)   # 형식 9까지는 없음 → 처음 값
 	if why == "":
 		why = _v11_from(d, s)   # 형식 10까지는 없음 → 처음 값
+	if why == "":
+		why = _v12_from(d, b, s)   # 형식 11까지는 없음 → 처음 값
 	if why != "":
 		return _broken(why)
 	return _result(Status.OK, s, saved_at)
@@ -418,6 +435,23 @@ static func _v11_from(d: Dictionary, s: GameState) -> String:
 		if not _is_finite_number(nxt[id]):
 			return "visitor_next.%s 가 숫자가 아님: %s" % [id, nxt[id]]
 		s.visitor_next[id] = floori(nxt[id])
+	return ""
+
+
+## 형식 12 칸 (장거리) → s. 회사 단계·트럭 단계를 다 읽은 뒤에 (장거리를 못 가는 트럭은 노선을 기본으로). 틀린 모양이면 그 이유
+static func _v12_from(d: Dictionary, b: Balance, s: GameState) -> String:
+	var laps = d.get("long_laps", 0)
+	if not _is_finite_number(laps):
+		return "long_laps 가 숫자가 아님: %s" % [laps]
+	s.long_laps = clampi(floori(laps), 0, MAX_WHOLE)
+	var shown = d.get("long_unlocked", false)
+	if typeof(shown) != TYPE_BOOL:
+		return "long_unlocked 가 true/false가 아님: %s" % [shown]
+	s.long_unlocked = shown
+	for i in s.trucks.size():
+		if not Trip.can_long(b, s, i):
+			s.truck(i).route = ""
+			s.truck(i).lap_route = ""
 	return ""
 
 

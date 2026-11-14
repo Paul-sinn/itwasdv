@@ -1,5 +1,5 @@
 {
-  "version": "0.15",
+  "version": "0.16",
   "trip": {
     "unit_price": 2500,
     "base_cargo": 20,
@@ -61,7 +61,8 @@
   },
   "routes": {
     "town": { "price_mult": 1.0, "road_mult": 1.0, "stops_mult": 1.0 },
-    "city": { "price_mult": 1.2, "road_mult": 0.4, "stops_mult": 2.0 }
+    "city": { "price_mult": 1.2, "road_mult": 0.4, "stops_mult": 2.0 },
+    "long": { "price_mult": 4.0, "road_mult": 5.0, "stops_mult": 1.0, "xp_per_parcel": 30, "unlock_star": 10 }
   },
   "depot": {
     "warehouse_hours": [4, 6, 8, 12],
@@ -100,6 +101,11 @@
       "tire": {
         "unlock": "agency",
         "options": ["speed", "fuel_cut", "maint_cut", "junk_ride", "junk_scent", "junk_cupholder", "junk_radio", "junk_gloss"]
+      },
+      "turbo": {
+        "unlock": "agency",
+        "unlock_star": 10,
+        "options": ["speed", "fuel_cut", "long_speed", "junk_ride", "junk_scent", "junk_cupholder", "junk_radio", "junk_gloss"]
       }
     },
     "options": {
@@ -132,6 +138,11 @@
         "kind": "own",
         "weight": 10,
         "values": [0.18, 0.30, 0.45, 0.55, 0.60]
+      },
+      "long_speed": {
+        "kind": "own",
+        "weight": 10,
+        "values": [0.05, 0.08, 0.12, 0.2, 0.3]
       },
       "junk_ride": { "kind": "junk", "weight": 12 },
       "junk_scent": { "kind": "junk", "weight": 12 },

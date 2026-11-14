@@ -40,6 +40,7 @@ const TEST_FILES := [
 	"res://tests/test_master.gd",
 	"res://tests/test_visitor.gd",
 	"res://tests/test_city.gd",
+	"res://tests/test_long.gd",
 	"res://tests/test_depot.gd",
 	"res://tests/test_quest.gd",
 	"res://tests/test_fmt.gd",

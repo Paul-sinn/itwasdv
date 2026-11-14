@@ -27,6 +27,10 @@ var today_staff: int = 0          ## 오늘 직원 몫
 var today_tax: int = 0            ## 오늘 세금
 var rank_first_done: bool = false ## 시내 1위 알림을 보냈나 (한 번만)
 
+# --- v7b 장거리 노선 (trip.gd). 전부 저장 ---
+var long_laps: int = 0            ## 장거리로 출발한 바퀴 수 (모든 트럭, 켜 둔 동안만. 퀘스트용)
+var long_unlocked: bool = false   ## 장거리 열림 알림을 보냈나 (한 번만)
+
 # --- 기사 레벨 (driver.gd) ---
 var driver_level: int = 1
 var driver_xp: int = 0            ## 지금 레벨에서 쌓은 경험치
@@ -119,6 +123,7 @@ func add_event(event: Dictionary) -> void:
 ##   { "type": "weekly_done", "money": int, "xp": int } / { "type": "rush_call" } / { "type": "rush_missed" } (v6b, 돈 보상은 v7-bal)
 ##   { "type": "master_unlocked" } / { "type": "master_notice", "bonus": String } / { "type": "master_visit", "bonus": String } (v6b)
 ##   { "type": "agency_founded" } / { "type": "helper_bought", "truck": int } / { "type": "rank_first" } (v7a)
+##   { "type": "long_unlocked" } (v7b: 대리점 + 어느 트럭이 처음 +10 → 장거리·터보 열림. 한 번만)
 ##   { "type": "visitor", "who": String, "event": String(보험사 이벤트 id 또는 ""), "gift": int(부품상만) } (v7-bal)
 func take_events() -> Array:
 	var out := _events

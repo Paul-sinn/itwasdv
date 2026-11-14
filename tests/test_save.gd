@@ -129,12 +129,12 @@ func test_write_then_read_same() -> void:
 	_clean()
 
 
-func test_format_11_dict() -> void:
+func test_format_12_dict() -> void:
 	var d := Save.to_dict(_sample_state(), 1794000000)
-	check_eq(d["version"], 11, "저장 형식")
+	check_eq(d["version"], 12, "저장 형식")
 	var keys := d.keys()
 	keys.sort()
-	check_eq(keys, ["abilities", "ability_points", "company_stage", "driver_level", "driver_xp", "insured_day", "insurer_event", "master_bonus",
+	check_eq(keys, ["abilities", "ability_points", "company_stage", "driver_level", "driver_xp", "insured_day", "insurer_event", "long_laps", "long_unlocked", "master_bonus",
 			"master_bonus_week", "master_day", "master_next_bonus", "master_next_day", "master_notice_week", "master_unlocked", "master_visit_week",
 			"master_week", "milestones_done", "money", "night_level", "parcels_total", "parts_rolled", "premium_spares", "quest_index",
 			"rank_first_done", "reputation", "rush_enabled", "rush_left", "rush_next", "rush_ring", "saved_at_utc", "setting_rolls",
@@ -143,7 +143,8 @@ func test_format_11_dict() -> void:
 			"저장 칸 (active_bonus·visitor_today는 저장 안 함, coupons 지움)")
 	var tk: Array = d["trucks"][0].keys()
 	tk.sort()
-	check_eq(tk, ["boost_lap", "destroy_count", "fail_count", "lap_cargo", "lap_clock", "lap_delivered", "settings", "star", "success_count"], "트럭 칸")
+	check_eq(tk, ["boost_lap", "destroy_count", "fail_count", "lap_cargo", "lap_clock", "lap_delivered", "lap_route", "route", "settings", "star",
+			"success_count"], "트럭 칸")
 
 
 ## v6-bal B1 ⑧: 껐다 켜도 지금 바퀴의 건수가 같음 (적재량 21.6 → 21건 바퀴, 22건 바퀴 둘 다).
