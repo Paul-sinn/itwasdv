@@ -25,13 +25,13 @@ static func progress(b: Balance, state: GameState) -> Array:
 	var q := current(b, state)
 	if q.is_empty():
 		return [0, 0]
-	return [_value(state, q), q["target"]]
+	return [value_of(state, q), q["target"]]
 
 
 ## 지금 차례 퀘스트가 찼으면 보상(돈 + 경험치)을 주고 다음으로 (한 번에 하나). 끝냈으면 true
 static func check(state: GameState, b: Balance) -> bool:
 	var q := current(b, state)
-	if q.is_empty() or _value(state, q) < q["target"]:
+	if q.is_empty() or value_of(state, q) < q["target"]:
 		return false
 	state.quest_index += 1
 	state.money += q["money"]
@@ -40,8 +40,8 @@ static func check(state: GameState, b: Balance) -> bool:
 	return true
 
 
-## 퀘스트 종류별 지금 값
-static func _value(state: GameState, q: Dictionary) -> int:
+## 퀘스트 종류별 지금 값 (업적도 같은 kind는 이것으로: achievement.gd)
+static func value_of(state: GameState, q: Dictionary) -> int:
 	match q["kind"]:
 		"parcels":
 			return state.parcels_total

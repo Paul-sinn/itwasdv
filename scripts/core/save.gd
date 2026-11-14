@@ -18,7 +18,8 @@
 ##   (형식 11) premium_spares, use_premium, visitor_next { NPC id: 날짜 번호 }, visitor_day, insurer_event, insured_day
 ##            (visitor_today는 저장 안 함: Visitor.tick이 채움)
 ##   (형식 12) trucks[].route, trucks[].lap_route (""/"long"), long_laps, long_unlocked, contracts [ 시간당 금액 ], contract_carry, today_contract
-##   (형식 13) depot_upgrades { 업그레이드 id: 레벨 }
+##   (형식 13) depot_upgrades { 업그레이드 id: 레벨 }, wraps [ 랩핑 id ], trucks[].wrap, stats { 통계 칸: 숫자 },
+##            junk_seen { "옵션/등급": 본 횟수 }, junk_triples [ "옵션/등급" ], achievements_done [ 업적 id ]
 ## 모르는 키는 버리고 범위 밖 값은 자른다. 음수 돈·스페어, 빠진 칸, 틀린 모양은 깨진 저장.
 ## 세팅: 모르는 부품·그 부품에 없는 옵션 id는 버리고, 등급·카운터는 범위로 자르고, 줄은 그 등급 줄 수까지 (앞에서부터).
 ## 형식 5 칸: 숫자가 아니면 깨진 저장, 숫자는 범위로 자름 (레벨 1~만렙, 경험치 0~다음 레벨 필요량−1, 창고·야간팀 1~표 끝,
@@ -33,12 +34,14 @@
 ##   날짜 번호는 정수면 그대로 (시계 조작 허용: 너무 먼 다음 방문은 Visitor.tick이 다시 굴림).
 ## 형식 12 칸: 글자·숫자·참거짓이 아니면 깨진 저장. 노선은 "long" 말고는 "" (기본), 장거리를 못 가는 트럭(대리점 전·+10 아래)은 ""로.
 ##   장거리 바퀴 수 0 이상으로 자름. 계약은 contracts.reputation 수까지 (뒤를 버림), 금액은 0 이상 정수로, 이월은 0~1 미만, 오늘 계약 몫 0 이상.
-## 형식 13 칸: { } 묶음·숫자가 아니면 깨진 저장. 업그레이드는 모르는 id를 버리고 0~최고 레벨로 자름 (json 묶음이 없으면 최고 0 → 버림).
+## 형식 13 칸: { } 묶음·[ ] 목록·숫자·글자가 아니면 깨진 저장. 업그레이드는 모르는 id를 버리고 0~최고 레벨로 자름 (json 묶음이 없으면 최고 0 → 버림).
+##   랩핑·업적·도감 칸은 모르는 id·겹친 것을 버리고, 통계·본 횟수는 0 이상으로 자름. 입힌 랩핑이 가진 랩핑이 아니면 "".
+##   stats가 없는 옛 저장(형식 12까지)은 최고 강화 단계를 받은 첫 달성 보너스 단계에서 채움 (나머지 통계는 원래 칸에서 읽음: Stats.get_all)
 ## 형식 3~9 파일은 그대로 읽는다 (없는 칸은 처음 값: 세팅 없음, 오버부스트 안 걸린 바퀴, 레벨 1, 창고·야간팀 Lv1, 퀘스트 처음부터,
 ##   lap_cargo 0 = 지금 바퀴 건수를 다음 진행 때 굴림, 능력치 없음, 쿠폰 0, 주간 진행 0·주 모름, 급송 켜짐·벨 시계 새로,
 ##   명장 안 열림 → 이미 +10을 넘었으면 다음 Master.tick에서 열림, 개인 기사·오늘 집계 0·날짜 모름·1위 알림 안 보냄,
 ##   고급 스페어 0·특별 NPC 다음 방문은 첫 tick에서 굴림, 노선 기본·장거리 0바퀴·장거리 알림 안 보냄, 기업 계약 없음,
-##   물류센터 업그레이드 Lv0). 형식 10까지의 coupons(보험 쿠폰)는 버림 (출시 전이라 바꿔 주지 않음).
+##   물류센터 업그레이드 Lv0, 랩핑·업적·도감 없음). 형식 10까지의 coupons(보험 쿠폰)는 버림 (출시 전이라 바꿔 주지 않음).
 ##
 ## 백업: 쓸 때마다 지금 파일을 path.bak1(가장 최근) → bak2 → bak3 으로 돌린다.
 ## 본 파일이 깨졌으면 path.broken 으로 옮기고 bak1 → bak2 → bak3 중 읽히는 첫 파일로 살린다.
@@ -52,6 +55,7 @@ const Driver = preload("res://scripts/core/driver.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Quest = preload("res://scripts/core/quest.gd")
 const Setting = preload("res://scripts/core/setting.gd")
+const Stats = preload("res://scripts/core/stats.gd")
 const Trip = preload("res://scripts/core/trip.gd")
 const Upgrade = preload("res://scripts/core/upgrade.gd")
 const TruckState = preload("res://scripts/core/truck_state.gd")
@@ -99,6 +103,7 @@ static func to_dict(s: GameState, saved_at_unix: int) -> Dictionary:
 			"lap_cargo": t.lap_cargo,
 			"route": t.route,
 			"lap_route": t.lap_route,
+			"wrap": t.wrap,
 			"success_count": t.success_count,
 			"fail_count": t.fail_count,
 			"destroy_count": t.destroy_count,
@@ -127,6 +132,11 @@ static func to_dict(s: GameState, saved_at_unix: int) -> Dictionary:
 		"contract_carry": s.contract_carry,
 		"today_contract": s.today_contract,
 		"depot_upgrades": s.depot_upgrades.duplicate(),
+		"wraps": s.wraps.duplicate(),
+		"stats": s.stats.duplicate(),
+		"junk_seen": s.junk_seen.duplicate(),
+		"junk_triples": s.junk_triples.duplicate(),
+		"achievements_done": s.achievements_done.duplicate(),
 	}
 	for key in MASTER_FIELDS + COMPANY_FIELDS + VISITOR_FIELDS:
 		d[key] = s.get(key)
@@ -191,6 +201,10 @@ static func from_dict(d, b: Balance) -> Dictionary:
 			if typeof(route) != TYPE_STRING:
 				return _broken("trucks[%d].%s 가 글자가 아님: %s" % [k, key, route])
 			t.set(key, "long" if route == "long" else "")
+		var wrap = td.get("wrap", "")   # 형식 12까지는 없음 → 랩핑 없음. 가진 랩핑인지는 _v13_from에서
+		if typeof(wrap) != TYPE_STRING:
+			return _broken("trucks[%d].wrap 이 글자가 아님: %s" % [k, wrap])
+		t.wrap = wrap
 		var settings = _settings_from(td.get("settings", {}), b)   # 형식 3에는 없음
 		if settings == null:
 			return _broken("trucks[%d].settings 모양이 틀림" % k)
@@ -491,6 +505,45 @@ static func _v13_from(d: Dictionary, b: Balance, s: GameState) -> String:
 		var lv := clampi(floori(ups[id]), 0, Upgrade.max_level(b, id))
 		if lv > 0:
 			s.depot_upgrades[id] = lv
+	var known := { "wraps": b.wraps.map(func(w): return w["id"]), "achievements_done": b.achievements.map(func(a): return a["id"]),
+			"junk_triples": [] }
+	for op in b.setting_options:
+		if b.setting_options[op]["kind"] == "junk":
+			for g in Balance.SETTING_GRADES:
+				known["junk_triples"].append(Stats.cell(op, g))
+	for key in known:   # 글자 목록: 아는 것만, 겹치지 않게
+		var list = d.get(key, [])
+		if typeof(list) != TYPE_ARRAY:
+			return "%s 가 [ ] 목록이 아님: %s" % [key, list]
+		for v in list:
+			if typeof(v) == TYPE_STRING and known[key].has(v) and not s.get(key).has(v):
+				s.get(key).append(v)
+	for t: TruckState in s.trucks:
+		if not s.wraps.has(t.wrap):
+			t.wrap = ""
+	var seen = d.get("junk_seen", {})
+	if typeof(seen) != TYPE_DICTIONARY:
+		return "junk_seen 이 { } 묶음이 아님: %s" % [seen]
+	for cell in seen:
+		if not known["junk_triples"].has(cell):
+			continue
+		if not _is_finite_number(seen[cell]):
+			return "junk_seen.%s 가 숫자가 아님: %s" % [cell, seen[cell]]
+		if seen[cell] >= 1:
+			s.junk_seen[cell] = clampi(floori(seen[cell]), 1, MAX_WHOLE)
+	if not d.has("stats"):   # 옛 저장: 최고 단계는 받은 첫 달성 보너스 단계에서 (지금 트럭 단계는 Stats.best_star가 같이 봄)
+		s.stats["best_star"] = s.milestones_done.max() if not s.milestones_done.is_empty() else 0
+		return ""
+	var st = d["stats"]
+	if typeof(st) != TYPE_DICTIONARY:
+		return "stats 가 { } 묶음이 아님: %s" % [st]
+	for key in Stats.COUNTERS:
+		if not st.has(key):
+			continue
+		if not _is_finite_number(st[key]):
+			return "stats.%s 가 숫자가 아님: %s" % [key, st[key]]
+		s.stats[key] = maxf(0.0, st[key]) if key == "seconds_on" else clampi(floori(st[key]), 0, MAX_WHOLE)
+	s.stats["best_star"] = mini(s.stats.get("best_star", 0), b.max_star)
 	return ""
 
 

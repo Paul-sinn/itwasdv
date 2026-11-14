@@ -11,6 +11,7 @@ extends RefCounted
 
 const Balance = preload("res://scripts/core/balance.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
+const Stats = preload("res://scripts/core/stats.gd")
 const Visitor = preload("res://scripts/core/visitor.gd")
 const Weekly = preload("res://scripts/core/weekly.gd")
 
@@ -100,6 +101,7 @@ static func tick(state: GameState, b: Balance, now_local: int, rng: RandomNumber
 	if is_visiting(state, now_local):
 		if state.master_visit_week != week:
 			state.master_visit_week = week
+			Stats.add(state, "master_visits", 1)
 			state.add_event({ "type": "master_visit", "bonus": state.master_bonus })
 		state.active_bonus = state.master_bonus
 	else:
