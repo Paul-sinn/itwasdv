@@ -39,6 +39,8 @@
 ## v8b: 설정 값은 Prefs (prefs.gd). 켤 때 읽고, 고른 언어가 있으면 화면을 만들기 전에 적용.
 ##      [설정] 고르기 → Prefs.set_value → 적용 (언어: 번역 바꾸기 → 언어가 바뀌면 화면 글자를 retranslate로 다시),
 ##      [기본값으로] → Prefs.reset + 큰 화면 방식도 전체 화면으로 (게임 저장은 안 건드림)
+##      U2: 띠 설정 → screen.apply_strip (항상 위·크기·자리·모니터). 띠 투명도는 작은 화면일 때 이 노드 modulate (큰 화면은 늘 100%).
+##          띠 크기는 창이 커지면 _layout이 동네를 창에 맞춰 키움 (그림·글자·클릭 받는 곳 같이)
 extends Control
 
 const Ability = preload("res://scripts/core/ability.gd")
@@ -257,6 +259,7 @@ func _layout() -> void:
 	var view := get_viewport_rect().size
 	_bg.visible = not screen.is_transparent()
 	var full := is_full()
+	modulate.a = 1.0 if full else Prefs.get_value("strip/opacity")
 	panel.visible = full
 	small_button.visible = full
 	settings_button.visible = full
@@ -653,10 +656,14 @@ func _on_rush_picked(on: bool) -> void:
 
 
 ## [설정] Prefs 값 고름 → 저장 → 적용. 언어는 번역을 바꾸면 NOTIFICATION_TRANSLATION_CHANGED로 글자를 다시 씀,
-## 숫자 표기·알림은 다음 그리기부터 (Fmt.money·town.notify가 Prefs를 봄)
+## 숫자 표기·알림은 다음 그리기부터 (Fmt.money·town.notify가 Prefs를 봄), 띠는 screen.apply_strip + 다시 배치 (투명도는 _layout)
 func _on_pref_picked(key: String, value: Variant) -> void:
-	if Prefs.set_value(key, value) and key == "ui/locale":
-		TranslationServer.set_locale(Prefs.locale())
+	if Prefs.set_value(key, value):
+		if key == "ui/locale":
+			TranslationServer.set_locale(Prefs.locale())
+		elif key.begins_with("strip/"):
+			screen.apply_strip()
+			_layout()
 	settings.show_prefs()
 
 
@@ -664,7 +671,9 @@ func _on_pref_picked(key: String, value: Variant) -> void:
 func _on_defaults_pressed() -> void:
 	Prefs.reset()
 	screen.set_full_style(ScreenMode.FullStyle.FULLSCREEN)
+	screen.apply_strip()
 	TranslationServer.set_locale(Prefs.locale())
+	_layout()
 	open_settings()
 
 

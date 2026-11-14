@@ -7,7 +7,13 @@
 ##     ⑧ 틀린 설정값(손으로 고친 파일) → 기본값, 맞는 값은 그대로 읽힘 (0.85·1.25 같은 소수도)
 ##     ⑨ [기본값으로]: 설정 파일의 [ui]·[strip] 값이 지워지고 기본값이 눌린 모양, 언어 = PC 언어, 큰 화면 = 전체 화면,
 ##        게임 저장(급송 전화·돈)과 처음 말풍선 기록은 그대로
-## 진짜 저장·설정 파일은 건드리지 않는다.
+## U2: ⑤ 띠 사각형 순수 함수(DesktopWindow.strip_rect): 크기 3 × 자리 2 × 배치가 다른 가짜 모니터 2개에서
+##        크기 = 480x220 × 배율, 쓸 수 있는 영역 안, 아래 끝 = 작업표시줄 위, 고른 구석에 붙음
+##     ⑥ [설정] 띠 크기 3가지 → [작게]: 동네가 창에 맞게 커지고 visible_rects()가 창 안, 건물·구석 줄이 보이는 곳(클릭 받는 다각형) 안,
+##        건물 클릭 자리 = 그림 자리(설계 좌표 × 배율), 건물을 누르면 그 건물 화면·빈 곳은 그대로. 투명도 4가지 = 띠만 (큰 화면 100%)
+##     ⑦ 뽑힌 모니터 번호 → 주 모니터 (DesktopWindow.pick_screen), 설정값은 남고 [설정]에는 [주 모니터]가 눌린 모양
+##     ⑩ 기본값이면 띠 자리·크기가 v8a와 같음 (옛 식), 투명도 100%, 항상 위 켜기 (기존 확인 전부는 따로 돌림)
+## 진짜 저장·설정 파일은 건드리지 않는다. 진짜 창(항상 위·투명도·두 번째 모니터)은 사람이 본다.
 ##
 ## 실행:
 ##   <GODOT_CONSOLE> --headless --path <프로젝트> -s tests/check_v8b.gd
@@ -16,6 +22,8 @@ extends SceneTree
 const ErrorWatch = preload("res://tests/error_watch.gd")   ## 실행 중 스크립트 오류가 나면 실패로 끝냄
 const MAIN_SCENE := "res://scenes/main.tscn"
 const Balance = preload("res://scripts/core/balance.gd")
+const ClickRegion = preload("res://scripts/ui/click_region.gd")
+const DesktopWindow = preload("res://scripts/ui/desktop_window.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Rush = preload("res://scripts/core/rush.gd")
 const Save = preload("res://scripts/core/save.gd")
@@ -54,6 +62,9 @@ func _run() -> void:
 	await _notices(b)
 	await _bad_values()
 	await _defaults()
+	_strip_rects()
+	await _strip_sizes()
+	await _unplugged()
 
 	Engine.time_scale = 1.0
 	TranslationServer.set_locale("ko")
@@ -396,7 +407,148 @@ func _defaults() -> void:
 	await _close(m)
 
 
+# ---------------- ⑤⑩ 띠 사각형 (순수 함수) ----------------
+
+func _strip_rects() -> void:
+	# 가짜 모니터 두 개: 주 모니터(아래 작업표시줄 40) + 왼쪽 위로 비켜 놓인 큰 모니터(아래 작업표시줄 48)
+	var screens := [
+		[Rect2i(0, 0, 1920, 1080), Rect2i(0, 0, 1920, 1040)],
+		[Rect2i(-2560, -300, 2560, 1440), Rect2i(-2560, -300, 2560, 1392)],
+	]
+	var bad := []
+	var n := 0
+	for sc: Array in screens:
+		var usable: Rect2i = sc[1]
+		for scale: float in Prefs.CHOICES["strip/scale"]:
+			for corner: String in Prefs.CHOICES["strip/corner"]:
+				n += 1
+				var r := DesktopWindow.strip_rect(sc[0], usable, scale, corner)
+				var size := Vector2i((Vector2(Feel.SMALL_SIZE) * scale).round())
+				var at_corner := r.position.x == usable.position.x if corner == "left" else r.end.x == usable.end.x
+				if r.size != size or not usable.encloses(r) or r.end.y != usable.end.y or not at_corner:
+					bad.append("%s ×%s %s → %s" % [usable, scale, corner, r])
+	var a: Array = screens[0]
+	var old := Rect2i(a[1].end - Feel.SMALL_SIZE, Feel.SMALL_SIZE)   # v8a small_rect 식
+	var same: bool = DesktopWindow.strip_rect(a[0], a[1], Prefs.DEFAULTS["strip/scale"], Prefs.DEFAULTS["strip/corner"]) == old
+	# 쓸 수 있는 영역이 모니터 밖으로 오면 모니터 안에
+	var odd := DesktopWindow.strip_rect(Rect2i(0, 0, 1920, 1080), Rect2i(5000, 0, 100, 100), 1.0, "right")
+	_report(bad.is_empty() and n == 12 and odd == Rect2i(1440, 860, 480, 220),
+			"⑤ 띠 사각형 %d가지 (크기 3 × 자리 2 × 모니터 2): 크기 = 480x220 × 배율, 쓸 수 있는 영역 안, 아래 끝 = 작업표시줄 위, 고른 구석 %s" % [n, bad])
+	_clean()
+	_report(same and DesktopWindow.strip_size(Prefs.get_value("strip/scale")) == Feel.SMALL_SIZE and Prefs.get_value("strip/always_on_top") == true
+			and Prefs.get_value("strip/opacity") == 1.0,
+			"⑩ 기본값: 띠 자리 = v8a 식 %s (주 모니터 오른쪽 아래 480x220), 항상 위 켜기, 투명도 100%%" % old)
+
+
+# ---------------- ⑥ 띠 크기·투명도 ----------------
+
+func _strip_sizes() -> void:
+	TranslationServer.set_locale("ko")
+	_clean()
+	var m := await _launch_strip()
+	var lines := []
+	var bad := []
+	for scale: float in Prefs.CHOICES["strip/scale"]:
+		await _go_full(m)
+		_click(m.settings_button.get_global_rect().get_center())
+		await _frames(2)
+		_click(m.settings.pref_buttons["strip/scale"][scale].get_global_rect().get_center())
+		await _frames(2)
+		_click(m.small_button.get_global_rect().get_center())
+		await _frames(3)
+		var view: Vector2 = m.get_viewport_rect().size
+		var win := Rect2(Vector2.ZERO, view)
+		var rects: Array = m.visible_rects()
+		var poly := ClickRegion.build(rects, view.y)
+		var outside := rects.filter(func(r: Rect2): return not win.encloses(r))
+		var town = m.town
+		var zoom_ok: bool = is_equal_approx(town.zoom, scale) and Vector2i(view) == DesktopWindow.strip_size(scale)
+		var spots := {}
+		for id: String in town.building_rects():
+			var spot := _town_spot(id)
+			var drawn := Rect2(town.global_position + town.origin + spot.position * scale, spot.size * scale)
+			var got: Rect2 = town.building_rects()[id]
+			got.position += town.global_position
+			spots[id] = got
+			if not got.is_equal_approx(drawn) or not _covered(rects, got) or not ClickRegion.contains_even_odd(poly, got.get_center()):
+				bad.append("×%s %s 그림 %s / 클릭 %s" % [scale, id, drawn, got])
+		var hud := Rect2(town._money_label.global_position, town._money_label.size)
+		if not _covered(rects, hud):
+			bad.append("×%s 구석 줄 %s" % [scale, hud])
+		lines.append("×%s 창 %s 동네 배수 %s 사각형 %d개(창 밖 %d)" % [scale, Vector2i(view), Fmt.num(town.zoom), rects.size(), outside.size()])
+		# 빈 곳(동네 위쪽 가운데 하늘)은 눌러도 그대로, 건물은 그 건물 화면
+		_click(Vector2(view.x * 0.6, view.y * 0.05))
+		await _frames(2)
+		var stays: bool = not m.is_full()
+		_click(spots["car_center"].get_center())
+		await _frames(3)
+		var opens: bool = m.is_full() and m.panel.building == "car_center"
+		if not (stays and opens):
+			bad.append("×%s 빈 곳 그대로 %s / 카센터 클릭 → %s" % [scale, stays, m.panel.building])
+		if not zoom_ok or not outside.is_empty():
+			bad.append("×%s 창·배수 %s" % [scale, Vector2i(view)])
+	_report(bad.is_empty(), "⑥ [설정] 띠 크기 3가지 → [작게]: %s, 건물·구석 줄이 보이는 곳 안, 건물 클릭 자리 = 그림 자리, 빈 곳은 그대로·카센터는 열림 %s" % [lines, bad])
+
+	# 투명도: 띠만 (큰 화면은 100%)
+	var got := []
+	var ok := true
+	for op: float in Prefs.CHOICES["strip/opacity"]:
+		_click(m.settings_button.get_global_rect().get_center())
+		await _frames(2)
+		_click(m.settings.pref_buttons["strip/opacity"][op].get_global_rect().get_center())
+		await _frames(2)
+		var full_a: float = m.modulate.a
+		_click(m.small_button.get_global_rect().get_center())
+		await _frames(2)
+		got.append("%s → 띠 %s" % [m.settings.pref_buttons["strip/opacity"][op].text, Fmt.num(m.modulate.a)])
+		ok = ok and is_equal_approx(m.modulate.a, op) and full_a == 1.0
+		await _go_full(m)
+	_report(ok, "⑥ [설정] 투명도 %s, 큰 화면은 늘 100%%" % [got])
+	await _close(m)
+
+
+## 동네 설계 좌표의 건물 자리
+func _town_spot(id: String) -> Rect2:
+	return { "tuning": Feel.TOWN_TUNING_RECT, "depot": Feel.TOWN_DEPOT_RECT, "car_center": Feel.TOWN_CAR_CENTER_RECT, "office": Feel.TOWN_OFFICE_RECT }[id]
+
+
+## r이 보이는 곳 사각형 하나 안에 다 들어가나 (1픽셀 여유)
+func _covered(rects: Array, r: Rect2) -> bool:
+	return rects.any(func(v: Rect2): return v.grow(1.0).encloses(r))
+
+
+# ---------------- ⑦ 뽑힌 모니터 ----------------
+
+func _unplugged() -> void:
+	var cases := [[5, 2, 0, 0], [1, 2, 0, 1], [-1, 3, 1, 1], [2, 2, 1, 1], [0, 1, 0, 0], [3, 0, 0, 0]]
+	var bad := cases.filter(func(c): return DesktopWindow.pick_screen(c[0], c[1], c[2]) != c[3])
+	_clean()
+	Prefs.set_value("strip/screen", 5)   # 모니터 6을 골라 둔 채 뽑힘
+	Prefs.read_file()
+	var kept: bool = Prefs.get_value("strip/screen") == 5 and DesktopWindow.screen_index() == DisplayServer.get_primary_screen()
+	TranslationServer.set_locale("ko")
+	var m := await _launch()
+	await _go_full(m)
+	_click(m.settings_button.get_global_rect().get_center())
+	await _frames(2)
+	var shown: bool = m.settings.pref_buttons["strip/screen"][-1].button_pressed and Prefs.get_value("strip/screen") == 5
+	_report(bad.is_empty() and kept and shown,
+			"⑦ 고른 모니터가 없으면 주 모니터 (pick_screen %d가지 %s), 설정값 5는 남고 [설정]에는 [%s]가 눌린 모양" % [
+			cases.size(), bad, m.settings.pref_buttons["strip/screen"][-1].text])
+	await _close(m)
+
+
 # ---------------- 도우미 ----------------
+
+## 띠 크기 설정대로 창 크기를 바꾸는 _launch (진짜 창에서 DesktopWindow가 하는 일을 화면 없이 흉내)
+func _launch_strip() -> Node:
+	var m := await _launch()
+	m.screen.mode_changed.connect(func(mode):
+		if mode == ScreenMode.Mode.SMALL:
+			root.size = DesktopWindow.strip_size(Prefs.get_value("strip/scale")))
+	return m
+
+
 
 ## 작은 화면 크기로 띄움 (현지 시각 고정, 게임 시간은 멈춤, 급송 벨 끔). 저장·설정은 지금 있는 시험 파일 그대로
 func _launch() -> Node:
