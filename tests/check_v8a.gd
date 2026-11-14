@@ -1,7 +1,5 @@
-## v8a U1 완료 기준 자동 확인. 진짜 게임 화면(main.tscn)에 진짜 클릭을 넣어서 본다.
-## 물류센터 업그레이드는 진짜 계산(scripts/core/upgrade.gd, C1). C2 전이라 랩핑·통계·도감·업적 값은 껍데기
-## (scripts/ui/stub_*.gd: 지시서 약속과 같은 이름·인자)에 준비로 넣는다. C2를 합치면 준비를 진짜 상태
-## (GameState.wraps · stats · junk_seen · achievements_done, TruckState.wrap)로 바꾼다.
+## v8a U1·U2 완료 기준 자동 확인. 진짜 게임 화면(main.tscn)에 진짜 클릭을 넣어서 본다.
+## 값은 전부 진짜 계산 (scripts/core/ upgrade·wrap·stats·achievement). 지난 기록·돈·단계를 state에 넣는 것만 준비로 한다.
 ## ① 랩핑 그림: Truck.body_shapes 5가지(랩핑 없음 + 4개)가 서로 다르고, 점이 전부 트럭 몸통 안 (보이는 곳 그대로), 양쪽 방향, 반창고는 원래 색 위에
 ## ② 튜닝숍 [랩핑]: 카드 4개 (미리 보기·이름), 구매용 [값] 클릭 → Wrap.buy (모자라면 꺼짐·눌러도 그대로), 보상용 "업적 '…' 달성하면 받아요"(버튼 없음),
 ##    [입히기] → 띠 트럭 랩핑 (큰 화면·작은 화면 같은 트럭), "입는 중" + [벗기기] → 랩핑 없음, 2호차 탭 → 보조 트럭에만
@@ -10,6 +8,8 @@
 ##    다 사면 "(최고 단계)", 대리점이면 버튼 대신 "동네에서만 살 수 있어요 (효과는 유지)", Upgrade.enabled 거짓이면 숨김
 ##    + 업그레이드 3개를 산 뒤 화면 한 바퀴 표시 = 계산: 튜닝숍 시간당 줄(Trip.hourly_income), [세팅] "한 바퀴 적재량 N건"(Trip.cargo),
 ##      대리점 뒤 시내 정차할 곳 수(ceil(Trip.cargo), 기본 적재함 효과 유지)
+## ⑦ 업적 알림: 한 프레임에 여러 개면 "업적 N개 달성!" 하나, [강화] 클릭 +18 성공 → "업적 달성: 꿈의 +18 / 랩핑 '골드 +18' 받음" → [입히기],
+##    퍼짐 → 반창고, 옛 저장 첫 프레임에 한꺼번에 달성해도 알림 하나
 ## ⑤ ko·en 큰 화면 5가지에서 [랩핑]·[창고·할 일](개인 기사·대리점)·[기록]이 창 안, 동네·[작게]·[설정]과 안 겹침   ⑥ en 글자에 한글·키 없음
 ## 진짜 저장·설정 파일은 건드리지 않는다.
 ##
@@ -30,10 +30,11 @@ const Town = preload("res://scripts/ui/town.gd")
 const Truck = preload("res://scripts/ui/truck.gd")
 const Trip = preload("res://scripts/core/trip.gd")
 const Upgrade = preload("res://scripts/core/upgrade.gd")
-## shortcut: C2 전 껍데기. 합치면 준비를 진짜 상태로 (위 머리글)
-const Wrap = preload("res://scripts/ui/stub_wrap.gd")
-const Stats = preload("res://scripts/ui/stub_stats.gd")
-const Achievement = preload("res://scripts/ui/stub_achievement.gd")
+const Wrap = preload("res://scripts/core/wrap.gd")
+const Stats = preload("res://scripts/core/stats.gd")
+const Achievement = preload("res://scripts/core/achievement.gd")
+const Enhance = preload("res://scripts/core/enhance.gd")
+const Setting = preload("res://scripts/core/setting.gd")
 const TEST_SAVE := "user://test_v8a.json"
 const TEST_SETTINGS := "user://test_v8a_settings.cfg"
 const FIT_SIZES := [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(3440, 1440), Vector2i(1280, 1300), Vector2i(2200, 800)]
@@ -62,6 +63,8 @@ func _run() -> void:
 	_shapes()
 	await _wrap_tab(b)
 	await _record_tab(b)
+	await _reward_wraps(b)
+	await _old_save(b)
 	await _upgrades(b)
 	await _upgrade_lap(b)
 	for loc in ["ko", "en"]:
@@ -70,10 +73,11 @@ func _run() -> void:
 		_report(bad.is_empty(), "⑤ %s [랩핑](트럭 3대)·[창고·할 일](개인 기사·대리점)·[기록] 큰 화면 %d가지에서 창 안, 동네·[작게]·[설정]과 안 겹침 %s" % [loc, FIT_SIZES.size(), bad])
 	TranslationServer.set_locale("ko")
 	var bad := en_texts.filter(func(x): return _untranslated(String(x)))
-	_report(bad.is_empty() and en_texts.size() >= 80, "⑥ en 랩핑 카드·[기록] 통계·도감·업적·업그레이드 줄·알림 글자 %d개에 한글·키 없음 %s" % [en_texts.size(), bad])
+	var ach_en := en_texts.filter(func(x): return String(x).contains("chievement"))
+	_report(bad.is_empty() and en_texts.size() >= 80 and not ach_en.is_empty(),
+			"⑥ en 랩핑 카드·[기록] 통계·도감·업적·업그레이드 줄·알림 글자 %d개에 한글·키 없음 %s, 업적 알림 %s" % [en_texts.size(), bad, ach_en])
 	print("    en: %s" % [en_texts.slice(0, 40)])
 
-	_reset_stubs()
 	Engine.time_scale = 1.0
 	Save.delete_file(TEST_SAVE)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SETTINGS))
@@ -116,7 +120,6 @@ func _shapes() -> void:
 # ---------------- ② 튜닝숍 [랩핑] ----------------
 
 func _wrap_tab(b: Balance) -> void:
-	_reset_stubs()
 	Save.delete_file(TEST_SAVE)
 	var m := await _launch(b)
 	var s: GameState = m.state
@@ -161,8 +164,10 @@ func _wrap_tab(b: Balance) -> void:
 	await _frames(2)
 	var worn_note: String = w.notes["stripe"].text
 	var worn_wrap: String = town.trucks[0].wrap
-	var wear_ok: bool = Wrap.worn(s, 0) == "stripe" and town.trucks[0].wrap == "stripe" and w.notes["stripe"].is_visible_in_tree() \
-			and worn_note == "입는 중" and stripe.text == "벗기기"
+	var saved = _saved_state(b)
+	var wear_ok: bool = s.truck(0).wrap == "stripe" and town.trucks[0].wrap == "stripe" and w.notes["stripe"].is_visible_in_tree() \
+			and worn_note == "입는 중" and stripe.text == "벗기기" \
+			and saved != null and saved.wraps.has("stripe") and saved.truck(0).wrap == "stripe"
 	m.screen.enter_small()
 	await _frames(3)
 	var small_ok: bool = not m.is_full() and town.trucks[0].wrap == "stripe"
@@ -171,9 +176,9 @@ func _wrap_tab(b: Balance) -> void:
 	var back_ok: bool = m.is_full() and w.is_visible_in_tree()   # 튜닝숍은 마지막에 보던 칸으로
 	_click(stripe.get_global_rect().get_center())
 	await _frames(2)
-	var off_ok: bool = Wrap.worn(s, 0) == "" and town.trucks[0].wrap == "" and stripe.text == "입히기" and not w.notes["stripe"].visible
+	var off_ok: bool = s.truck(0).wrap == "" and town.trucks[0].wrap == "" and stripe.text == "입히기" and not w.notes["stripe"].visible
 	_report(wear_ok and small_ok and back_ok and off_ok,
-			"② [입히기] → 내 트럭 랩핑 '%s' (큰 화면·띠 같은 트럭), '%s' + [벗기기] → 랩핑 없음 → [%s]" % [worn_wrap, worn_note, stripe.text])
+			"② [입히기] → 내 트럭 랩핑 '%s' (TruckState.wrap·저장, 큰 화면·띠 같은 트럭), '%s' + [벗기기] → 랩핑 없음 → [%s]" % [worn_wrap, worn_note, stripe.text])
 
 	# 2호차 탭 → 보조 트럭에만
 	_agency_with_helpers(b, s, 1)
@@ -182,7 +187,7 @@ func _wrap_tab(b: Balance) -> void:
 	await _frames(2)
 	_click(stripe.get_global_rect().get_center())
 	await _frames(2)
-	var helper_ok: bool = p.truck == 1 and w._truck == 1 and Wrap.worn(s, 1) == "stripe" and Wrap.worn(s, 0) == "" \
+	var helper_ok: bool = p.truck == 1 and w._truck == 1 and s.truck(1).wrap == "stripe" and s.truck(0).wrap == "" \
 			and town.trucks.size() == 2 and town.trucks[1].wrap == "stripe" and town.trucks[0].wrap == "" and stripe.text == "벗기기"
 	_report(helper_ok, "② 트럭 탭 [2호차] → [입히기] → 2호차만 랩핑 (띠 2호차 '%s', 내 트럭 '%s'), 미리 보기는 2호차 색" % [
 			town.trucks[1].wrap if town.trucks.size() > 1 else "?", town.trucks[0].wrap])
@@ -192,65 +197,101 @@ func _wrap_tab(b: Balance) -> void:
 # ---------------- ③ 물류센터 [기록] ----------------
 
 func _record_tab(b: Balance) -> void:
-	_reset_stubs()
 	Save.delete_file(TEST_SAVE)
 	var m := await _launch(b)
 	var s: GameState = m.state
-	# 준비: 통계·도감·업적 값 (C2 뒤에는 진짜 상태)
-	var vals := { "parcels": 12345, "money_earned": 123456789, "seconds_on": 3725.0, "best_star": 18, "tries": 40, "successes": 25,
-			"fails": 12, "destroys": 3, "insured_saves": 1, "setting_rolls": 77, "tips": 9, "master_visits": 2 }
-	Stats.values.merge(vals, true)   # 켤 때 Stats.tick이 seconds_on을 이미 넣었음
-	Stats.seen.merge({ "junk_cupholder:0": 3, "junk_cupholder:2": 1, "junk_ride:4": 12 }, true)
-	Stats.triples["junk_cupholder:0"] = true
-	Achievement.done.append_array(["first_parcel", "star_10", "star_15", "star_18"])
-	Achievement.now.merge({ "parcels_10k": 3210, "master_10": 2 }, true)
-	await _frames(2)
-	_click(m.town.building_rects()["depot"].get_center())
+	var p = m.panel
+	# 준비: 진짜 칸에 지난 기록 (배송 수, 트럭 강화 결과, 세팅 돌린 수, Stats가 세는 칸, 별 칸 하나)
+	s.parcels_total = 3210
+	s.truck(0).success_count = 25
+	s.truck(0).fail_count = 12
+	s.truck(0).destroy_count = 3
+	s.setting_rolls = 77
+	s.stats.merge({ "money_earned": 123456789, "seconds_on": 3725.0, "best_star": 12, "insured_saves": 1, "tips": 9, "master_visits": 2 }, true)
+	var star_cell := Stats.cell("junk_cupholder", 0)
+	s.junk_seen[star_cell] = 3
+	s.junk_triples.append(star_cell)
+	s.money = 1000000000000
 	await _frames(3)
-	var d = m.panel.driver
+
+	# 도감: 튜닝숍 [세팅] 적재함을 진짜로 돌려 잡옵이 나올 때까지 (나오면 고르지 않아도 칸이 채워짐)
+	_click(m.town.building_rects()["tuning"].get_center())
+	await _frames(3)
+	var st = p.setting
+	_click(p.setting_tab_button.get_global_rect().get_center())
+	await _frames(2)
+	_click(st.part_buttons["cargo_box"].get_global_rect().get_center())
+	await _frames(2)
+	m.suspense_scale = 0.05
+	var seen0 := _seen_total(s)
+	var rolls := 0
+	var junk_lines := []
+	while rolls < 30 and _seen_total(s) == seen0:
+		_click(st.roll_button.get_global_rect().get_center())
+		await _until_rolled(m)
+		await _frames(2)
+		rolls += 1
+		junk_lines = s.truck(0).part("cargo_box")["pending"]["lines"].filter(func(op): return Setting.option_kind(b, op) == "junk")
+		_click(st.keep_button.get_global_rect().get_center())   # 예전 것 (안 골라도 도감은 채워짐)
+		await _frames(2)
+	m.suspense_scale = 1.0
+
+	_click(p.building_buttons["depot"].get_global_rect().get_center())
+	await _frames(3)
+	var d = p.driver
 	_click(d.record_page_button.get_global_rect().get_center())
 	await _frames(3)
 	var r = d.record
-	var want_stats := {
-		"parcels": "12,345건", "money_earned": "%s원" % Fmt.money(123456789), "seconds_on": Fmt.away(3725.0), "best_star": "+18", "tries": "40번",
-		"successes": "25번", "fails": "12번", "destroys": "3번", "insured_saves": "1번", "setting_rolls": "77번", "tips": "9번", "master_visits": "2번",
-	}
+	var all := Stats.get_all(s)
 	var got := {}
 	var stats_ok: bool = r.is_visible_in_tree() and r.stat_values.size() == 12 and not d._depot_box.is_visible_in_tree()
-	for k: String in want_stats:
+	for k: String in all:
 		got[k] = r.stat_values[k].text
-		stats_ok = stats_ok and r.stat_values[k].is_visible_in_tree() and got[k] == want_stats[k]
-	_report(stats_ok, "③ [기록] 통계 12줄: %s" % [got.values()])
+		stats_ok = stats_ok and r.stat_values[k].is_visible_in_tree() and got[k] == _stat_text(k, all[k])
+	stats_ok = stats_ok and got["parcels"] == "3,210건" and got["money_earned"] == "%s원" % Fmt.money(123456789) and got["seconds_on"] == "1시간 2분" \
+			and got["best_star"] == "+12" and got["tries"] == "40번" and got["setting_rolls"] == "%d번" % (77 + rolls)
+	_report(stats_ok, "③ [기록] 통계 12줄 = Stats.get_all: %s" % [got.values()])
 
 	var book := Stats.junk_book(b, s)
 	var cells: Array = r.cells
+	var cells_ok := book.size() == 25 and cells.size() == 25
+	var filled := []
+	for j in mini(book.size(), cells.size()):
+		var e: Dictionary = book[j]
+		var c: Dictionary = cells[j]
+		var want_text := "%d번" % e["seen"] if e["seen"] > 0 else "?"
+		cells_ok = cells_ok and c["option"] == e["option"] and c["grade"] == e["grade"] and c["label"].text == want_text \
+				and c["star"].visible == e["triple"] and c["style"].bg_color == (Feel.COLOR_BOOK_EMPTY if e["seen"] == 0 else _cell_color(e["grade"]))
+		if e["seen"] > 0:
+			filled.append("%s %s" % [Stats.cell(e["option"], e["grade"]), c["label"].text])
 	var cup0 := _cell(cells, "junk_cupholder", 0)
-	var cup2 := _cell(cells, "junk_cupholder", 2)
-	var ride4 := _cell(cells, "junk_ride", 4)
-	var blank := _cell(cells, "junk_radio", 1)
-	var unseen := cells.filter(func(c): return c["label"].text == "?").size()
 	var head: String = r._book_head.text
-	var book_ok: bool = book.size() == 25 and cells.size() == 25 and head == "잡옵 도감 · 3 / 25칸" and unseen == 22 \
-			and cup0["label"].text == "3번" and cup0["star"].is_visible_in_tree() and cup0["star"].size.x > 0.0 \
-			and cup2["label"].text == "1번" and not cup2["star"].visible and ride4["label"].text == "12번" \
-			and blank["label"].text == "?" and not blank["star"].visible and blank["style"].bg_color == Feel.COLOR_BOOK_EMPTY \
-			and is_equal_approx(ride4["style"].bg_color.a, Feel.BOOK_CELL_ALPHA) and ride4["style"].bg_color.r == Feel.SETTING_GRADE_COLORS[4].r
-	_report(book_ok, "③ [기록] '%s' 칸 25개 (안 본 칸 '?' %d개), 컵홀더 순정 '%s' + 3줄 별, 스포츠 '%s' 별 없음, 승차감 프로토타입 '%s' 등급 색 바탕" % [
-			head, unseen, cup0["label"].text, cup2["label"].text, ride4["label"].text])
+	var book_ok: bool = cells_ok and _seen_total(s) > seen0 and not junk_lines.is_empty() \
+			and head == "잡옵 도감 · %d / 25칸" % Stats.junk_book_count(s) and cup0["star"].is_visible_in_tree() and cup0["star"].size.x > 0.0
+	_report(book_ok, "③ [세팅] %d번 돌려 잡옵 %s가 나옴 → [기록] '%s', 채운 칸 %s (= Stats.junk_book, 나머지 '?'), 3줄 별 칸에 별" % [
+			rolls, junk_lines, head, filled])
 
 	var ach_head: String = r._ach_head.text
 	var notes := {}
 	for id in ["parcels_10k", "star_18", "first_destroy", "setting_racing", "level_max"]:
 		notes[id] = r.ach_notes[id].text
-	var ach_ok: bool = r.ach_names.size() == 20 and ach_head == "업적 · 4 / 20" and r.ach_names["first_parcel"].text == "첫 배달" \
-			and r.ach_rights["star_18"].text == "달성" and r.ach_rights["parcels_10k"].text == "3,210 / 10,000" \
-			and r.ach_rights["master_10"].text == "2 / 10" and r.ach_rights["first_destroy"].text == "0 / 1" \
-			and notes["parcels_10k"] == "택배 10,000건 배달" and notes["star_18"] == "엔진 +18 첫 성공 · 보상: 랩핑 '골드 +18'" \
-			and notes["first_destroy"] == "엔진이 처음 퍼짐 · 보상: 랩핑 '반창고'" and notes["setting_racing"] == "세팅 등급 레이싱 달성" \
-			and notes["level_max"] == "기사 Lv.50 달성"
+	var rights_ok := true
+	var done := 0
+	for a: Dictionary in Achievement.all(b):
+		var id: String = a["id"]
+		var pr := Achievement.progress(b, s, id)
+		done += 1 if Achievement.is_done(s, id) else 0
+		rights_ok = rights_ok and r.ach_rights[id].text == ("달성" if Achievement.is_done(s, id) else "%s / %s" % [Fmt.count(mini(pr[0], pr[1])), Fmt.count(pr[1])])
+	var ach_ok: bool = rights_ok and r.ach_names.size() == 20 and ach_head == "업적 · %d / 20" % done and done >= 4 \
+			and Achievement.is_done(s, "first_destroy") and r.ach_rights["first_destroy"].text == "달성" \
+			and r.ach_rights["parcels_10k"].text == "3,210 / 10,000" and r.ach_rights["star_15"].text == "12 / 15" \
+			and r.ach_names["first_parcel"].text == "첫 배달" and notes["parcels_10k"] == "택배 10,000건 배달" \
+			and notes["star_18"] == "엔진 +18 첫 성공 · 보상: 랩핑 '골드 +18'" and notes["first_destroy"] == "엔진이 처음 퍼짐 · 보상: 랩핑 '반창고'" \
+			and notes["setting_racing"] == "세팅 등급 레이싱 달성" and notes["level_max"] == "기사 Lv.50 달성"
 	for id: String in r.ach_names:
 		ach_ok = ach_ok and r.ach_names[id].text != "" and not r.ach_names[id].text.begins_with("ACH_")
-	_report(ach_ok, "③ [기록] '%s' 20줄: 달성 '%s', 진행 '%s', 설명·보상 %s" % [ach_head, r.ach_rights["star_18"].text, r.ach_rights["parcels_10k"].text, notes.values()])
+	_report(ach_ok, "③ [기록] '%s' 20줄 = Achievement (달성 '%s', 진행 '%s' · '%s'), 설명·보상 %s" % [
+			ach_head, r.ach_rights["first_destroy"].text, r.ach_rights["parcels_10k"].text, r.ach_rights["star_15"].text, notes.values()])
 
 	# 휠로 스크롤 (진짜 휠 입력)
 	var sc: ScrollContainer = r.scroll
@@ -264,10 +305,91 @@ func _record_tab(b: Balance) -> void:
 	await _close(m)
 
 
+# ---------------- ⑦ 보상 랩핑 · 업적 알림 ----------------
+
+## 강화를 진짜로 눌러 +18 성공 → 골드 +18, 퍼짐 → 반창고. 알림은 한 프레임에 달성한 것을 하나로
+func _reward_wraps(b: Balance) -> void:
+	Save.delete_file(TEST_SAVE)
+	var m := await _launch(b)
+	var s: GameState = m.state
+	var p = m.panel
+	var town = m.town
+	s.master_unlocked = true   # 준비: 명장 요일 고르기 창이 안 뜨게 (+10을 처음 넘을 때 뜸)
+	s.truck(0).star = 17       # 준비: +17 (그 앞 단계 기록은 없음)
+	s.spares = 2
+	s.money = 1000000000000
+	await _frames(3)
+	var two := "업적 2개 달성!"
+	var group_ok: bool = Achievement.is_done(s, "star_10") and Achievement.is_done(s, "star_15") and not Achievement.is_done(s, "star_18") \
+			and _count_notice(town, two) == 1 and _count_notice(town, "업적 달성: 쓸 만한 엔진") == 0 and _count_notice(town, "업적 달성: 튜닝에 빠지다") == 0
+	_report(group_ok, "⑦ 한 프레임에 업적 2개 (+10·+15) → 알림 하나 '%s' (하나씩 따로 안 뜸)" % two)
+
+	_click(town.building_rects()["tuning"].get_center())
+	await _frames(3)
+	m.suspense_scale = 0.05
+	_seed_for(m, Enhance.Result.SUCCESS, 17)
+	_click(p._enhance_button.get_global_rect().get_center())
+	await _until_done(m)
+	await _frames(3)
+	var gold_note := "업적 달성: 꿈의 +18\n랩핑 '골드 +18' 받음"
+	var gold_ok: bool = s.truck(0).star == 18 and Achievement.is_done(s, "star_18") and Wrap.owned(s, "gold18") and _count_notice(town, gold_note) == 1
+	_click(p.wrap_tab_button.get_global_rect().get_center())
+	await _frames(2)
+	var w = p.wrap
+	var gold_btn: Button = w.buttons["gold18"]
+	var gold_card_ok: bool = gold_btn.is_visible_in_tree() and gold_btn.text == "입히기" and not w.notes["gold18"].visible
+	_click(gold_btn.get_global_rect().get_center())
+	await _frames(2)
+	var gold_wear: bool = s.truck(0).wrap == "gold18" and town.trucks[0].wrap == "gold18"
+	_report(gold_ok and gold_card_ok and gold_wear,
+			"⑦ [강화] 클릭 +17 → +18 성공 → 알림 '%s', [랩핑] 골드 +18 [입히기] → 띠 트럭 '%s'" % [gold_note.replace("\n", " / "), town.trucks[0].wrap])
+
+	_click(p.engine_tab_button.get_global_rect().get_center())
+	await _frames(2)
+	_seed_for(m, Enhance.Result.DESTROY, 18)
+	_click(p._enhance_button.get_global_rect().get_center())
+	await _until_done(m)
+	await _frames(3)
+	var band_note := "업적 달성: 괜찮아, 다시 하면 돼\n랩핑 '반창고' 받음"
+	var band_ok: bool = s.truck(0).destroy_count == 1 and s.truck(0).star == b.broken_drop_to and Achievement.is_done(s, "first_destroy") \
+			and Wrap.owned(s, "bandage") and _count_notice(town, band_note) == 1
+	await _wait(Feel.DESTROY_SHAKE_DURATION + 0.1)   # 퍼짐 흔들림이 끝나야 버튼 자리가 맞음
+	_click(p.wrap_tab_button.get_global_rect().get_center())
+	await _frames(2)
+	var band_btn: Button = w.buttons["bandage"]
+	_click(band_btn.get_global_rect().get_center())
+	await _frames(2)
+	var saved = _saved_state(b)
+	var band_wear: bool = s.truck(0).wrap == "bandage" and town.trucks[0].wrap == "bandage" and saved != null \
+			and saved.wraps.has("gold18") and saved.wraps.has("bandage") and saved.truck(0).wrap == "bandage" and saved.achievements_done.has("first_destroy")
+	_report(band_ok and band_wear,
+			"⑦ [강화] 클릭 +18 → 퍼짐 → 알림 '%s', [랩핑] 반창고 [입히기] → 띠 트럭 '%s', 저장에 랩핑·업적" % [band_note.replace("\n", " / "), town.trucks[0].wrap])
+	await _close(m)
+
+
+## 옛 저장(기록이 많음)을 읽은 첫 프레임: 업적이 한꺼번에 달성돼도 알림은 "업적 N개 달성!" + "랩핑 N개 받음" 하나
+func _old_save(b: Balance) -> void:
+	var old := GameState.new_game()
+	old.parcels_total = 20000
+	old.truck(0).star = 20
+	old.truck(0).destroy_count = 1
+	Save.delete_file(TEST_SAVE)
+	Save.write_file(TEST_SAVE, old, int(Time.get_unix_time_from_system()))
+	var m := await _launch(b)
+	var s: GameState = m.state
+	await _frames(3)
+	var n := s.achievements_done.size()
+	var all_notes: Array = m.town.notices_shown + m.town._notice_queue
+	var ach_notes := all_notes.filter(func(x): return String(x).contains("업적"))
+	var want := "업적 %d개 달성!\n랩핑 2개 받음" % n
+	_report(n >= 6 and ach_notes == [want] and Wrap.owned(s, "gold18") and Wrap.owned(s, "bandage"),
+			"⑦ 옛 저장 첫 프레임에 업적 %d개 → 알림 하나 '%s' (업적 알림 %d개)" % [n, want.replace("\n", " / "), ach_notes.size()])
+	await _close(m)
+
+
 # ---------------- ④ 물류센터 업그레이드 3줄 ----------------
 
 func _upgrades(b: Balance) -> void:
-	_reset_stubs()
 	Save.delete_file(TEST_SAVE)
 	var m := await _launch(b)
 	var s: GameState = m.state
@@ -340,7 +462,6 @@ func _upgrades(b: Balance) -> void:
 
 ## 업그레이드 3개를 진짜 클릭으로 산 뒤 화면의 한 바퀴 표시가 계산 값과 같이 바뀌나
 func _upgrade_lap(b: Balance) -> void:
-	_reset_stubs()
 	Save.delete_file(TEST_SAVE)
 	var m := await _launch(b)
 	var s: GameState = m.state
@@ -405,7 +526,6 @@ func _effect_has(text: String, line: String) -> bool:
 
 ## 문제 목록. en이면 보이는 글자를 en_texts에 모음
 func _fit_all(b: Balance, en: bool) -> Array:
-	_reset_stubs()
 	Save.delete_file(TEST_SAVE)
 	var m := await _launch(b)
 	var s: GameState = m.state
@@ -414,9 +534,9 @@ func _fit_all(b: Balance, en: bool) -> Array:
 	var w = p.wrap
 	var bad := []
 	s.money = 0   # 모자란 금액 줄까지 다 보일 때
-	Wrap.owned_ids.append("flame")
-	Stats.seen["junk_gloss:3"] = 2
-	Stats.triples["junk_gloss:3"] = true
+	s.wraps.append("flame")   # 준비: 가진 랩핑 (입는 중 줄까지 보일 때)
+	s.junk_seen[Stats.cell("junk_gloss", 3)] = 2
+	s.junk_triples.append(Stats.cell("junk_gloss", 3))
 	await _frames(2)
 	_click(m.town.building_rects()["depot"].get_center())
 	await _frames(3)
@@ -453,8 +573,10 @@ func _fit_all(b: Balance, en: bool) -> Array:
 	# 대리점 + 보조 트럭 2대: [창고·할 일] 버튼 대신 안내, 튜닝숍 [랩핑] (트럭 탭, 입는 중 · 가짐 · 값 · 업적 보상 카드)
 	_agency_with_helpers(b, s, 2)
 	s.money = 0
-	Wrap.worn_by[0] = "flame"
+	s.truck(0).wrap = "flame"
 	await _frames(3)
+	if en:   # 창업·보조 트럭 2대 → 업적 알림 (한 프레임이면 묶임)
+		en_texts.append_array((m.town.notices_shown + m.town._notice_queue).filter(func(x): return String(x).contains("chievement")))
 	for size: Vector2i in FIT_SIZES:
 		root.size = size
 		await _frames(3)
@@ -483,15 +605,67 @@ func _fit_all(b: Balance, en: bool) -> Array:
 
 # ---------------- 도우미 ----------------
 
-## 껍데기 값 비우기 (확인 사이에 남지 않게)
-func _reset_stubs() -> void:
-	Wrap.owned_ids.clear()
-	Wrap.worn_by.clear()
-	Stats.values.clear()
-	Stats.seen.clear()
-	Stats.triples.clear()
-	Achievement.done.clear()
-	Achievement.now.clear()
+## 도감에서 본 줄 수 합
+func _seen_total(s: GameState) -> int:
+	var n := 0
+	for k in s.junk_seen:
+		n += int(s.junk_seen[k])
+	return n
+
+
+## [기록] 통계 한 줄 값 글 (ko)
+func _stat_text(k: String, v) -> String:
+	match k:
+		"seconds_on":
+			return Fmt.away(v)
+		"money_earned":
+			return "%s원" % Fmt.money(v)
+		"best_star":
+			return "+%d" % v
+		"parcels":
+			return "%s건" % Fmt.count(v)
+	return "%s번" % Fmt.count(v)
+
+
+## 본 도감 칸 바탕 (등급 색을 옅게)
+func _cell_color(grade: int) -> Color:
+	var c: Color = Feel.SETTING_GRADE_COLORS[grade]
+	c.a = Feel.BOOK_CELL_ALPHA
+	return c
+
+
+## 이 단계에서 다음 강화 굴리기가 want가 나오게 m.rng 씨앗을 고른다 (명장·엔진 보호 없을 때)
+func _seed_for(m: Node, want: int, star: int) -> void:
+	var probe := RandomNumberGenerator.new()
+	for sd in 100000:
+		probe.seed = sd
+		if Enhance.roll(m.balance, star, probe) == want:
+			m.rng.seed = sd
+			return
+	push_error("씨앗을 못 찾음")
+
+
+## 강화 뜸이 끝날 때까지 (최대 600프레임)
+func _until_done(m: Node) -> void:
+	await process_frame
+	var waited := 0
+	while m.enhancing and waited < 600:
+		await process_frame
+		waited += 1
+
+
+## 세팅 돌리기 뜸이 끝날 때까지 (최대 600프레임)
+func _until_rolled(m: Node) -> void:
+	await process_frame
+	var waited := 0
+	while m.rolling and waited < 600:
+		await process_frame
+		waited += 1
+
+
+## 진짜 시간 seconds 동안 기다림 (게임 시간이 멈춰 있어도)
+func _wait(seconds: float) -> void:
+	await create_timer(seconds, true, false, true).timeout
 
 
 ## c가 스크롤 칸 sc의 보이는 곳 안에 다 들어와 있나

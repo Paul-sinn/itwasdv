@@ -464,3 +464,7 @@ UPGRADE_SORT_UNIT,−%s,−%s
 UPGRADE_BOX_UNIT,+%s건,+%s
 UPGRADE_SOLO_ONLY,동네에서만 살 수 있어요 (효과는 유지),Only before your agency (effect stays)
 NOTICE_UPGRADE,물류센터 업그레이드! %s Lv.%d,Depot upgrade! %s Lv.%d
+NOTICE_ACHIEVEMENT,업적 달성: %s,Achievement unlocked: %s
+NOTICE_ACHIEVEMENTS,업적 %d개 달성!,%d achievements unlocked!
+NOTICE_WRAP_GOT,랩핑 '%s' 받음,Got the '%s' wrap
+NOTICE_WRAPS_GOT,랩핑 %d개 받음,Got %d wraps

@@ -4,16 +4,16 @@
 ##   잡옵 도감 25칸 (Stats.junk_book): 등급 이름 머리줄, 잡옵마다 이름 + 등급 5칸.
 ##     안 본 칸 "?", 본 칸은 등급 색 바탕에 본 횟수, 같은 잡옵 3줄이 나온 칸은 별 그림 (글꼴 글자 대신 도형: 번역 규칙상 별 글자 금지)
 ##   업적 20줄 (Achievement.all 순서): 이름 + 오른쪽 "달성" / "N / 목표", 아래 작은 줄 설명 (+ 보상 랩핑이 있으면 "보상: 랩핑 '…'")
-## 이름·설명은 번역 키 STAT_<키>, SETTING_OPT_<잡옵>, ACH_<ID>, ACH_<ID>_DESC, WRAP_<ID>. 값은 계산 쪽 그대로 (여기서 세지 않음)
+## 이름·설명은 번역 키 STAT_<키>, SETTING_OPT_<잡옵>, ACH_<ID>, ACH_<ID>_DESC, WRAP_<ID>. 값은 계산 쪽 그대로 (여기서 세지 않음.
+## 업적 진행은 목표를 넘을 수 있어 화면에서 목표로 자름, 보상 랩핑은 Wrap.for_achievement)
 extends VBoxContainer
 
 const Balance = preload("res://scripts/core/balance.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Setting = preload("res://scripts/core/setting.gd")
-## shortcut: C2 전 껍데기 (약속과 같은 이름·인자). 합치면 scripts/core/stats.gd · achievement.gd · wrap.gd
-const Stats = preload("res://scripts/ui/stub_stats.gd")
-const Achievement = preload("res://scripts/ui/stub_achievement.gd")
-const Wrap = preload("res://scripts/ui/stub_wrap.gd")
+const Stats = preload("res://scripts/core/stats.gd")
+const Achievement = preload("res://scripts/core/achievement.gd")
+const Wrap = preload("res://scripts/core/wrap.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 
@@ -152,9 +152,9 @@ func _build(b: Balance, s: GameState) -> void:
 		if desc.contains("%s"):   # 목표 수가 들어가는 설명 (세팅 등급은 등급 이름)
 			desc = desc % (tr("SETTING_GRADE_%d" % a["target"]) if a["kind"] == "setting_grade" else Fmt.count(a["target"]))
 		ach_notes[id].text = desc
-		for w: String in Wrap.ids(b):
-			if Wrap.reward_of(b, w) == id:
-				ach_notes[id].text += " · " + tr("RECORD_ACH_REWARD") % tr("WRAP_" + w.to_upper())
+		var w := Wrap.for_achievement(b, id)
+		if w != "":
+			ach_notes[id].text += " · " + tr("RECORD_ACH_REWARD") % tr("WRAP_" + w.to_upper())
 	set_ui_scale(_scale)
 
 

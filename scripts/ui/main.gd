@@ -32,7 +32,9 @@
 ## v7b: 이번 바퀴 노선이 "long"인 트럭은 띠에서 화면 밖으로 나갔다 돌아오고(truck.far), "+금액"은 나간 쪽 가장자리, 나가 있는 동안
 ##      구석 "장거리 배송 중 · N분 N초". 사무실 [시내] [장거리] → Trip.set_route → 저장. 장거리 열림(long_unlocked) → 동네 알림
 ##      U2: 프레임마다 Contract.tick (기업 계약 체결·돈), 체결(contract) → 동네 알림, 꺼둔 동안 요약에 계약 줄
-## v8a: 띠·큰 화면 트럭마다 입힌 랩핑(Wrap), 프레임마다 Stats.tick(켜 둔 시간)·Achievement.check.
+## v8a: 띠·큰 화면 트럭마다 입힌 랩핑(TruckState.wrap), 프레임마다 Stats.tick(켜 둔 시간 = 진짜 초)·Achievement.check.
+##      업적 알림은 그 프레임에 달성한 것을 한 알림으로: 1개면 "업적 달성: 이름", 여러 개(옛 저장 첫 프레임 등)면 "업적 N개 달성!",
+##      보상 랩핑이 있으면 아래 줄 "랩핑 '…' 받음" (여러 개면 "랩핑 N개 받음")
 ##      물류센터 업그레이드 [값] → Upgrade.buy → 알림·저장, 튜닝숍 [랩핑] [값] → Wrap.buy, [입히기]/[벗기기] → Wrap.wear (고른 트럭) → 저장
 extends Control
 
@@ -53,10 +55,9 @@ const Save = preload("res://scripts/core/save.gd")
 const Setting = preload("res://scripts/core/setting.gd")
 const Trip = preload("res://scripts/core/trip.gd")
 const Upgrade = preload("res://scripts/core/upgrade.gd")
-## v8a: C2 전이라 화면 시험용 껍데기 (약속과 같은 이름·인자). 합치면 preload 경로만 scripts/core/ 로 (stub_*.gd 머리글)
-const Wrap = preload("res://scripts/ui/stub_wrap.gd")
-const Stats = preload("res://scripts/ui/stub_stats.gd")
-const Achievement = preload("res://scripts/ui/stub_achievement.gd")
+const Wrap = preload("res://scripts/core/wrap.gd")
+const Stats = preload("res://scripts/core/stats.gd")
+const Achievement = preload("res://scripts/core/achievement.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const Town = preload("res://scripts/ui/town.gd")
@@ -311,7 +312,7 @@ func _process(delta: float) -> void:
 	Master.tick(state, balance, now, rng)
 	Rush.tick(state, balance, delta, rng)
 	Contract.tick(state, balance, delta)
-	Stats.tick(state, delta)
+	Stats.tick(state, delta / Engine.time_scale if Engine.time_scale > 0.0 else delta)   # 켜 둔 시간은 진짜 초 (F2 배속과 상관없이)
 	Achievement.check(state, balance)
 	town.set_truck_count(state.trucks.size())
 	for i in state.trucks.size():
@@ -367,7 +368,7 @@ func _advance_truck(i: int, delta: float) -> void:
 	else:
 		sprite.follow(Trip.lap_progress(balance, state, i))
 	sprite.boosting = state.truck(i).boost_lap
-	sprite.wrap = Wrap.worn(state, i)   # v8a: 입힌 랩핑대로 차체 색·무늬
+	sprite.wrap = state.truck(i).wrap   # v8a: 입힌 랩핑대로 차체 색·무늬
 	var house: int = Town.EDGE if far else sprite.nearest_house()   # 동네: "+돈"은 트럭(있어야 할 자리)에서 가장 가까운 집에
 	for e in events:
 		match e["type"]:
@@ -486,8 +487,11 @@ func _quest_line() -> String:
 ## 할 일 끝·강화 첫 달성 바로 뒤에 온 레벨업·만렙은 같은 알림에 줄을 더해 하나로 (한 번에 여러 레벨이면 마지막 레벨, 포인트는 합)
 func _show_events(events: Array) -> void:
 	var cur := {}
+	var achieved := []   # 이번 프레임에 달성한 업적 (마지막에 한 알림으로)
 	for e: Dictionary in events:
 		match e["type"]:
+			"achievement":
+				achieved.append(e)
 			"quest_done":
 				_notify(cur)
 				cur = { "head": tr("NOTICE_QUEST") % [Fmt.quest_name(e["id"]), Fmt.money(e["money"]), e["xp"]] }
@@ -526,6 +530,25 @@ func _show_events(events: Array) -> void:
 				_notify(cur)
 				cur = { "head": tr("NOTICE_CONTRACT") % Fmt.money(e["hourly"]) }
 	_notify(cur)
+	_notify_achievements(achieved)
+
+
+## 업적 알림 한 개로 묶기 (옛 저장을 읽은 첫 프레임에 한꺼번에 달성해도 알림이 줄줄이 안 뜨게):
+## 1개 "업적 달성: 이름" / 여러 개 "업적 N개 달성!", 받은 랩핑이 있으면 아래 줄 (1개 이름, 여러 개 수)
+func _notify_achievements(list: Array) -> void:
+	if list.is_empty():
+		return
+	var lines := PackedStringArray()
+	if list.size() == 1:
+		lines.append(tr("NOTICE_ACHIEVEMENT") % tr("ACH_" + String(list[0]["id"]).to_upper()))
+	else:
+		lines.append(tr("NOTICE_ACHIEVEMENTS") % list.size())
+	var wraps := list.filter(func(e): return e["wrap"] != "")
+	if wraps.size() == 1:
+		lines.append(tr("NOTICE_WRAP_GOT") % tr("WRAP_" + String(wraps[0]["wrap"]).to_upper()))
+	elif wraps.size() > 1:
+		lines.append(tr("NOTICE_WRAPS_GOT") % wraps.size())
+	town.notify("\n".join(lines))
 
 
 func _notify(n: Dictionary) -> void:

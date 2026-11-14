@@ -4,13 +4,12 @@
 ##     안 가짐 + 구매용: [값] (돈이 모자라면 꺼짐)   안 가짐 + 보상용: 아래 줄 "업적 '…' 달성하면 받아요", 버튼 없음
 ##     가짐: [입히기]   고른 트럭이 입는 중: 아래 줄 "입는 중" + [벗기기] (기본 = 랩핑 없음으로)
 ##   트럭은 튜닝숍 트럭 탭에서 고른 트럭 (garage_panel.truck). 미리 보기 바탕색도 그 트럭 원래 색
-## 버튼은 신호만 → main.gd → Wrap.buy / Wrap.wear. 값·가진 것·보상 업적은 Wrap 그대로
+## 버튼은 신호만 → main.gd → Wrap.buy / Wrap.wear. 값·가진 것·보상 업적은 Wrap 그대로, 입은 랩핑은 TruckState.wrap
 extends VBoxContainer
 
 const Balance = preload("res://scripts/core/balance.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
-## shortcut: C2 전 껍데기 (약속과 같은 이름·인자). 합치면 scripts/core/wrap.gd, Wrap.worn(s, i) → s.truck(i).wrap
-const Wrap = preload("res://scripts/ui/stub_wrap.gd")
+const Wrap = preload("res://scripts/core/wrap.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const Truck = preload("res://scripts/ui/truck.gd")
@@ -54,7 +53,7 @@ func refresh(b: Balance, s: GameState, i: int) -> void:
 		_truck = i
 		for id: String in previews:
 			previews[id].queue_redraw()
-	var worn := Wrap.worn(s, i)
+	var worn: String = s.truck(i).wrap
 	for id: String in buttons:
 		var btn: Button = buttons[id]
 		var note: Label = notes[id]
