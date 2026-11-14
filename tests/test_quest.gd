@@ -13,16 +13,17 @@ var b: Balance = Balance.load_file()
 
 const IDS := ["first_parcel", "parcels_20", "first_enhance", "first_setting", "star_3", "setting_street", "star_5",
 		"ecu_first", "warehouse_2", "level_5", "star_8", "setting_sport", "night_2", "star_10", "level_10", "warehouse_3",
-		"star_12", "star_15", "level_20", "setting_racing", "first_spare", "star_18", "found_agency", "first_helper", "tire_first"]
+		"star_12", "star_15", "level_20", "setting_racing", "first_spare", "star_18", "found_agency", "first_helper", "tire_first",
+		"long_first", "turbo_first", "contract_first"]
 
 
 func _quest_ids(events: Array) -> Array:
 	return events.filter(func(ev): return ev["type"] == "quest_done").map(func(ev): return ev["id"])
 
 
-## v5 C1 ⑨: 목록 22개 (v7a +3 = 25), 처음 차례·진행, 조건이 안 찼으면 아무 일 없음
+## v5 C1 ⑨: 목록 22개 (v7a +3, v7b +3 = 28), 처음 차례·진행, 조건이 안 찼으면 아무 일 없음
 func test_list_and_first() -> void:
-	check_eq(Quest.count(b), 25, "퀘스트 수")
+	check_eq(Quest.count(b), 28, "퀘스트 수")
 	var ids := []
 	for q in b.quests:
 		ids.append(q["id"])
@@ -40,7 +41,7 @@ func test_list_and_first() -> void:
 ## v5 C1 ⑨: 조건을 미리 넘긴 퀘스트는 check 한 번에 하나씩, 보상(돈·경험치)은 정확히 한 번, 다 끝나면 {}
 func test_all_in_order_one_per_check() -> void:
 	var s := GameState.new_game()
-	# 25개 조건을 전부 미리 채움 (v7a: 창업, 보조 트럭 1대, 타이어 돌림)
+	# 28개 조건을 전부 미리 채움 (v7a: 창업, 보조 트럭 1대, 타이어 돌림, v7b: 장거리 1바퀴, 터보 돌림, 계약 1개)
 	s.parcels_total = 20
 	s.truck(0).star = 18
 	s.setting_rolls = 1
@@ -53,6 +54,9 @@ func test_all_in_order_one_per_check() -> void:
 	s.company_stage = GameState.AGENCY
 	s.trucks.append(TruckState.new())
 	s.parts_rolled["tire"] = true
+	s.long_laps = 1
+	s.parts_rolled["turbo"] = true
+	s.contracts = [1]
 	var money := 0
 	var xp := 0
 	for k in IDS.size():

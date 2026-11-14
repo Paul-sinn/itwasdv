@@ -5,6 +5,7 @@
 extends RefCounted
 
 const Balance = preload("res://scripts/core/balance.gd")
+const Contract = preload("res://scripts/core/contract.gd")   # company ↔ contract 고리 (trip ↔ company처럼)
 const GameState = preload("res://scripts/core/game_state.gd")
 const TruckState = preload("res://scripts/core/truck_state.gd")
 const Trip = preload("res://scripts/core/trip.gd")
@@ -67,7 +68,7 @@ static func buy_helper(b: Balance, state: GameState) -> bool:
 	return true
 
 
-## 순위 기준 시간당 매출: 모든 트럭 Trip.hourly_income 합 (직원 몫·세금 떼기 전)
+## 순위 기준 시간당 매출: 모든 트럭 Trip.hourly_income 합 (직원 몫·세금 떼기 전). 기업 계약은 안 넣음 (트럭 배송 매출로만 경쟁, v7b)
 static func hourly_sales(b: Balance, state: GameState) -> float:
 	var sum := 0.0
 	for i in state.trucks.size():
@@ -75,10 +76,10 @@ static func hourly_sales(b: Balance, state: GameState) -> float:
 	return sum
 
 
-## 켜 둔 동안 시간당 내 돈: 모든 트럭 Trip.hourly_net 합 (직원 몫·세금 뗀 뒤, 급송 뺌).
-## "N원 모자람 · 약 N분 뒤"는 이 값을 Economy.seconds_to_afford(price, money, hourly)에 넘긴다
+## 켜 둔 동안 시간당 내 돈: 모든 트럭 Trip.hourly_net 합 (직원 몫·세금 뗀 뒤, 급송 뺌) + 기업 계약 × (1 − 세율) (v7b).
+## "N원 모자람 · 약 N분 뒤"는 이 값을 Economy.seconds_to_afford(price, money, hourly)에 넘긴다. 주간 목표 돈 보상(24시간치)도 이 값
 static func hourly_net(b: Balance, state: GameState) -> float:
-	var sum := 0.0
+	var sum := Contract.hourly(b, state) * (1.0 - tax_rate(b, state))
 	for i in state.trucks.size():
 		sum += Trip.hourly_net(b, state, i)
 	return sum
@@ -107,10 +108,11 @@ static func next_gap(b: Balance, state: GameState) -> float:
 	return 0.0
 
 
-## 오늘(현지 날짜) 집계 { "sales": 번 돈, "staff": 직원 몫, "tax": 세금, "profit": 순이익 = 내 돈으로 들어온 것 }
+## 오늘(현지 날짜) 집계 { "sales": 번 돈, "staff": 직원 몫, "tax": 세금, "profit": 순이익 = 내 돈으로 들어온 것,
+##   "contract": 매출 중 기업 계약 몫 (v7b. sales에 이미 들어 있음, 그 세금도 tax에) }
 static func today(state: GameState) -> Dictionary:
 	return { "sales": state.today_sales, "staff": state.today_staff, "tax": state.today_tax,
-			"profit": state.today_sales - state.today_staff - state.today_tax }
+			"profit": state.today_sales - state.today_staff - state.today_tax, "contract": state.today_contract }
 
 
 ## 처음 1위가 되면 알림 { "type": "rank_first" } 한 번 (rank_first_done 저장). Trip.advance가 부를 때마다 부름

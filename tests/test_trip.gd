@@ -243,7 +243,8 @@ func test_offline() -> void:
 	for away in [0.0, -3 * hour]:
 		var s := _game(10)
 		var r := Trip.apply_offline(s, bv3, away)
-		check_eq(r, { "money": 0, "staff": 0, "tax": 0, "parcels": 0, "spares": 0, "hours": 0.0, "xp": 0, "full": false, "ignored": true },
+		check_eq(r, { "money": 0, "staff": 0, "tax": 0, "parcels": 0, "spares": 0, "hours": 0.0, "xp": 0, "full": false, "ignored": true,
+				"contract": 0 },
 				"%s초 꺼둠 → 무시" % away)
 		check_eq([s.money, s.spares, s.spare_drop_carry, s.parcels_total], [0, 0, 0.0, 0], "%s초 꺼둠: 상태가 바뀜" % away)
 

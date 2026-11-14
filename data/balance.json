@@ -64,6 +64,10 @@
     "city": { "price_mult": 1.2, "road_mult": 0.4, "stops_mult": 2.0 },
     "long": { "price_mult": 4.0, "road_mult": 5.0, "stops_mult": 1.0, "xp_per_parcel": 30, "unlock_star": 10 }
   },
+  "contracts": {
+    "reputation": [150000, 450000, 900000],
+    "sales_share": [0.05, 0.07, 0.10]
+  },
   "depot": {
     "warehouse_hours": [4, 6, 8, 12],
     "warehouse_prices": [2000000, 3000000, 40000000],
@@ -176,6 +180,9 @@
     { "id": "star_18", "kind": "star", "target": 18, "xp": 1000, "money": 1500000 },
     { "id": "found_agency", "kind": "agency", "target": 1, "xp": 1000, "money": 5000000 },
     { "id": "first_helper", "kind": "helpers", "target": 1, "xp": 800, "money": 3000000 },
-    { "id": "tire_first", "kind": "part_rolled", "target": 1, "part": "tire", "xp": 600, "money": 2000000 }
+    { "id": "tire_first", "kind": "part_rolled", "target": 1, "part": "tire", "xp": 600, "money": 2000000 },
+    { "id": "long_first", "kind": "long_laps", "target": 1, "xp": 800, "money": 3000000 },
+    { "id": "turbo_first", "kind": "part_rolled", "target": 1, "part": "turbo", "xp": 600, "money": 2000000 },
+    { "id": "contract_first", "kind": "contracts", "target": 1, "xp": 1000, "money": 5000000 }
   ]
 }
