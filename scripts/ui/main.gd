@@ -29,6 +29,8 @@
 ##      누가 왔는지·이벤트·가입은 _visitor_info() 한 곳 (Master.is_visiting, Visitor.today / insurer_event / is_insured).
 ##      U1: 보험은 state가 정함 (Visitor.join_insurance → Enhance가 알아서 보험료·막음). 강화 칸 [고급 스페어 쓰기] → state.use_premium → 저장,
 ##      퍼지면 r["drop_to"]·r["premium"]으로 "+17에서 다시"(고급 스페어 / 복구 보험) 구분. 특별 NPC 방문·주간 보상 돈 → 동네 알림
+## v7b: 이번 바퀴 노선이 "long"인 트럭은 띠에서 화면 밖으로 나갔다 돌아오고(truck.far), "+금액"은 나간 쪽 가장자리, 나가 있는 동안
+##      구석 "장거리 배송 중 · N분 N초". 사무실 [시내] [장거리] → set_route → 저장. 노선 함수는 C1 전이라 RouteStub (같은 이름의 껍데기)
 extends Control
 
 const Ability = preload("res://scripts/core/ability.gd")
@@ -55,6 +57,7 @@ const SettingsPanel = preload("res://scripts/ui/settings_panel.gd")
 const DayPicker = preload("res://scripts/ui/day_picker.gd")
 const NpcDialog = preload("res://scripts/ui/npc_dialog.gd")
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
+const RouteStub = preload("res://scripts/ui/route_stub.gd")   ## shortcut: C1 전 임시. C1을 합치면 Trip으로 바꿈 (route_stub.gd 맨 위)
 
 const AUTOSAVE_SECONDS := 30.0        ## 30초마다 저장 (배속과 상관없이 진짜 30초)
 const TRUCK := 0   ## 내 트럭 번호 (구석 줄 "+N", 치트 키). 강화·세팅은 panel.truck (튜닝숍 트럭 탭)
@@ -159,6 +162,7 @@ func _ready() -> void:
 	panel.driver.reset_pressed.connect(_on_ability_reset)
 	panel.driver.found_pressed.connect(_on_found_pressed)
 	panel.office.buy_pressed.connect(_on_helper_buy_pressed)
+	panel.office.route_pressed.connect(_on_route_pressed)
 	panel.master.day_pressed.connect(_on_day_picked)
 	town.tuning_pressed.connect(func(): open_building("tuning"))
 	_open_pending_setting()
@@ -298,6 +302,7 @@ func _process(delta: float) -> void:
 	town.set_truck_count(state.trucks.size())
 	for i in state.trucks.size():
 		_advance_truck(i, delta)
+	_show_long()
 	_show_events(state.take_events())
 	town.set_hud(state.money, t.star, state.driver_level)
 	town.set_point_dot(Ability.points_left(state) > 0)
@@ -309,7 +314,7 @@ func _process(delta: float) -> void:
 	if npc_dialog.visible and npc_dialog.who != visitor["who"]:
 		npc_dialog.visible = false   # 날이 바뀌어 NPC가 떠남
 	town.set_office(Company.stage(state) >= GameState.AGENCY)
-	town.set_city(Trip.route_id(state, TRUCK) == "city", _city_spots())
+	town.set_city(RouteStub.route_id(state, TRUCK) != "town", _city_spots())   # 내 트럭이 장거리여도 대리점이면 시내 그림
 	town.set_rank(Company.rank(balance, state))
 	panel.now_local = now
 	if _want_day_picker and is_full() and panel.building == "tuning" and not enhancing:
@@ -340,16 +345,19 @@ func _process(delta: float) -> void:
 func _advance_truck(i: int, delta: float) -> void:
 	var events := Trip.advance(state, balance, i, delta, rng)
 	var sprite: Node2D = town.trucks[i]
-	if town.city:   # 시내: 집마다 서고, "+돈"은 배송된 그 집에 (정차할 곳 = 실을 수 있는 수만큼)
+	var far := RouteStub.route_id(state, i) == "long"
+	if far:   # 장거리: 화면 밖으로 나갔다 바퀴 끝에 돌아옴, "+돈"은 나간 쪽 가장자리
+		sprite.far(Trip.lap_progress(balance, state, i))
+	elif town.city:   # 시내: 집마다 서고, "+돈"은 배송된 그 집에 (정차할 곳 = 실을 수 있는 수만큼)
 		sprite.stop_and_go(Trip.lap_stop_progress(balance, state, i), Trip.lap_cargo(balance, state, i))
 	else:
 		sprite.follow(Trip.lap_progress(balance, state, i))
 	sprite.boosting = state.truck(i).boost_lap
-	var house: int = sprite.nearest_house()   # 동네: "+돈"은 트럭(있어야 할 자리)에서 가장 가까운 집에
+	var house: int = Town.EDGE if far else sprite.nearest_house()   # 동네: "+돈"은 트럭(있어야 할 자리)에서 가장 가까운 집에
 	for e in events:
 		match e["type"]:
 			"parcel":
-				if town.city:
+				if town.city and not far:
 					house = e["house"]
 				town.show_payout(house, e["pay"], e.get("kind", "normal"), e.get("rush", false), i)
 				earned_total += e["pay"]
@@ -369,6 +377,17 @@ func _advance_truck(i: int, delta: float) -> void:
 				tips_total += e["pay"]
 				if _measuring:
 					_measure_earned += e["pay"]
+
+
+## 구석 "장거리 배송 중": 이번 바퀴가 장거리이고 물류센터를 떠난(싣기 끝난) 트럭 수 + 그중 가장 빨리 돌아오는 남은 초
+func _show_long() -> void:
+	var away := 0
+	var soonest := INF
+	for i in state.trucks.size():
+		if RouteStub.route_id(state, i) == "long" and Trip.lap_progress(balance, state, i) > 0.0:
+			away += 1
+			soonest = minf(soonest, RouteStub.lap_seconds_left(balance, state, i))
+	town.set_long(away, soonest)
 
 
 ## 시내 정차할 곳 수 = 트럭들이 한 바퀴에 실을 수 있는 가장 많은 수 (평균 적재량 올림. 소수 적재량이면 바퀴마다 그 앞쪽 집만 감)
@@ -787,6 +806,13 @@ func _on_helper_buy_pressed() -> void:
 		panel.office.refresh(balance, state)   # 새 줄을 만든 뒤 커지게
 		panel.office.show_bought(Company.helper_count(state))
 		Quest.check(state, balance)
+		_save()
+	panel.refresh(balance, state)
+
+
+## 사무실 [시내] / [장거리] → set_route (못 고르면 그대로. 다음 바퀴부터 적용은 계산 쪽) → 저장
+func _on_route_pressed(i: int, id: String) -> void:
+	if RouteStub.set_route(balance, state, i, id):
 		_save()
 	panel.refresh(balance, state)
 

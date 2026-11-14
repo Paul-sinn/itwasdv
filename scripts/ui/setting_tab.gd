@@ -6,6 +6,8 @@
 ##   고르는 중(pending)이면: 지금 쓰는 것 / 새로 나온 것을 나란히 + 버튼 두 개
 ## 확률·비용은 scripts/core/setting.gd 값을 그대로 보여 준다. 버튼은 신호만 → main.gd → Setting.try_roll / choose
 ## 부품·옵션·등급 이름은 번역 파일 키 SETTING_PART_<ID>, SETTING_OPT_<ID>, SETTING_GRADE_<등급> (id는 balance.json)
+## v7b: 네 번째 부품 터보 (json에서 옴). 대리점 + 엔진 단계 둘 다 걸린 부품은 창업 전 "터보 · 대리점 + 엔진 +10에 열려요",
+##      장거리 속도 옵션이 나오는 부품이면 "장거리 노선에서만" 설명. 부품 버튼은 넘치면 다음 줄로 (HFlowContainer: 잠긴 버튼 글이 길어도 차고 폭 안)
 extends VBoxContainer
 
 const Balance = preload("res://scripts/core/balance.gd")
@@ -30,7 +32,7 @@ var roll_button: Button
 var keep_button: Button     ## 예전 것 쓰기
 var take_button: Button     ## 새 것 쓰기
 
-var _parts_row: HBoxContainer
+var _parts_row: HFlowContainer
 var _lock_note: Label       ## 부품 버튼 아래 "타이어·휠 · 대리점을 차리면 열려요" (대리점 전에만)
 var _grade: Label           ## "적재함 · 스트리트" (등급 색)
 var _lines: VBoxContainer   ## 지금 쓰는 줄
@@ -52,7 +54,7 @@ var _font_sizes := {}       ## 글자 → 배수 곱하기 전 크기
 
 
 func _ready() -> void:
-	_parts_row = HBoxContainer.new()
+	_parts_row = HFlowContainer.new()
 	add_child(_parts_row)
 	_lock_note = _label(self, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
 	_grade = _label(self, Feel.PANEL_TITLE_SIZE, Feel.COLOR_TEXT)
@@ -100,7 +102,8 @@ func set_ui_scale(s: float) -> void:
 	if _choose == null:
 		return
 	add_theme_constant_override("separation", int(roundf(Feel.PANEL_GAP_SMALL * s)))
-	_parts_row.add_theme_constant_override("separation", int(roundf(Feel.PANEL_GAP_SMALL * s)))
+	_parts_row.add_theme_constant_override("h_separation", int(roundf(Feel.PANEL_GAP_SMALL * s)))
+	_parts_row.add_theme_constant_override("v_separation", int(roundf(Feel.PANEL_GAP_SMALL * s)))
 	_choose.add_theme_constant_override("separation", int(roundf(Feel.SETTING_COLUMN_GAP * s)))
 	for c: Control in _font_sizes:
 		c.add_theme_font_size_override("font_size", _px(_font_sizes[c]))
@@ -196,9 +199,10 @@ func refresh(b: Balance, s: GameState, locked: bool) -> void:
 		var open := Setting.unlocked(b, s, truck, id)
 		if open:
 			btn.text = part_name(id)
-		elif Setting.unlock_stage(b, id) > Company.stage(s):   # 타이어·휠: 창업 전
+		elif Setting.unlock_stage(b, id) > Company.stage(s):   # 타이어·휠·터보: 창업 전 (터보는 엔진 단계도)
 			btn.text = part_name(id)
-			locks.append(tr("SETTING_LOCKED_AGENCY") % part_name(id))
+			var star := Setting.unlock_star(b, id)
+			locks.append(tr("SETTING_LOCKED_AGENCY_STAR") % [part_name(id), star] if star > 0 else tr("SETTING_LOCKED_AGENCY") % part_name(id))
 		else:
 			btn.text = tr("SETTING_LOCKED") % [part_name(id), Setting.unlock_star(b, id)]
 		btn.disabled = not open
@@ -229,6 +233,8 @@ func refresh(b: Balance, s: GameState, locked: bool) -> void:
 		notes.append(tr("SETTING_CARGO_NOW") % Fmt.num(Trip.cargo(b, s, truck), 1))
 	if chances.has("overboost"):
 		notes.append(tr("SETTING_OVERBOOST_NOTE") % Fmt.num(b.overboost_mult))
+	if chances.has("long_speed"):
+		notes.append(tr("SETTING_LONG_SPEED_NOTE"))
 	_effect.text = "\n".join(notes)
 
 	var cost := Setting.roll_cost(b, grade, s)

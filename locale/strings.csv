@@ -353,3 +353,14 @@ NOTICE_VISITOR_DEALER,중고 부품상이 왔어요 · 고급 스페어 엔진 +
 NPC_EVENT_NAME_PARTNER_DISCOUNT,제휴 할인,Partner discount
 NPC_EVENT_NAME_RECOVERY,복구 보험,Recovery cover
 SETTING_MAGICIAN,(마술사 ×%s),(Magician ×%s)
+ROUTE_CITY,시내,City
+ROUTE_LONG,장거리,Long haul
+OFFICE_ROUTE_BUTTON,%s · 시간당 %s원,%s · ₩%s/h
+OFFICE_ROUTE_NEXT,다음 바퀴부터 %s,From the next lap: %s
+OFFICE_ROUTE_LOCKED,장거리는 엔진 +%d부터,Long haul opens at engine +%d
+TOWN_LONG_ONE,장거리 배송 중 · %d분 %d초,Long haul · back in %dm %ds
+TOWN_LONG_MANY,장거리 배송 중 %d대 · %d분 %d초,Long haul ×%d · first back in %dm %ds
+SETTING_PART_TURBO,터보,Turbo
+SETTING_OPT_LONG_SPEED,장거리 속도,Long-haul speed
+SETTING_LOCKED_AGENCY_STAR,%s · 대리점 + 엔진 +%d에 열려요,%s · opens with an agency + engine +%d
+SETTING_LONG_SPEED_NOTE,장거리 속도: 장거리 노선에서만 빨라져요,Long-haul speed: only works on the long-haul route

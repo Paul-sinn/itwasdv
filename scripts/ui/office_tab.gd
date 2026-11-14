@@ -5,6 +5,9 @@
 ## 순위·남은 양·오늘 집계·보조 트럭 값은 Company 값을, 라이벌 매출·세율은 balance 숫자를 그대로 보여 준다 (여기서 계산하지 않음).
 ## 트럭 시간당은 Trip.hourly_income (번 돈 기준. 튜닝숍 강화 칸과 같음). 버튼은 신호만 → main.gd → Company.buy_helper
 ## 라이벌 이름은 번역 파일 RIVAL_<번호> (번호 = balance rivals 순서, 0이 가장 작음), 단계 이름은 STAGE_<단계 id>
+## v7b: [트럭] 칸에 트럭마다 (내 트럭부터) 줄 + [시내 · 시간당 N원] [장거리 · 시간당 N원] 스위치 (지금 고른 쪽 눌림) + 한 줄 안내:
+##      바꾼 뒤 이번 바퀴가 끝나기 전이면 "다음 바퀴부터 장거리", 장거리가 잠겼으면 "장거리는 엔진 +10부터".
+##      스위치 → route_pressed → main.gd → set_route. 노선 값은 C1 전이라 RouteStub (Trip과 같은 이름의 껍데기)
 extends VBoxContainer
 
 const Balance = preload("res://scripts/core/balance.gd")
@@ -15,8 +18,14 @@ const Trip = preload("res://scripts/core/trip.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const Town = preload("res://scripts/ui/town.gd")
+const RouteStub = preload("res://scripts/ui/route_stub.gd")   ## shortcut: C1 전 임시. C1을 합치면 Trip으로 바꿈 (route_stub.gd 맨 위)
+
+## 스위치 순서와 노선 이름 번역 키
+const ROUTES := ["city", "long"]
+const ROUTE_NAMES := { "city": "ROUTE_CITY", "long": "ROUTE_LONG" }
 
 signal buy_pressed   ## [보조 트럭 사기]
+signal route_pressed(i: int, id: String)   ## [시내] / [장거리] (i = 트럭 번호, 0 = 내 트럭)
 
 enum Page { TRUCKS, RANK, BOOKS }
 ## 잠긴 순위표 줄 (위가 큰 무대)
@@ -26,6 +35,9 @@ var page := Page.TRUCKS
 var page_buttons := {}               ## Page → 칸 고르기 버튼
 var buy_button: Button
 var truck_lines: Array[Label] = []   ## 보조 트럭 줄 (2호차부터)
+var mine_line: Label                 ## 내 트럭 줄 (맨 위)
+var route_buttons: Array[Dictionary] = []   ## 트럭 번호 → { "city": Button, "long": Button }
+var route_notes: Array[Label] = []   ## 트럭 번호 → "다음 바퀴부터 …" / "장거리는 엔진 +N부터" (없으면 숨김)
 var locked_rows: Array[Label] = []   ## 잠긴 줄 3개
 var rank_rows: Array[Label] = []     ## 시내 순위표 줄 (위가 1위. 라이벌 수 + 1)
 var tax_rows: Array[Label] = []      ## 세율표 줄 (단계 순서)
@@ -43,6 +55,7 @@ var _profit: Label
 var _tax_list: VBoxContainer
 var _scale := 1.0
 var _font_sizes := {}     ## 글자 → 배수 곱하기 전 크기
+var _blocks: Array[BoxContainer] = []   ## 트럭 칸·스위치 줄 (간격을 배수에 맞춤)
 
 
 func _ready() -> void:
@@ -108,6 +121,8 @@ func set_ui_scale(s: float) -> void:
 		box.add_theme_constant_override("separation", int(roundf(Feel.PANEL_GAP_SMALL * s)))
 	for box: BoxContainer in [_truck_list, _rank_list, _tax_list]:
 		box.add_theme_constant_override("separation", int(roundf(Feel.PANEL_GAP_SMALL * s * 0.5)))
+	for box: BoxContainer in _blocks:
+		box.add_theme_constant_override("separation", int(roundf(Feel.PANEL_GAP_SMALL * s * 0.5)))
 	for c: Control in _font_sizes:
 		c.add_theme_font_size_override("font_size", _px(_font_sizes[c]))
 
@@ -135,16 +150,17 @@ func refresh(b: Balance, s: GameState) -> void:
 
 func _refresh_trucks(b: Balance, s: GameState) -> void:
 	var n := Company.helper_count(s)
-	while truck_lines.size() < n:
-		var l := _label(_truck_list, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
-		l.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN   # 산 순간 커질 기준점
-		l.autowrap_mode = TextServer.AUTOWRAP_OFF
-		truck_lines.append(l)
-	for i in truck_lines.size():
-		truck_lines[i].visible = i < n
-		if i < n:   # 보조 트럭 = 트럭 번호 i + 1, 이름 "(i + 2)호차"
-			truck_lines[i].text = tr("OFFICE_TRUCK_LINE") % [tr("TRUCK_TAB_HELPER") % (i + 2), s.truck(i + 1).star,
-					Fmt.money(int(Trip.hourly_income(b, s, i + 1)))]
+	while route_buttons.size() < n + 1:
+		_add_truck_block()
+	for i in route_buttons.size():   # 트럭 번호 i (0 = 내 트럭, 보조 트럭 줄 = truck_lines[i − 1], 이름 "(i + 1)호차")
+		var shown := i <= n
+		route_notes[i].get_parent().visible = shown
+		if not shown:
+			continue
+		var line := mine_line if i == 0 else truck_lines[i - 1]
+		line.text = tr("OFFICE_TRUCK_LINE") % [tr("TRUCK_TAB_MINE") if i == 0 else tr("TRUCK_TAB_HELPER") % (i + 1), s.truck(i).star,
+				Fmt.money(int(Trip.hourly_income(b, s, i)))]
+		_refresh_route(b, s, i)
 	_no_helper.visible = n == 0
 	var price := Company.helper_price(b, s)
 	buy_button.visible = price >= 0
@@ -156,6 +172,54 @@ func _refresh_trucks(b: Balance, s: GameState) -> void:
 	elif s.money < price:
 		_buy_note.text = tr("DEPOT_SHORT") % [Fmt.money(price - s.money), Fmt.wait_text(Economy.seconds_to_afford(price, s.money, Company.hourly_net(b, s)))]
 	_buy_note.visible = price < 0 or s.money < price
+
+
+## 트럭 i의 스위치: 고른 쪽 눌림, 두 노선 시간당, 장거리 잠김이면 꺼짐 + 안내, 바꾼 노선이 다음 바퀴부터면 안내
+func _refresh_route(b: Balance, s: GameState, i: int) -> void:
+	var choice := RouteStub.route_choice(s, i)
+	for id: String in ROUTES:
+		var btn: Button = route_buttons[i][id]
+		btn.text = tr("OFFICE_ROUTE_BUTTON") % [tr(ROUTE_NAMES[id]), Fmt.money(int(RouteStub.hourly_income_on(b, s, i, id)))]
+		btn.set_pressed_no_signal(id == choice)
+	var open := RouteStub.can_long(b, s, i)
+	route_buttons[i]["long"].disabled = not open
+	var note := route_notes[i]
+	var pending := choice != RouteStub.route_id(s, i)   # 바꿨는데 이번 바퀴는 아직 예전 노선
+	if pending:
+		note.text = tr("OFFICE_ROUTE_NEXT") % tr(ROUTE_NAMES[choice])
+	elif not open:
+		note.text = tr("OFFICE_ROUTE_LOCKED") % RouteStub.long_star(b)
+	note.visible = pending or not open
+
+
+## 트럭 하나의 칸: 줄 + 스위치 두 개 + 안내 한 줄 (트럭 번호 = 만든 순서)
+func _add_truck_block() -> void:
+	var i := route_buttons.size()
+	var block := VBoxContainer.new()
+	_truck_list.add_child(block)
+	var l := _label(block, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
+	l.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN   # 산 순간 커질 기준점
+	l.autowrap_mode = TextServer.AUTOWRAP_OFF
+	if i == 0:
+		mine_line = l
+	else:
+		truck_lines.append(l)
+	var row := HBoxContainer.new()
+	block.add_child(row)
+	var pair := {}
+	for id: String in ROUTES:
+		var btn := _button(row, "", Feel.PANEL_TEXT_SIZE)
+		btn.toggle_mode = true   # 눌림 = 고른 노선 (refresh가 상태에 맞춤)
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.add_theme_color_override("font_pressed_color", Feel.COLOR_STAR)
+		btn.add_theme_color_override("font_hover_pressed_color", Feel.COLOR_STAR)
+		btn.pressed.connect(func(): route_pressed.emit(i, id))
+		pair[id] = btn
+	route_buttons.append(pair)
+	route_notes.append(_label(block, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM))
+	_blocks.append(block)
+	_blocks.append(row)
+	set_ui_scale(_scale)
 
 
 ## 순위 줄: 내 자리 = Company.rank (위에서 rank번째). 나머지는 라이벌을 매출이 큰 순서로 (balance rivals는 오름차순)

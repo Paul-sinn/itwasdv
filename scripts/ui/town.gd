@@ -14,6 +14,8 @@
 ##      급송 전화는 말풍선 대신 전화 아이콘 (누르면 rush_accept_pressed. 아래 남은 시간 막대). 알림은 아이콘 왼쪽에
 ##      U3 시내 (set_city. 창업 뒤 = 계산 노선 "city"): 같은 길에 작은 집·회사 건물이 정차할 곳 수만큼 촘촘히, 뒤쪽 빌딩 실루엣
 ##      (띠에서도 → 보이는 곳), 큰 화면은 하늘·바닥 색. 창업 전에는 동네 그대로 (집 TOWN_HOUSES채)
+## v7b: 장거리 바퀴인 트럭은 왼쪽 화면 밖으로 나갔다 돌아옴 (truck.far). 그 "+금액"은 나간 쪽 가장자리 (show_payout(EDGE, …)),
+##      나가 있는 동안 왼쪽 아래 구석 "장거리 배송 중 · N분 N초" (여러 대면 대수 + 가장 빨리 돌아오는 시간. set_long)
 ## 동네 설계 좌표(feel.gd TOWN_SIZE = 작은 화면 크기)로 만들고, 전체 화면에서는 같은 동네를 통째로 확대한다.
 ## 길·집·트럭은 확대해서 그리고(선명함), 글자는 확대 배수에 맞춘 글자 크기로 따로 놓는다.
 ## 그리기만 한다. 돈·배송은 main.gd → scripts/core/trip.gd (배송 이벤트가 오면 show_payout)
@@ -32,6 +34,7 @@ const BUILDING_NAMES := { "tuning": "BUILDING_TUNING", "depot": "TOWN_DEPOT", "c
 ## 건물 자리 (동네 설계 좌표)와 색. 사무실은 창업 뒤에만
 const BUILDING_SPOTS := { "tuning": Feel.TOWN_TUNING_RECT, "depot": Feel.TOWN_DEPOT_RECT, "car_center": Feel.TOWN_CAR_CENTER_RECT, "office": Feel.TOWN_OFFICE_RECT }
 const BUILDING_COLORS := { "tuning": Feel.COLOR_TUNING, "depot": Feel.COLOR_DEPOT, "car_center": Feel.COLOR_CAR_CENTER, "office": Feel.COLOR_OFFICE }
+const EDGE := -1   ## show_payout·show_spare·show_tip의 집 번호 대신: 장거리 트럭이 나간 쪽 가장자리 (물류센터 앞 길 왼쪽 끝)
 
 signal tuning_pressed   ## 구석 작은 버튼 [강화]
 signal rush_accept_pressed   ## 급송 전화 아이콘
@@ -82,6 +85,7 @@ var _last_payout: Label   ## 마지막 "+금액" (팁이 오면 그 옆에 "팁!
 var _dot_style: StyleBoxFlat
 var _rush_left: Label     ## 구석 줄 끝 "급송 N건 남음" (받은 급송이 남아 있을 때)
 var _rank_label: Label    ## 구석 줄 "시내 N위" (창업 뒤)
+var _long_label: Label    ## 왼쪽 아래 "장거리 배송 중 · N분 N초" (장거리 트럭이 나가 있을 때. set_long)
 
 
 func _ready() -> void:
@@ -132,6 +136,9 @@ func _ready() -> void:
 	_notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_notice.visible = false
 	add_child(_notice)
+	_long_label = make_label(Feel.QUEST_FONT_SIZE, Feel.COLOR_LONG)
+	_long_label.visible = false
+	add_child(_long_label)
 
 	for id: String in BUILDING_SPOTS:
 		var board := make_label(Feel.LABEL_FONT_SIZE, Feel.COLOR_TEXT)
@@ -177,6 +184,9 @@ func layout(top_left: Vector2, z: float, text_k: float) -> void:
 	_set_font(_quest_label, Feel.QUEST_FONT_SIZE)
 	_quest_label.reset_size()
 	_quest_label.position = to_view(Feel.TOWN_QUEST_POS)
+	_set_font(_long_label, Feel.QUEST_FONT_SIZE)
+	_long_label.reset_size()
+	_long_label.position = to_view(Feel.TOWN_LONG_POS)
 	_set_font(_notice, Feel.NOTICE_FONT_SIZE)
 	_place_icons()
 
@@ -444,6 +454,18 @@ func set_hud(money: int, star: int, level: int) -> void:
 	_level_label.text = tr("TOWN_LEVEL") % level
 
 
+## 왼쪽 아래 "장거리 배송 중 · N분 N초": count = 나가 있는 장거리 트럭 수 (0 = 숨김), seconds = 가장 빨리 돌아오는 트럭의 남은 초
+func set_long(count: int, seconds: float) -> void:
+	_long_label.visible = count > 0
+	if count == 0:
+		return
+	var left := ceili(maxf(seconds, 0.0))
+	var text := tr("TOWN_LONG_ONE") % [left / 60, left % 60] if count == 1 else tr("TOWN_LONG_MANY") % [count, left / 60, left % 60]
+	if _long_label.text != text:
+		_long_label.text = text
+		_long_label.reset_size()
+
+
 ## 레벨 옆 점 (찍을 능력치 포인트가 남았으면 켬. 물류센터에 가 보라는 표시)
 func set_point_dot(on: bool) -> void:
 	point_dot.visible = on
@@ -546,6 +568,8 @@ func show_boost(which := 0) -> void:
 
 
 func _house_spot(house: int) -> Vector2:
+	if house == EDGE:   # 장거리: 동네 왼쪽 끝, 물류센터 앞 길 높이
+		return Vector2(0.0, route.points[0].y)
 	return _houses[clampi(house, 0, _houses.size() - 1)]
 
 
@@ -633,9 +657,13 @@ func visible_rects(truck_pad: float) -> Array:
 	out.append(hud.merge(Rect2(_quest_label.position, _quest_label.size).grow(o)))
 	if _notice.visible:
 		out.append(Rect2(_notice.position, _notice.size).grow(o))
+	if _long_label.visible:
+		out.append(Rect2(_long_label.position, _long_label.size).grow(o))
 	# 트럭·연기·떠오르는 글자: 겹치는 것끼리 한 사각형으로 (v7a: 트럭 3대 + 글자 10개여도 30개 이하로)
 	var moving: Array[Rect2] = []
 	for t in trucks:
+		if t.away():   # 장거리로 화면 밖에 나가 있음
+			continue
 		moving.append(t.click_rect().grow(truck_pad))
 		var smoke := t.smoke_rect()
 		if smoke.has_area():

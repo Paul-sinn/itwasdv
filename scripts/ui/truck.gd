@@ -57,8 +57,12 @@ func set_view(origin: Vector2, zoom: float) -> void:
 func place() -> void:
 	if _route == null:
 		return
-	position = view_origin + (_route.point_at(_s) + Vector2(0, Feel.TOWN_TRUCK_LIFT)) * view_zoom
+	var p := _route.point_at(maxf(_s, 0.0)) + _route.direction_at(0.0) * minf(_s, 0.0)   # 음수 = 길 시작점 밖 (장거리)
+	position = view_origin + (p + Vector2(0, Feel.TOWN_TRUCK_LIFT)) * view_zoom
 	scale = Vector2.ONE * view_zoom * Feel.TOWN_TRUCK_SCALE
+	# 동네 왼쪽 끝을 넘어가면 넘어간 만큼 흐려짐 (큰 화면은 동네 밖도 그려지는 창이라)
+	var half := Feel.TRUCK_SIZE.x * Feel.TOWN_TRUCK_SCALE / 2.0
+	self_modulate.a = clampf((p.x + half) / (2.0 * half), 0.0, 1.0)
 
 
 ## 엔진 떨림: seconds 동안 px 세기로 (끝으로 갈수록 ENGINE_SHAKE_GROW배까지 세짐). 트럭 자기 좌표 픽셀
@@ -94,6 +98,21 @@ func follow(phase: float) -> void:
 	_lap_min = Feel.TOWN_DRIVE_SECONDS_MIN
 	var d := clampf(phase, 0.0, 1.0) * _loop_length()
 	_goal = d if d <= _loop_length() / 2.0 else _loop_length() - d
+
+
+## 장거리 (v7b): 물류센터 → 왼쪽 화면 밖 → (먼 길) → 화면 밖에서 돌아와 물류센터. x = 이번 바퀴 진행 (Trip.lap_progress 0 ~ 1).
+## 바퀴 = 나가는 길 LONG_EXIT_PX + 먼 길(동네 한 바퀴 × LONG_VIEW_LOOPS) + 들어오는 길로 쳐서, 동네에서 달릴 때 빠르기로 나가고
+## 바퀴가 끝날 때 물류센터에 닿게 들어옴. 화면 밖 = 길 위 거리가 음수 (길 시작점에서 길 반대쪽으로 곧게)
+func far(x: float) -> void:
+	_lap_min = Feel.TOWN_DRIVE_SECONDS_MIN
+	var total := 2.0 * Feel.LONG_EXIT_PX + _loop_length() * Feel.LONG_VIEW_LOOPS
+	var d := clampf(x, 0.0, 1.0) * total
+	_goal = -minf(minf(d, Feel.LONG_EXIT_PX), total - d)
+
+
+## 화면 밖에 나가 있나 (다 나갔고 돌아오는 중도 아님). 보이는 곳에서 뺌
+func away() -> bool:
+	return self_modulate.a <= 0.0 and _goal <= _s
 
 
 ## 트럭에서(가야 할 자리에서) 가장 가까운 집 번호
