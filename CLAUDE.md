@@ -31,12 +31,12 @@ docs/PROTOTYPE_V3~V5.md  끝난 지시서: v3 경제 뼈대 (한 바퀴 계산, 
 docs/PROTOTYPE_V6A.md    끝난 지시서: 건물 클릭 + 건물 화면 (튜닝숍·물류센터·카센터). v6b(명장·보험·급송·대형·VIP)는 아직
 docs/PROTOTYPE_V6_BAL.md 끝난 지시서: 사용자 답 반영 (시트 확률표, 옵션 수치, 오버부스트·소수점 규칙, 말풍선)
 docs/PROTOTYPE_V5B.md    끝난 지시서: 기사 능력치 5개
-docs/PROTOTYPE_V6B.md    진행 중: 대형·VIP, 급송 전화, 주간 목표·쿠폰, 명장·보험
+docs/PROTOTYPE_V6B.md    끝난 지시서: 대형·VIP, 급송 전화, 주간 목표·쿠폰, 명장·보험
 docs/SHEET_SNAPSHOT.md   숫자 시트 스냅샷 (아직 json에 없는 숫자의 기준)
 locale/strings.csv       화면 글자 (keys, ko, en). 고치면 --import 뒤 .translation 두 개도 같이 커밋
 docs/IDEAS.md            나중에 할 것 / 이미 정한 것
 tools/tune_sim.py        경제 시뮬레이터 (판정용. --table = 단계별 표)
-scripts/core/            계산 코드 (balance, trip 한 바퀴·스페어 드랍, economy 가격, enhance, setting 세팅 돌리기, driver 기사 레벨, ability 능력치, depot 창고·야간팀, quest 다음 할 일, truck_state, game_state, save)
+scripts/core/            계산 코드 (balance, trip 한 바퀴·스페어 드랍, economy 가격, enhance, setting 세팅 돌리기, driver 기사 레벨, ability 능력치, master 명장 방문일, rush 급송 전화, weekly 주간 목표, depot 창고·야간팀, quest 다음 할 일, truck_state, game_state, save)
 scripts/ui/              화면 코드 (main, town 동네, route 꼬불길 계산, truck, garage_panel 차고,
                          settings_panel 설정, screen_mode 두 화면 오가기, desktop_window 창, tray_icon 알림 영역)
 scenes/                  Godot 씬
@@ -76,6 +76,9 @@ PowerShell (사용자 터미널): 어느 폴더에서든 그대로 복사해서 
 
 # 건물 클릭 (띠의 건물 3개 + 작은 버튼만 반응, 건물 화면 오가기, 카센터에서 스페어 사기)
 & "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -s tests/check_buildings.gd
+
+# v6b (대형·VIP·급송 "+금액", 급송 전화 [받기], [설정] 급송 끄기, 주간 목표, 명장 요일·[명장] 칸, [보험], "N번 시도 가능")
+& "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -s tests/check_v6b.gd
 
 # 기사 능력치 (물류센터 [능력치] 칸: [+], 두 번 누르는 [초기화], 팁, 포인트 점)
 & "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -s tests/check_ability.gd
@@ -156,16 +159,17 @@ python -I -X utf8 "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwas
 - 프로젝트 안의 `.csv`는 Godot가 번역 파일로 가져간다 → 기록 파일은 `.gdignore`가 있는 폴더(`tests/soak_logs`)에
 
 ## 현재 작업
-**2026-11-13 오후 v5b (기사 능력치) 끝:** 가지 `prototype-v5b`. 화면 없는 확인 10개 전부 통과, QA 통과 55 / 실패 1(지시서 약속 누락 → 지시서를 고쳐 닫음). 그 앞 v6-bal(사용자 답 반영)도 끝(QA 42 / 0). **다음은 v6b** (`docs/PROTOTYPE_V6B.md`: 대형·VIP, 급송 전화, 주간 목표·쿠폰, 명장·보험) → v7.
-- v5b에서 넣은 것: 능력치 5개(상하차·친절·협상·노하우·정비 지식, 내 트럭만), 팁(기본 2%, 단가 1건치: 임시), 물류센터 화면 [능력치] [창고·할 일] 두 칸, 두 번 누르는 [초기화], 동네 "팁!", 포인트 점. 저장 형식 7. `Trip` 수입 함수 인자가 `(b, state, i)`로 바뀜
-- v5b 시뮬 30일: 가볍게 +19, 열심히 +21 (능력치·팁으로 한 단계 빠름) → 강화 비용 제안 `cost_base` 52,500 (QUESTIONS Q19, 허락 전)
+**2026-11-13 오후 v6b (대형·VIP, 급송 전화, 주간 목표·쿠폰, 명장·보험) 끝:** 가지 `prototype-v6b`. 화면 없는 확인 11개 전부 통과, QA 통과 74 / 실패 1(지시서 약속 누락 → 지시서를 고쳐 닫음). 같은 날 v6-bal(답 반영, QA 42 / 0), v5b(능력치, QA 55 / 1)도 끝. **다음은 v7 대리점** (기획서 16.9).
+- v6b에서 넣은 것: 대형 화물(+15, ×3, 몫 10%)·VIP 귀중품(+18, ×5, 몫 5%), 급송 요청 전화(30~60분, 받으면 내 트럭 20건 ×2, [설정]에서 끔), 주간 배송 목표(30,000건 → 쿠폰 1 + 경험치 2,000), 명장 방문일(+10에 열림, 요일 고르기, 전날 예고, 그날만 보너스 7개 중 1개), 보험(방문일 추가 요금 = 비용 × 2, 아니면 쿠폰), "N번 시도 가능". 저장 형식 9. 현지 시각은 화면이 `now_local`로 넘김 (확인 스크립트는 `main.now_local_override`)
+- v5b에서 넣은 것: 능력치 5개(내 트럭만), 팁, 물류센터 [능력치] [창고·할 일] 두 칸, 두 번 누르는 [초기화]. `Trip` 수입 함수 인자 `(b, state, i)`
+- 시뮬 30일 (지금 json): 가볍게 +20, 열심히 +21 (빠름) → 강화 비용 제안 `cost_base` 65,000 (QUESTIONS Q21, 허락 전)
 - **폴더 주의:** 사용자가 `itwasdv` 폴더(`prototype-v6`)에서 플레이 테스트 중이라, 새 작업은 `itwasdv-merge` 폴더에서 합친다. 아래 "명령"의 경로 `...\itwasdv`를 `...\itwasdv-merge`로 바꾸면 새 버전이 돈다 (`override.cfg` 때문에 저장 폴더가 따로라 `itwasdv`의 진짜 저장은 안 건드림: `app_userdataitwasdv-merge`)
 - 숫자 시트 = `docs/SHEET_SNAPSHOT.md` (Claude Docs 커넥터 대신. 바뀌면 사용자가 새 스냅샷을 줌)
 - v6-bal에서 넣은 것: 시트 강화 확률표(실패는 늘 단계 유지), 기름값 20%, 돌리기 비용(스포츠 160만·레이싱 600만), 옵션 수치·이동 속도 가중치 10, 오버부스트 = 걸린 바퀴 내내 운전 속도 2배, 소수점 적재량은 바퀴마다 확률로, 레벨 곡선 1.33, 퀘스트 보상, 창고·야간팀 가격, 처음 켰을 때 말풍선. 저장 형식 6
-- **허락 기다리는 제안** (바깥 폴더 `QUESTIONS.md` Q17·Q19, `_reports/v6bal_proposal.diff`, `_reports/v5b_proposal.diff`): 스페어 드랍 0.000006, 기름값 절감·적재량 수치 낮추기, 강화 비용 기본값 52,500, 노하우·상하차 수치. json에 안 넣음
+- **허락 기다리는 제안** (바깥 폴더 `QUESTIONS.md` Q17·Q19·Q21, `_reports/v6bal_proposal.diff`, `_reports/v5b_proposal.diff`): 스페어 드랍 0.000006, 기름값 절감·적재량 수치 낮추기, 강화 비용 기본값 65,000, 주간 목표 60,000, 노하우·상하차 수치, 보험 추가 요금 배수 (Q21, `_reports/v6b_proposal.diff`). json에 안 넣음
 - 진행 기록은 바깥 폴더 `PROGRESS.md`, 담당 보고는 `_reports/`
-- 남은 손 확인 (사용자): 플레이 테스트(v3~v6a, v6-bal 지시서 맨 아래), 띠 24시간 켜두기, 진짜 창 확인(`check_switch.ps1`, `check_desktop.ps1`, `shot_screens.gd`: 건물 빛남·이름표, 말풍선, 세팅 칸, 오버부스트 불꽃), 영어 화면, 알림 영역 아이콘 클릭
-- 지금 코드가 기획서와 다른 곳: 보험·명장·주간 목표·급송 전화·대형·VIP 없음(v6b) / 트럭은 데이터만 여러 대, 타이어·터보·대리점 없음(v7)
+- 남은 손 확인 (사용자): 플레이 테스트(v3~v6a, v6-bal, v5b, v6b 지시서 맨 아래), 띠 24시간 켜두기, 진짜 창 확인(`check_switch.ps1`, `check_desktop.ps1`, `shot_screens.gd`: 건물 빛남·이름표, 말풍선, 세팅 칸, 오버부스트 불꽃), 영어 화면, 알림 영역 아이콘 클릭
+- 지금 코드가 기획서와 다른 곳: 트럭은 데이터만 여러 대, 타이어·터보·대리점 없음(v7)
 
 지난 기록:
 - v0 끝 (플레이 테스트 "아니오" 1개, 결과는 `docs/IDEAS.md`)
@@ -174,6 +178,7 @@ python -I -X utf8 "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwas
   `check_desktop.ps1` 44/44. 그때 전체 화면 맨 위 2줄 빈틈을 찾아 고침
 - 오래 켜두기: 사용자가 2026-11-10에 2시간 넘게 켜 두고 화면 어두워짐·작업표시줄 깨짐 없음을 확인
   (v0 기록 1시간 44분: GDI·USER·핸들 그대로, 작업 메모리만 98~472MB 오르내림. 원인 모름 → 평소 쓸 때 지켜보기)
+- v6b (2026-11-13 오후): 계산 `v6b-core` C1~C3, 화면 `v6b-ui` U1~U2. `core` 페인이 QA
 - v5b 기사 능력치 (2026-11-13 오후): 계산 `v5b-core` C1~C2, 화면 `v5b-ui` U1. `core` 페인이 QA
 - v6-bal 답 반영 (2026-11-13 오후): 계산 `bal-core` B1~B2, 화면 `bal-ui` U1. `core` 페인이 QA
 - v6a 건물 클릭 (2026-11-13): 화면만. `ui` 페인이 만들고 `core` 페인이 QA

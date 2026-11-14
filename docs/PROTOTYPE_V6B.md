@@ -106,6 +106,13 @@ static func can_insure(state: GameState, now_local: int) -> bool          ## 방
 static func insure_fee(state: GameState, b: Balance, i: int, now_local: int) -> int   ## 방문 중이면 비용 × 2, 쿠폰이면 0
 static func try_enhance(state, b, i, rng, insure: bool = false, now_local: int = 0) -> Dictionary
     ## 결과에 "insured": bool (보험이 퍼짐을 막았나), "double": bool (2단계 올랐나) 추가
+## (2026-11-13 QA 뒤 약속에 넣음. C2가 만든 것)
+## Enhance.chances_for(b, s: GameState, i: int, insure: bool = false) -> Dictionary
+## Enhance.block_reason(state, b, i, insure: bool = false, now_local: int = 0) -> Block   (Block.NO_INSURE 추가)
+## Economy.enhance_cost(b, star: int, s: GameState) -> int        ## 할인 보너스 반영 (실제로 빠지는 돈)
+## Economy.base_enhance_cost(b, star: int) -> int                 ## 보너스 없는 공식 (시뮬·표용)
+## Economy.tries(s, b, i, insure: bool = false, now_local: int = 0) -> int   ## "지금 돈이면 N번 시도 가능" (지금 단계 비용 기준)
+## Setting.roll_cost(b, grade: int, s: GameState) -> int / Setting.up_chance(b, grade: int, s: GameState) -> float
 ## Enhance.chances_for / block_reason / Economy.enhance_cost 를 화면이 부르는 곳은 보너스·보험을 반영한 값을 돌려줘야 한다
 ## (화면이 보여 주는 확률·비용 = 실제). 인자가 바뀌면 "바뀐 약속" 표로 보고
 
