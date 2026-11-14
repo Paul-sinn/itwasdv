@@ -11,6 +11,10 @@
 ## ④ 튜닝숍 [세팅] 터보: 창업 전·창업 뒤 +10 전 모두 "터보 · 대리점 + 엔진 +10에 열려요", +10 트럭은 켜짐 + "장거리 노선에서만",
 ##    ko·en 큰 화면 5가지에서 (창업 전, 3호차 +0, 터보, 터보 고르는 화면) 창 안
 ## ⑤ 사무실 [트럭] 트럭 3대 + 안내 줄 ko·en 큰 화면 5가지에서 창 안   ⑥ en 글자에 한글·키 없음
+## U2 (기업 계약): ⑦ 평판이 기준에 닿으면 알림 "기업 계약 체결! 시간당 +N원" (계약마다 한 번), [장부] "· 그중 기업 계약 N원" = Company.today contract,
+##    "기업 계약 N / 3 · 시간당 N원" = Contract.hourly, "다음 계약까지 회사 평판 N" = next_reputation − 평판, 다 맺으면 "모두 맺었어요"
+##    ⑧ 돌아왔을 때 요약 "기업 계약 +N원" = apply_offline contract (계약 없으면 그 줄 없음), 작은 화면 안 (ko·en)
+##    ⑨ 새 퀘스트 3개 이름·설명 (작은 화면 다음 할 일 줄, 물류센터)   ⑩ ko·en [장부] 큰 화면 5가지에서 창 안
 ## 진짜 저장·설정 파일은 건드리지 않는다.
 ##
 ## 실행:
@@ -21,6 +25,7 @@ const ErrorWatch = preload("res://tests/error_watch.gd")   ## 실행 중 스크�
 const MAIN_SCENE := "res://scenes/main.tscn"
 const Balance = preload("res://scripts/core/balance.gd")
 const Company = preload("res://scripts/core/company.gd")
+const Contract = preload("res://scripts/core/contract.gd")
 const Driver = preload("res://scripts/core/driver.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Quest = preload("res://scripts/core/quest.gd")
@@ -35,6 +40,7 @@ const TEST_SETTINGS := "user://test_v7b_settings.cfg"
 const SMALL_SIZES := [Vector2i(480, 220), Vector2i(720, 330), Vector2i(960, 440)]
 const FIT_SIZES := [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(3440, 1440), Vector2i(1280, 1300), Vector2i(2200, 800)]
 const LONG_NOTICE := "장거리 노선이 열렸어요"
+const HOUR := 3600
 const TURBO_LOCK := "터보 · 대리점 + 엔진 +10에 열려요"
 
 var fails := PackedStringArray()
@@ -61,6 +67,7 @@ func _run() -> void:
 	await _strip_long(b)
 	await _long_money_xp(b)
 	await _turbo_slot(b)
+	await _u2(b)
 	for loc in ["ko", "en"]:
 		TranslationServer.set_locale(loc)
 		var bad := await _office_fit(b, loc == "en")
@@ -381,6 +388,167 @@ func _turbo_slot(b: Balance) -> void:
 			FIT_SIZES.size(), fit["ko"], fit["en"]])
 
 
+# ---------------- U2: 기업 계약 ----------------
+
+func _u2(b: Balance) -> void:
+	# ⑦ 체결 알림 · [장부]
+	Save.delete_file(TEST_SAVE)
+	var m := await _launch(b)
+	var s: GameState = m.state
+	var town = m.town
+	_agency_with_helpers(b, s, 0)
+	s.quest_index = Quest.count(b)
+	s.driver_level = Driver.max_level(b)
+	s.truck(0).star = 10   # 시간당 매출이 있게 (계약 금액 = 그 순간 매출 × 비율)
+	s.reputation = b.contract_reputation[0]   # 준비: 첫 계약 기준에 닿음
+	await _frames(3)
+	m._want_day_picker = false   # +10 = 명장이 열림 → 요일 고르기 창 (여기서는 안 봄)
+	var first := _contract_notice(b, s, 0)
+	var signed_ok: bool = Contract.count(s) == 1 and _count_notice(town, first) == 1
+	Engine.time_scale = Feel.CHEAT_TIME_SCALE
+	await _wait(1.0)   # 게임 1분쯤: 계약 수입이 쌓임
+	Engine.time_scale = 0.0
+	await _frames(1)
+	_click(town.building_rects()[Town.OFFICE].get_center())
+	await _frames(3)
+	var o = m.panel.office
+	_click(o.page_buttons[o.Page.BOOKS].get_global_rect().get_center())
+	await _frames(2)
+	var d := Company.today(s)
+	var need: int = Contract.next_reputation(b, s) - s.reputation
+	var books := [o._sales.text, o._contract.text, o._contracts.text, o._contract_next.text]
+	var books_ok: bool = d["contract"] > 0 and d["sales"] > d["contract"] and o._contract_next.is_visible_in_tree() and books == [
+			"매출 %s원" % Fmt.money(d["sales"]), "· 그중 기업 계약 %s원" % Fmt.money(d["contract"]),
+			"기업 계약 1 / %d · 시간당 %s원" % [b.contract_reputation.size(), Fmt.money(int(Contract.hourly(b, s)))],
+			"다음 계약까지 회사 평판 %s" % Fmt.count(need)]
+	s.reputation = b.contract_reputation[-1]   # 준비: 마지막 기준 → 프레임마다 하나씩 나머지 계약
+	await _frames(4)
+	var signed := []
+	var notices := 0
+	for k in Contract.count(s):
+		signed.append(_contract_notice(b, s, k))
+		notices += _count_notice(town, signed[k])
+	var all_text: String = o._contract_next.text
+	var all_ok: bool = Contract.count(s) == 3 and notices == 3 and all_text == "기업 계약을 모두 맺었어요" and o._contracts.text.begins_with("기업 계약 3 / 3 · ")
+	_report(signed_ok and books_ok and all_ok,
+			"⑦ 기업 계약: 평판이 기준에 닿으면 알림 %s (계약마다 한 번) / [장부] %s = Company.today·Contract.hourly·next_reputation / 다 맺으면 '%s'" % [
+			signed, books, all_text])
+	await _close(m)
+
+	# ⑧ 돌아왔을 때 요약: 계약 있음 (가장 긴 요약: 보조 트럭 2대 + 노하우 + 계약) ko·en / 계약 없음 → 그 줄 없음
+	var away := []
+	var bad := []
+	for c in [["ko", true], ["en", true], ["ko", false]]:
+		TranslationServer.set_locale(c[0])
+		var st := GameState.new_game()
+		_agency_with_helpers(b, st, 2)
+		st.truck(0).star = 10
+		st.abilities["knowhow"] = 3   # 노하우 경험치 줄도 나오게
+		st.ability_points = 3
+		st.quest_index = Quest.count(b)
+		st.rush_enabled = false
+		if c[1]:
+			st.contracts = [floori(Company.hourly_sales(b, st) * b.contract_shares[0])]   # 준비: 계약 1개
+		Save.write_file(TEST_SAVE, st, int(Time.get_unix_time_from_system()) - 3 * HOUR)
+		m = await _launch(b)
+		var r: Dictionary = m.offline_report
+		var note: String = m.popup.note_text()
+		var lines := note.split("\n")
+		var fits: bool = m.popup.visible and Rect2(Vector2.ZERO, Vector2(Feel.SMALL_SIZE)).encloses(m.popup.get_rect()) \
+				and _enclosed(m.visible_rects(), m.popup.get_global_rect())
+		if not fits:
+			bad.append("%s 요약 %s 작은 화면 밖" % [c[0], m.popup.get_rect()])
+		if c[0] == "en":
+			en_texts.append_array(lines)
+		elif c[1]:
+			away = lines
+			var line := "기업 계약 +%s원" % Fmt.money(r.get("contract", -1))
+			var at := lines.find(line)
+			if r.get("contract", 0) <= 0 or at < 0 or not lines[at + 1].begins_with("직원 몫"):
+				bad.append("요약에 '%s' 없음 (세금 줄 앞): %s" % [line, lines])
+		elif note.contains("기업 계약") or r.get("contract", -1) != 0:
+			bad.append("계약 없는데 요약에 계약 줄: %s" % [lines])
+		await _close(m)
+	TranslationServer.set_locale("ko")
+	_report(bad.is_empty(), "⑧ 돌아왔을 때 요약 (3시간): %s, 계약 줄 = apply_offline contract (세금 줄 앞), 계약 없으면 없음, ko·en 작은 화면 안 %s" % [away, bad])
+
+	# ⑨ 새 퀘스트 3개: 작은 화면 다음 할 일 줄 + 물류센터 이름·설명 (ko·en)
+	var quests := []
+	bad = []
+	for loc in ["ko", "en"]:
+		TranslationServer.set_locale(loc)
+		Save.delete_file(TEST_SAVE)
+		m = await _launch(b)
+		for id in ["long_first", "turbo_first", "contract_first"]:
+			var at := -1
+			for i in b.quests.size():
+				if b.quests[i]["id"] == id:
+					at = i
+			m.state.quest_index = at   # 준비: 그 퀘스트 차례 (새 게임이라 진행 0)
+			await _frames(2)
+			var line: String = m.town._quest_label.text
+			if loc == "ko":
+				var want: String = { "long_first": "첫 장거리", "turbo_first": "첫 터보", "contract_first": "첫 기업 계약" }[id]
+				if at < 0 or line != "다음 할 일: %s 0/1" % want:
+					bad.append("%s 줄 '%s'" % [id, line])
+				quests.append(line)
+			else:
+				en_texts.append(line)
+		_click(m.town.building_rects()["depot"].get_center())
+		await _frames(3)
+		var dt = m.panel.driver
+		_click(dt.depot_page_button.get_global_rect().get_center())
+		await _frames(2)
+		var desc := [dt._quest_name.text, dt._quest_desc.text]
+		if loc == "ko":
+			if desc != ["첫 기업 계약", "회사 평판을 모아 기업 계약 1개 맺기"] or not dt._quest_desc.is_visible_in_tree():
+				bad.append("물류센터 %s" % [desc])
+			quests.append(desc)
+		else:
+			en_texts.append_array(desc)
+		await _close(m)
+	TranslationServer.set_locale("ko")
+	_report(bad.is_empty(), "⑨ 새 퀘스트: %s %s" % [quests, bad])
+
+	# ⑩ ko·en [장부] (계약 1 / 3 + 다음 계약 줄) 큰 화면 5가지
+	var fit := {}
+	for loc in ["ko", "en"]:
+		TranslationServer.set_locale(loc)
+		Save.delete_file(TEST_SAVE)
+		m = await _launch(b)
+		s = m.state
+		_agency_with_helpers(b, s, 2)
+		s.driver_level = Driver.max_level(b)
+		s.truck(0).star = 10
+		s.reputation = b.contract_reputation[0]
+		await _frames(3)
+		m._want_day_picker = false
+		_click(m.town.building_rects()[Town.OFFICE].get_center())
+		await _frames(3)
+		o = m.panel.office
+		fit[loc] = []
+		for size: Vector2i in FIT_SIZES:
+			root.size = size
+			await _frames(3)
+			_click(o.page_buttons[o.Page.BOOKS].get_global_rect().get_center())
+			await _frames(3)
+			_fit(m, fit[loc], "사무실 [장부]", size, Contract.count(s) == 1 and o._contract_next.is_visible_in_tree() and o.tax_rows[-1].is_visible_in_tree())
+		if loc == "en":
+			en_texts.append_array([o._contract.text, o._contracts.text, o._contract_next.text])
+			en_texts.append_array(m.town.notices_shown + m.town._notice_queue)
+		await _close(m)
+	TranslationServer.set_locale("ko")
+	_report(fit["ko"].is_empty() and fit["en"].is_empty(), "⑩ ko·en 사무실 [장부] (기업 계약 줄 3개 + 세율표) 큰 화면 %d가지에서 창 안, 동네·[작게]·[설정]과 안 겹침 %s %s" % [
+			FIT_SIZES.size(), fit["ko"], fit["en"]])
+
+
+## 계약 k 체결 알림 글 (계산 쪽 이벤트 hourly = floor(hourly_of))
+func _contract_notice(b: Balance, s: GameState, k: int) -> String:
+	if k >= Contract.count(s):
+		return "(계약 %d 없음)" % k
+	return "기업 계약 체결! 시간당 +%s원" % Fmt.money(floori(Contract.hourly_of(b, s, k)))
+
+
 # ---------------- ⑤ 사무실 [트럭] 창 크기 ----------------
 
 ## 문제 목록. en이면 보이는 글자를 en_texts에 모음
@@ -456,7 +624,7 @@ func _count_notice(town: Node, text: String) -> int:
 
 ## en 화면에 한글이나 번역 키가 그대로 보이나
 func _untranslated(x: String) -> bool:
-	for prefix in ["ROUTE_", "OFFICE_", "TOWN_", "SETTING_", "TRUCK_", "NOTICE_"]:
+	for prefix in ["ROUTE_", "OFFICE_", "TOWN_", "SETTING_", "TRUCK_", "NOTICE_", "BOOKS_", "RETURN_", "QUEST_"]:
 		if x.contains(prefix):
 			return true
 	return _hangul.search(x) != null
@@ -505,6 +673,11 @@ func _click(pos: Vector2) -> void:
 		e.position = pos
 		e.global_position = pos
 		root.push_input(e)
+
+
+## 진짜 시간 seconds 동안 기다림 (게임 시간이 멈춰 있어도)
+func _wait(seconds: float) -> void:
+	await create_timer(seconds, true, false, true).timeout
 
 
 ## cond가 참이 될 때까지 프레임을 돌림 (진짜 시간 seconds까지). 됐으면 true

@@ -2,6 +2,8 @@
 ##   [트럭]: 보조 트럭 목록 ("2호차  +3 · 시간당 M원") + [보조 트럭 사기 (N원)] (모자라면 꺼짐 + "N원 모자람 · 약 N분 뒤", 다 샀으면 "더 살 수 없어요")
 ##   [순위표]: 잠긴 줄 3개(세계·전국·지역) + 시내 순위표: "다음 순위까지 시간당 N원", 라이벌 10곳 + 나 (내 줄 강조, 1위면 1위 색)
 ##   [장부]: 오늘 매출·직원 몫·세금·순이익 + 세율표 5줄 (지금 단계 강조)
+##     v7b U2: 매출 아래 "· 그중 기업 계약 N원" (Company.today contract), 순이익 아래 "기업 계약 N / 3 · 시간당 N원"(Contract.hourly) +
+##     "다음 계약까지 회사 평판 N" (Contract.next_reputation − 평판. 다 맺으면 "기업 계약을 모두 맺었어요")
 ## 순위·남은 양·오늘 집계·보조 트럭 값은 Company 값을, 라이벌 매출·세율은 balance 숫자를 그대로 보여 준다 (여기서 계산하지 않음).
 ## 트럭 시간당은 Trip.hourly_income (번 돈 기준. 튜닝숍 강화 칸과 같음). 버튼은 신호만 → main.gd → Company.buy_helper
 ## 라이벌 이름은 번역 파일 RIVAL_<번호> (번호 = balance rivals 순서, 0이 가장 작음), 단계 이름은 STAGE_<단계 id>
@@ -12,6 +14,7 @@ extends VBoxContainer
 
 const Balance = preload("res://scripts/core/balance.gd")
 const Company = preload("res://scripts/core/company.gd")
+const Contract = preload("res://scripts/core/contract.gd")
 const Economy = preload("res://scripts/core/economy.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Trip = preload("res://scripts/core/trip.gd")
@@ -51,6 +54,9 @@ var _sales: Label
 var _staff: Label
 var _tax: Label
 var _profit: Label
+var _contract: Label        ## "· 그중 기업 계약 N원" (매출 아래)
+var _contracts: Label       ## "기업 계약 N / 3 · 시간당 N원"
+var _contract_next: Label   ## "다음 계약까지 회사 평판 N" / "기업 계약을 모두 맺었어요"
 var _tax_list: VBoxContainer
 var _scale := 1.0
 var _font_sizes := {}     ## 글자 → 배수 곱하기 전 크기
@@ -100,9 +106,12 @@ func _ready() -> void:
 	var books: VBoxContainer = _pages[Page.BOOKS]
 	_label(books, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM).text = tr("BOOKS_HEAD")
 	_sales = _label(books, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
+	_contract = _label(books, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
 	_staff = _label(books, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
 	_tax = _label(books, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
 	_profit = _label(books, Feel.PANEL_TITLE_SIZE, Feel.COLOR_STAR)
+	_contracts = _label(books, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
+	_contract_next = _label(books, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
 	_label(books, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM).text = tr("TAX_HEAD")
 	_tax_list = VBoxContainer.new()
 	books.add_child(_tax_list)
@@ -246,6 +255,10 @@ func _refresh_books(b: Balance, s: GameState) -> void:
 	_staff.text = tr("BOOKS_STAFF") % Fmt.money(d["staff"])
 	_tax.text = tr("BOOKS_TAX") % Fmt.money(d["tax"])
 	_profit.text = tr("BOOKS_PROFIT") % Fmt.money(d["profit"])
+	_contract.text = tr("BOOKS_CONTRACT") % Fmt.money(d["contract"])
+	_contracts.text = tr("BOOKS_CONTRACTS") % [Contract.count(s), b.contract_reputation.size(), Fmt.money(int(Contract.hourly(b, s)))]
+	var need := Contract.next_reputation(b, s)
+	_contract_next.text = tr("BOOKS_CONTRACT_ALL") if need < 0 else tr("BOOKS_CONTRACT_NEXT") % Fmt.count(maxi(need - s.reputation, 0))
 	while tax_rows.size() < b.tax_rates.size():
 		tax_rows.append(_label(_tax_list, Feel.OFFICE_ROW_SIZE, Feel.COLOR_DIM))
 	for i in tax_rows.size():

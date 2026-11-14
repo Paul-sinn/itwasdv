@@ -365,3 +365,15 @@ SETTING_OPT_LONG_SPEED,장거리 속도,Long-haul speed
 SETTING_LOCKED_AGENCY_STAR,%s · 대리점 + 엔진 +%d에 열려요,%s · opens with an agency + engine +%d
 SETTING_LONG_SPEED_NOTE,장거리 속도: 장거리 노선에서만 빨라져요,Long-haul speed: only works on the long-haul route
 NOTICE_LONG_UNLOCKED,장거리 노선이 열렸어요,The long-haul route is open
+BOOKS_CONTRACT,· 그중 기업 계약 %s원,· of which business contracts ₩%s
+BOOKS_CONTRACTS,기업 계약 %d / %d · 시간당 %s원,Business contracts %d / %d · ₩%s/h
+BOOKS_CONTRACT_NEXT,다음 계약까지 회사 평판 %s,Company reputation to the next contract: %s
+BOOKS_CONTRACT_ALL,기업 계약을 모두 맺었어요,All business contracts signed
+NOTICE_CONTRACT,기업 계약 체결! 시간당 +%s원,Business contract signed! +₩%s/h
+RETURN_CONTRACT,기업 계약 +%s원,Business contracts +₩%s
+QUEST_LONG_FIRST,첫 장거리,First long haul
+QUEST_LONG_FIRST_DESC,사무실에서 트럭 하나를 장거리 노선으로 보내기,Send a truck on the long-haul route from the Office
+QUEST_TURBO_FIRST,첫 터보,First turbo
+QUEST_TURBO_FIRST_DESC,터보 세팅 한 번 돌리기,Roll a turbo setup once
+QUEST_CONTRACT_FIRST,첫 기업 계약,First business contract
+QUEST_CONTRACT_FIRST_DESC,회사 평판을 모아 기업 계약 1개 맺기,Build company reputation to sign 1 business contract

@@ -31,11 +31,13 @@
 ##      퍼지면 r["drop_to"]·r["premium"]으로 "+17에서 다시"(고급 스페어 / 복구 보험) 구분. 특별 NPC 방문·주간 보상 돈 → 동네 알림
 ## v7b: 이번 바퀴 노선이 "long"인 트럭은 띠에서 화면 밖으로 나갔다 돌아오고(truck.far), "+금액"은 나간 쪽 가장자리, 나가 있는 동안
 ##      구석 "장거리 배송 중 · N분 N초". 사무실 [시내] [장거리] → Trip.set_route → 저장. 장거리 열림(long_unlocked) → 동네 알림
+##      U2: 프레임마다 Contract.tick (기업 계약 체결·돈), 체결(contract) → 동네 알림, 꺼둔 동안 요약에 계약 줄
 extends Control
 
 const Ability = preload("res://scripts/core/ability.gd")
 const Balance = preload("res://scripts/core/balance.gd")
 const Company = preload("res://scripts/core/company.gd")
+const Contract = preload("res://scripts/core/contract.gd")
 const Depot = preload("res://scripts/core/depot.gd")
 const Driver = preload("res://scripts/core/driver.gd")
 const Master = preload("res://scripts/core/master.gd")
@@ -298,6 +300,7 @@ func _process(delta: float) -> void:
 	var now := now_local()
 	Master.tick(state, balance, now, rng)
 	Rush.tick(state, balance, delta, rng)
+	Contract.tick(state, balance, delta)
 	town.set_truck_count(state.trucks.size())
 	for i in state.trucks.size():
 		_advance_truck(i, delta)
@@ -449,6 +452,8 @@ func _offline_lines() -> PackedStringArray:
 	var note := tr("RETURN_DETAIL") % [offline_report["parcels"], offline_report["spares"]]
 	if offline_report["xp"] > 0:   # 노하우가 있을 때만 (꺼둔 동안 경험치)
 		note += "\n" + tr("RETURN_XP") % offline_report["xp"]
+	if offline_report.get("contract", 0) > 0:   # 기업 계약 번 돈 (세금 떼기 전. 세금은 아래 줄에 같이)
+		note += "\n" + tr("RETURN_CONTRACT") % Fmt.money(offline_report["contract"])
 	if Company.stage(state) >= GameState.AGENCY:   # 대리점이면 뗀 것 (위 큰 글자 돈 = 떼고 난 내 돈)
 		note += "\n" + tr("RETURN_STAFF_TAX") % [Fmt.money(offline_report["staff"]), Fmt.money(offline_report["tax"])]
 	note += "\n" + rule
@@ -504,6 +509,9 @@ func _show_events(events: Array) -> void:
 			"long_unlocked":   # 대리점 + 어느 트럭이 처음 +10 (계산 쪽이 한 번만 보냄)
 				_notify(cur)
 				cur = { "head": tr("NOTICE_LONG_UNLOCKED") }
+			"contract":   # 기업 계약 체결 (hourly = 그 계약 시간당, 협상 반영)
+				_notify(cur)
+				cur = { "head": tr("NOTICE_CONTRACT") % Fmt.money(e["hourly"]) }
 	_notify(cur)
 
 
