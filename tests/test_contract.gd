@@ -38,10 +38,10 @@ func _events(s: GameState) -> Array:
 	return s.take_events().filter(func(e): return e["type"] == "contract")
 
 
-## json "contracts" = 시작값 (평판 기준은 임시), 틀린 숫자는 막힘
+## json "contracts" = 시작값 (평판 기준은 v7b C4 시뮬), 틀린 숫자는 막힘
 func test_json_contracts() -> void:
 	check(b.is_ok(), "진짜 balance.json에 문제가 있음: %s" % ", ".join(b.errors))
-	check_eq(b.contract_reputation, PackedInt64Array([150000, 450000, 900000]), "평판 기준 (임시)")
+	check_eq(b.contract_reputation, PackedInt64Array([200000, 1700000, 3600000]), "평판 기준 (v7b C4: 가볍게 만렙 뒤 1 / 3 / 6주)")
 	check_eq(b.contract_shares, PackedFloat64Array([0.05, 0.07, 0.10]), "매출의 5 / 7 / 10%")
 	for c in [
 		[func(d): d.erase("contracts"), "\"contracts\" 묶음이 없음"],
@@ -65,14 +65,14 @@ func test_sign() -> void:
 	Contract.tick(solo, b, 1.0)
 	check_eq([Contract.count(solo), _events(solo).size()], [0, 0], "개인 기사는 평판이 넘쳐도 계약 없음")
 	var s := _game([10], true)
-	s.reputation = 149_999
+	s.reputation = 199_999
 	Contract.tick(s, b, 1.0)
-	check_eq([Contract.count(s), Contract.next_reputation(b, s)], [0, 150000], "평판 149,999: 아직")
+	check_eq([Contract.count(s), Contract.next_reputation(b, s)], [0, 200000], "평판 199,999: 아직")
 	var sales := Company.hourly_sales(b, s)
-	s.reputation = 150_000
+	s.reputation = 200_000
 	Contract.tick(s, b, 0.0)
 	var want0 := floori(sales * 0.05)
-	check_eq([Contract.count(s), s.contracts, Contract.next_reputation(b, s)], [1, [want0], 450000], "평판 15만: 1개 = 시간당 매출 × 5%")
+	check_eq([Contract.count(s), s.contracts, Contract.next_reputation(b, s)], [1, [want0], 1700000], "평판 20만: 1개 = 시간당 매출 × 5%")
 	check_eq(_events(s), [{ "type": "contract", "index": 0, "hourly": want0 }], "체결 알림")
 	Contract.tick(s, b, 0.0)
 	check_eq(Contract.count(s), 1, "다음 기준 전에는 더 안 맺음")

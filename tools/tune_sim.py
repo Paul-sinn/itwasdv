@@ -1,6 +1,6 @@
 """
 택배 방치형 - 경제 시뮬레이터 (v5 기사 레벨·퀘스트·창고·야간팀 + v6-bal 규칙 + v5b 능력치·팁 + v6b 대형·VIP·급송·주간 목표·명장
-+ v7a 대리점·보조 트럭·직원 몫·세금·타이어·순위 + v7-bal 특별 NPC·보험·시내 노선까지, 판정용)
++ v7a 대리점·보조 트럭·직원 몫·세금·타이어·순위 + v7-bal 특별 NPC·보험·시내 노선 + v7b 장거리·터보·기업 계약까지, 판정용)
 
 흉내 내는 것 (v7a 게임에 있는 것만):
   트럭 1대, 엔진 강화(성공 / 실패=유지 / 퍼짐 → 스페어 1개 쓰고 +15), 강화 비용 고정표,
@@ -17,7 +17,8 @@
   v7-bal: 명장 보너스 3개(퍼짐 감소·성공 상승·2단계), 특별 NPC 3명(보험사·마술사·중고 부품상, 21~28일마다, 첫 방문 1~28일),
   보험(보험사 날 [예]만, 보험료 = 기본 비용 × 퍼짐(표 값) × fee_mult), 제휴 할인·복구 보험, 마술사 날 등급업 × 2, 고급 스페어(+17),
   주간 목표 돈 보상(하루치 = 시간당 내 돈 × reward_hours), 시내 노선(창업 뒤 모든 트럭: 단가·도로·한 바퀴 싣는 수·싣는 시간).
-  장거리·터보·기업 계약은 아직 없음 (v7b).
+  v7b: 장거리 노선(대리점 + 그 트럭 +10, 트럭마다 스위치), 터보(대리점 + +10, 장거리 속도 옵션은 장거리에서만), 장거리 경험치,
+  기업 계약(평판 기준마다 체결, 맺을 때 순위 매출 × 비율로 고정, 협상, 세금, 꺼둔 동안 야간팀 %), 퀘스트 3개.
 
 계산식은 docs/PROTOTYPE_V3~V5.md "계산식" + PROTOTYPE_V6_BAL.md "바뀌는 규칙" + PROTOTYPE_V5B.md "정한 것" =
 scripts/core/trip.gd, economy.gd, enhance.gd, setting.gd, driver.gd, ability.gd, depot.gd, quest.gd, company.gd 와 같다.
@@ -38,10 +39,15 @@ scripts/core/trip.gd, economy.gd, enhance.gd, setting.gd, driver.gd, ability.gd,
     복구 보험 날 가입 안 하고 퍼지면 +17. 고급 스페어(켜 둠)는 퍼질 때 먼저 써서 +17. "스페어 1개 필요"는 보통 + 고급
   노선 (Trip._route, v7-bal C2): 창업 뒤 모든 트럭이 시내. 단가 = round(unit_price × price_mult × (1 + 협상)), 도로 × road_mult,
     한 바퀴 싣는 수 = 적재량 × stops_mult, 싣는 시간 × stops_mult. 시뮬은 노선마다 Bal 사본(Bal.routed)을 써서 같은 식을 그대로 씀
+  장거리 (v7b, Trip.route_id): 트럭마다 Bal 사본 (Player.bt). 장거리 사본은 속도 = 출력 × (1 + 이동 속도 + 장거리 속도) (Trip._speed_at),
+    내 트럭 배송 경험치 = routes.long.xp_per_parcel. 꺼둔 동안도 트럭마다 그 노선 숫자로 (Trip.apply_offline: 스위치 노선)
+  기업 계약 (contract.gd): 대리점 + 평판 ≥ 다음 기준이면 체결, 금액 = floor(그 순간 순위 매출 × sales_share[k]), 시간당 = 금액 합 × (1 + 협상).
+    켜 둔 동안 × (1 − 세율) 평균 (게임은 정수로 쌓고 오늘 누계로 세금 반올림), 꺼둔 동안 floor(시간당 × 시간 × 야간팀) − round(× 세율).
+    순위 매출(Company.hourly_sales)엔 안 넣고 시간당 내 돈(Company.hourly_net = 주간 보상 기준)엔 세금 뗀 값으로 넣음
   직원 몫·세금 (Trip._split): 번 돈(배송 1건 돈·팁마다, 꺼둔 동안은 트럭마다 floor한 합) → 직원 몫 round(× 30%, 보조 트럭만),
     세금 round(× 세율), 나머지가 내 돈. 켜 둔 동안은 평균 (종류 몫 × (뗀 1건 돈 + 팁 확률 × 뗀 팁) = 게임 Trip.hourly_net)
 게임 숫자는 전부 data/balance.json (게임과 같은 파일)의 trip / engine / offline / setting / driver / abilities / depot / quests / company /
-special / rush / weekly / master / visitors / routes.
+special / rush / weekly / master / visitors / routes / contracts.
 
 실행:  python -I -X utf8 tools/tune_sim.py                   가볍게(2.5시간)·열심히(8시간) 둘 다, 세팅 있음
                                                              (+ 세팅 없음 비교 줄, v4 숫자 비교 줄)
@@ -59,6 +65,8 @@ special / rush / weekly / master / visitors / routes.
                                                                정비비 감소 한 줄의 가치
                                                              + v7-bal: 옵션 한 줄의 가치(동네·시내), 보험 기대값, 마술사, 급송,
                                                                시내 한 바퀴·상하차 효과·보조 트럭 본전
+                                                             + v7b: 장거리 ÷ 시내 시간당 (단가 배수·세팅별), 터보 장거리 속도 한 줄의 가치
+       python -I -X utf8 tools/tune_sim.py --long-mults 4,8,10   v7b 표의 장거리 단가 배수 후보 (기본: json 값 + 6·8·10·12)
        (옵션: --players 1000  --seed 7)
        -X utf8: 막대그래프 글자(█) 때문에 cp949 콘솔에서 필요
 판정: "30일" 줄의 지금 단계 중앙값 (기획서 16.7). 최고 도달 단계는 참고만.
@@ -117,6 +125,10 @@ v4 숫자 비교: 같은 유저를 꺼둔 동안 V4_OFFLINE(8시간 × 50%) 고�
   - v7a 보조 트럭 배송: 켜 둔 동안은 트럭마다 배송 수를 세고(소수 이어 감) 직원 몫·세금 뗀 평균 돈. 스페어 드랍은 평균값을
       spare_drop_carry에 더함 (꺼둔 동안처럼, 다음 꺼둔 동안에 정수로). 경험치 0. 본전 = 산 뒤 켜 둔 동안 번 내 돈이 값에 닿은 켜 둔 시간
   - v7a 순위: 매일 켜 둔 시간이 끝날 때 모든 트럭 시간당 매출(번 돈, 급송 뺌)을 라이벌과 비교. 같거나 넘으면 그 라이벌 위
+  - v7b 노선 규칙: 살펴볼 때마다 장거리를 갈 수 있는 트럭은 시내·장거리 중 시간당 번 돈(Trip.hourly_income_on)이 큰 쪽으로 바꿈.
+      게임은 다음 바퀴부터지만 시뮬은 평균이라 바로 (한 바퀴 차이). 세팅 고르기 값도 갈 수 있는 노선 중 큰 쪽
+  - v7b 기업 계약: 살펴볼 때·켜 둔 구간 끝·꺼둔 동안 경험치 뒤에 평판을 봄 (게임은 프레임마다). 계약 돈도 번 돈처럼 세팅 몫·강화 몫으로
+  - v7b 장거리 첫 바퀴 퀘스트: 장거리 트럭이 켜 둔 동안 달리면 끝 (게임은 장거리로 바퀴를 출발할 때)
 """
 import argparse
 import bisect
@@ -217,6 +229,11 @@ class Bal:
         self.routes = {k: {kk: float(v) for kk, v in rt.items()} for k, rt in d["routes"].items()}
         self.route = "raw"
         self.stops_mult = 1.0
+        self.route_xp = None      # 노선 xp_per_parcel (장거리. 없으면 동네·시내 규칙)
+        self.long_unlock = int(self.routes["long"].get("unlock_star", 0))   # Trip.can_long: 대리점 + 그 트럭 이 단계
+        # --- v7b 기업 계약 ---
+        self.contract_rep = [int(x) for x in d["contracts"]["reputation"]]
+        self.contract_share = [float(x) for x in d["contracts"]["sales_share"]]
         # --- abilities (기사 능력치 v5b): id → (per_point, max_points), json 순서 ---
         self.abilities = {k: (float(v["per_point"]), int(v["max_points"])) for k, v in d["abilities"].items()}
         self.max_star = int(eng["max_star"])
@@ -303,6 +320,7 @@ class Bal:
         c.road = self.road * rt["road_mult"]
         c.load = self.load * rt["stops_mult"]
         c.stops_mult = rt["stops_mult"]
+        c.route_xp = int(rt["xp_per_parcel"]) if "xp_per_parcel" in rt else None
         return c
 
     # --- Trip ---
@@ -310,7 +328,8 @@ class Bal:
         return self.base_power + sum(self.power_gain[:star])
 
     def speed(self, star, tot):
-        return self.power(star) * (1.0 + tot.get("speed", 0.0))
+        """Trip._speed_at: 출력 × (1 + 이동 속도 [+ 장거리 속도: 장거리 사본만])"""
+        return self.power(star) * (1.0 + tot.get("speed", 0.0) + (tot.get("long_speed", 0.0) if self.route == "long" else 0.0))
 
     def cargo(self, tot):
         """평균 한 바퀴 싣는 수 (Trip.cargo, 소수점 그대로) = 기본 적재량 × (1 + 적재량 %) × 노선 stops_mult"""
@@ -485,6 +504,7 @@ class Truck:
         self.parts = {p: {"grade": 0, "lines": [], "counters": [0] * (b.max_grade + 1)} for p in b.parts}
         self.tot = {}
         self.frac = 0.0
+        self.route = ""           # v7b 노선 스위치: "" = 기본 (동네 / 시내), "long" = 장거리
         self.helper = helper
         self.bought_on, self.bought_day, self.price = bought_on, bought_day, price
         self.earned = 0.0
@@ -494,7 +514,7 @@ class Truck:
 class Player:
     # 내 트럭(트럭 0) 칸을 예전 이름 그대로 (v6b까지 트럭 1대 코드)
     star = property(lambda s: s.trucks[0].star, lambda s, v: setattr(s.trucks[0], "star", v))
-    b = property(lambda s: s.bc if s.stage >= 1 else s.b0)   # 지금 노선의 숫자 (창업 뒤 모든 트럭 시내)
+    b = property(lambda s: s.bt(s.trucks[0]))   # 내 트럭 노선의 숫자 (노선과 상관없는 숫자도 여기서 읽음)
     tot = property(lambda s: s.trucks[0].tot, lambda s, v: setattr(s.trucks[0], "tot", v))
     parts = property(lambda s: s.trucks[0].parts)
     frac = property(lambda s: s.trucks[0].frac, lambda s, v: setattr(s.trucks[0], "frac", v))
@@ -502,7 +522,7 @@ class Player:
     def __init__(self, b, hours, rng, setting, v4=False, build=DEFAULT_BUILD, style=DEFAULT_STYLE, accept=RUSH_ACCEPT, save=SAVE_SHARE):
         """v4 = v4 숫자 비교용: 꺼둔 동안 V4_OFFLINE 고정, 창고·야간팀·퀘스트·능력치·v6b(급송·주간·명장)·v7a(창업) 없음"""
         self.stage = 0
-        self.b0, self.bc = b.routed("town"), b.routed("city")   # 노선별 숫자 (self.b = 지금 노선)
+        self.b0, self.bc, self.bl = b.routed("town"), b.routed("city"), b.routed("long")   # 노선별 숫자 (bt(트럭) = 그 트럭 노선)
         self.H, self.rng, self.setting, self.v4 = hours, rng, setting, v4
         # v7a: 회사 단계, 창업 자금, 보조 트럭, 순위
         self.trucks = [Truck(b)]
@@ -513,6 +533,12 @@ class Player:
         self.helper_destroys = 0
         self.sales_log = {}       # 날 → 그날 끝 모든 트럭 시간당 매출 (창업 뒤)
         self.rank1_day = None     # 시내 1위가 된 날
+        # v7b: 장거리·기업 계약
+        self.long_sent = False    # 장거리 트럭이 켜 둔 동안 달린 적 있음 (퀘스트 long_laps)
+        self.contracts = []       # 맺은 계약 금액 (GameState.contracts)
+        self.contract_days = []   # 맺은 때 (날)
+        self.contract_gross = 0.0 # 계약으로 번 돈 합 (세금 떼기 전)
+        self.rep_day = {}         # 날 → 그날 끝 평판
         # v6b: 명장·주간 목표·급송 / v7-bal: 특별 NPC·보험
         self.style = style
         self.accept = 0.0 if v4 else accept
@@ -591,9 +617,39 @@ class Player:
         self.money += keep
         self.set_money += amount * self.share
 
+    def bt(self, t):
+        """트럭 t의 노선 숫자 (Trip._route): 개인 기사 = 동네, 대리점 = 시내, 장거리 스위치면 장거리"""
+        if self.stage < 1:
+            return self.b0
+        return self.bl if t.route == "long" else self.bc
+
+    def _can_long(self, t):
+        """Trip.can_long: 대리점 + 그 트럭 지금 단계 ≥ unlock_star"""
+        return self.stage >= 1 and t.star >= self.b0.long_unlock
+
+    def _pick_routes(self):
+        """v7b 노선 규칙: 장거리를 갈 수 있는 트럭은 시간당 번 돈이 큰 쪽 (Trip.hourly_income_on 비교), 못 가면 기본"""
+        for t in self.trucks:
+            ab = self._ab_of(t)
+            t.route = "long" if self._can_long(t) and self.bl.hourly(t.star, t.tot, ab) > self.bc.hourly(t.star, t.tot, ab) else ""
+
+    def contract_hourly(self):
+        """Contract.hourly: 계약 금액 합 × (1 + 협상). 세금 떼기 전"""
+        return sum(self.contracts) * (1.0 + self.ab.get("nego", 0.0))
+
+    def _sign(self):
+        """Contract.tick 체결: 대리점 + 평판 ≥ 다음 기준이면 floor(순위 매출 × 비율) (넘은 만큼 다)"""
+        reps = self.b0.contract_rep
+        while self.stage >= 1 and len(self.contracts) < len(reps) and self.reputation >= reps[len(self.contracts)]:
+            self.contracts.append(math.floor(self.sales() * self.b0.contract_share[len(self.contracts)]))
+            self.contract_days.append(self.t_day)
+
     def _xpp(self):
-        """내 트럭 배송 1건 경험치 (대리점이면 시내)"""
-        return self.b.city_xp if self.stage >= 1 else self.b.xp_per_parcel
+        """내 트럭 배송 1건 경험치: 노선에 경험치가 있으면 그것 (장거리), 아니면 대리점이면 시내"""
+        b = self.b
+        if b.route_xp is not None:
+            return b.route_xp
+        return b.city_xp if self.stage >= 1 else b.xp_per_parcel
 
     def _ab_of(self, t):
         """능력치는 내 트럭만 (Trip._ability)"""
@@ -601,18 +657,30 @@ class Player:
 
     def sales(self):
         """순위 기준 시간당 매출: 모든 트럭 시간당 번 돈 합 (Company.hourly_sales)"""
-        return sum(self.b.hourly(t.star, t.tot, self._ab_of(t)) for t in self.trucks)
+        return sum(self.bt(t).hourly(t.star, t.tot, self._ab_of(t)) for t in self.trucks)
 
     def daily_all(self):
-        """지금 하루 내 돈 (모든 트럭, 켜 둔 시간 + 꺼둔 동안, 직원 몫·세금 뗀 뒤, 급송 뺌)"""
-        b = self.b
+        """지금 하루 내 돈 (모든 트럭 + 기업 계약, 켜 둔 시간 + 꺼둔 동안, 직원 몫·세금 뗀 뒤, 급송 뺌)"""
         cap, rate = self.cap_rate()
         total = 0.0
         for t in self.trucks:
+            b = self.bt(t)
             ab = self._ab_of(t)
             off = b.offline(t.star, t.tot, 24 - self.H, cap, rate, ab)[0]
             total += b.hourly(t.star, t.tot, ab, (t.helper, self.stage)) * self.H + b.split(off, t.helper, self.stage)[2]
-        return total
+        return total + self._contract_net(self.contract_hourly() * self.H) + self._contract_offline(24 - self.H)[1]
+
+    def _contract_net(self, gross):
+        """계약 번 돈 → 세금 뗀 내 돈 (켜 둔 동안: 평균 비율로)"""
+        return gross * (1.0 - self.b.tax_rates[self.stage])
+
+    def _contract_offline(self, hours_away):
+        """Contract.offline: (번 돈 floor(시간당 × min(시간, 창고) × 야간팀), 세금 뗀 내 돈). 3분 미만이면 0"""
+        if not self.contracts or hours_away * 3600.0 < self.b.ignore_under:
+            return 0, 0
+        cap, rate = self.cap_rate()
+        gross = math.floor(self.contract_hourly() * min(hours_away, cap) * rate)
+        return gross, gross - roundi(gross * self.b.tax_rates[self.stage])
 
     # ---------- v7a 창업·보조 트럭 ----------
     def _found(self):
@@ -733,8 +801,9 @@ class Player:
             self.next_drop = self._geom()   # 기하분포는 기억이 없어서 다시 뽑아도 같음
 
     def hourly_net_all(self):
-        """Company.hourly_net: 모든 트럭 시간당 내 돈 (직원 몫·세금 뗀 뒤, 급송 뺌)"""
-        return sum(self.b.hourly(t.star, t.tot, self._ab_of(t), (t.helper, self.stage)) for t in self.trucks)
+        """Company.hourly_net: 모든 트럭 시간당 내 돈 (직원 몫·세금 뗀 뒤, 급송 뺌) + 기업 계약 × (1 − 세율)"""
+        return (sum(self.bt(t).hourly(t.star, t.tot, self._ab_of(t), (t.helper, self.stage)) for t in self.trucks)
+                + self._contract_net(self.contract_hourly()))
 
     def _weekly_add(self, n):
         """주간 목표에 배송 n건 (Weekly.add_parcels): 처음 닿으면 돈(Weekly.reward_money) + 경험치, 몇 주차 무슨 요일인지 기록"""
@@ -814,8 +883,10 @@ class Player:
             return 1 if self.stage >= 1 else 0
         if k == "helpers":
             return len(self.trucks) - 1
-        if k in ("long_laps", "contracts"):   # v7b: 장거리·기업 계약은 아직 시뮬에 없음 (C3에서) → 이 퀘스트에서 멈춤
-            return 0
+        if k == "long_laps":
+            return 1 if self.long_sent else 0
+        if k == "contracts":
+            return len(self.contracts)
         raise ValueError(f"모르는 퀘스트 종류: {k}")
 
     def _quests(self):
@@ -860,8 +931,8 @@ class Player:
         n = math.floor(total)
         self.frac = total - n
         self._deliver(n, hours, frac0, rate)
-        b = self.b
         for t in self.trucks[1:]:   # 보조 트럭: 직원 몫·세금 뗀 평균 돈, 경험치 0, 드랍은 평균값
+            b = self.bt(t)
             total = t.frac + b.parcels_per_hour(t.star, t.tot) * hours + 1e-9
             k = math.floor(total)
             t.frac = total - k
@@ -876,8 +947,14 @@ class Player:
         rush = hours * self.b.rush_per_hour(self.star, self.tot, self.ab, self.accept, (False, self.stage))   # 급송 (평균, 내 트럭만)
         self.rush_money += rush
         self._income(rush)
+        gross = self.contract_hourly() * hours   # 기업 계약 (Contract.tick: 세금 뗌, 직원 몫 없음)
+        self.contract_gross += gross
+        self._income(self._contract_net(gross))
+        if hours > 0 and any(t.route == "long" for t in self.trucks):
+            self.long_sent = True
         self.on_hours += hours
         self.t_day += hours / 24.0
+        self._sign()
         self._quests()   # 배송 수·레벨 퀘스트 (게임은 advance마다)
 
     def _spend(self, amount, kind, mine=True):
@@ -903,7 +980,8 @@ class Player:
         return best
 
     def _value(self, t, tot):
-        v = self.b.hourly(t.star, tot, self._ab_of(t))
+        ab = self._ab_of(t)
+        v = max(self.bc.hourly(t.star, tot, ab), self.bl.hourly(t.star, tot, ab)) if self._can_long(t) else self.bt(t).hourly(t.star, tot, ab)
         if self.b.needs_spare(t.star):
             v *= 1.0 + min(tot.get("engine_guard", 0.0), self.b.guard_cap)
         return v
@@ -955,6 +1033,7 @@ class Player:
     def act(self, day):
         """살펴보기 1번: 퀘스트 → 창업·보조 트럭 → 세팅 → 창고·야간팀 → 강화. 그사이 끝난 퀘스트가 있으면 (보상 돈으로) 한 번 더"""
         while True:
+            self._sign()
             self._quests()
             self._buy_for_quest()
             self._found()
@@ -962,6 +1041,7 @@ class Player:
             self._settings()
             self._buy_depot()
             self._enhance(day)
+            self._pick_routes()
             if not self._quests():
                 return
 
@@ -1063,7 +1143,8 @@ class Player:
         rate = b.parcels_per_hour(self.star, self.tot, self.ab)
         pay = b.money_per_parcel(self.star, self.tot, self.ab, cut=(False, self.stage))
         if rate > 0:
-            pay += sum(b.hourly(t.star, t.tot, None, (True, self.stage)) for t in self.trucks[1:]) / rate
+            pay += (sum(self.bt(t).hourly(t.star, t.tot, None, (True, self.stage)) for t in self.trucks[1:])
+                    + self._contract_net(self.contract_hourly())) / rate
         save = self.save if self.stage == 0 else 0.0
         keep = pay * (1.0 - self.share)
         pool = keep * (1.0 - save)
@@ -1128,26 +1209,34 @@ class Player:
                     "insured": self.insured, "saved": self.saved, "premium": self.premium, "weekly_money": self.weekly_money,
                     "master": self.master,
                     "level": self.level, "depot": dict(self.depot), "quests": self.quest_index,
+                    "routes": [t.route for t in self.trucks], "contracts": len(self.contracts),
+                    "contract_hourly": self.contract_hourly(), "net_all": self.hourly_net_all(),
+                    "contract_net": self._contract_net(self.contract_hourly()), "reputation": self.reputation,
                 }
             self._set_bonus("")                          # 꺼둔 동안은 보너스·급송·특별 NPC 효과 없음
             self.visiting = False
             self.visitor, self.ins_event, self.joined = "", "", False
             money, parcels, parcels0 = 0, 0, 0
-            for t in self.trucks:   # Trip.apply_offline: 트럭마다 floor한 번 돈 → 직원 몫·세금 뗌
-                g, n_t = b.offline(t.star, t.tot, 24 - H, *self.cap_rate(), self._ab_of(t))
-                money += b.split(g, t.helper, self.stage)[2]
+            for t in self.trucks:   # Trip.apply_offline: 트럭마다 (그 트럭 노선 숫자로) floor한 번 돈 → 직원 몫·세금 뗌
+                bt = self.bt(t)
+                g, n_t = bt.offline(t.star, t.tot, 24 - H, *self.cap_rate(), self._ab_of(t))
+                money += bt.split(g, t.helper, self.stage)[2]
                 parcels += n_t
                 self.carry += n_t * b.drop_chance(self._ab_of(t))
                 if t is self.trucks[0]:
                     parcels0 = n_t
-            self._income(money)
+            cg, cn = self._contract_offline(24 - H)   # 기업 계약 (Contract.offline)
+            self.contract_gross += cg
+            self._income(money + cn)
             self.parcels_total += parcels
             self._weekly_add(parcels)
             self._add_xp(b.offline_xp(parcels0, self.ab, self._xpp()))   # 노하우, 내 트럭만 (만렙 시각은 켜 둔 시간이 끝난 때로)
+            self._sign()
             whole = math.floor(self.carry)
             self.carry -= whole
             self.spares += whole
             self.spares_dropped += whole
+            self.rep_day[day] = self.reputation
         return self
 
 
@@ -1348,8 +1437,10 @@ def report(b, label, hours, players, seed, compare=None, v4=None, build=DEFAULT_
           f"고급 스페어 받음 {st.mean(p.premium_got for p in players):.2f}·씀 {st.mean(p.premium_used for p in players):.2f}개, "
           f"마술사 날 돌리기 {st.mean(p.magic_rolls for p in players):.1f}번")
     print(f"  ▶ 급송: {SIM_DAYS}일 동안 급송으로 더 번 돈 중앙값 {won(st.median(p.rush_money for p in players))}")
+    report_reputation(b, players)
     if save > 0:
         report_v7a(b, players, save)
+        report_v7b(b, players)
 
     print(f"\n  ▶ {SIM_DAYS}일 동안: 강화 {st.median(p.presses for p in players):,.0f}번 (중앙값), "
           f"스페어 산 것 평균 {st.mean(p.spares_bought for p in players):.2f}개 / 드랍 평균 {st.mean(p.spares_dropped for p in players):.2f}개, "
@@ -1418,7 +1509,140 @@ def report_v7a(b, players, save):
     day = lambda x: "못 감" if x == math.inf else f"{x:g}일째 ({x / 7:.1f}주)"
     print(f"    시내 1위: {SIM_DAYS}일 안에 {sum(1 for x in r1 if x < math.inf) / n * 100:.0f}%, 처음 된 날 (못 간 사람 포함) "
           f"중앙값 {day(pct(r1, 0.5))} [하위 10% {day(pct(r1, 0.9))} ~ 상위 10% {day(pct(r1, 0.1))}]")
+    peaks = [max(p.sales_log.values()) if p.sales_log else 0.0 for p in players]
+    print(f"    {SIM_DAYS}일 안 가장 높았던 시간당 매출 (창업 안 한 사람은 0): 하위 20% {won(pct(peaks, 0.2))}, 중앙값 {won(pct(peaks, 0.5))}"
+          f" → 라이벌 1위를 하위 20% 값 이하로 두면 {SIM_DAYS}일 안 1위가 80% 이상")
     print(f"    {SIM_DAYS}일 동안 보조 트럭 퍼짐 평균 {st.mean(p.helper_destroys for p in players):.2f}번")
+
+
+REP_WEEKS = [1, 3, 6]   # v7b ③: 만렙 뒤 몇 주에 계약 평판 기준에 닿게 할까 (지시서)
+
+
+def report_reputation(b, players):
+    """v7b ③: 만렙 뒤 평판 (노하우가 없으면 켜 둔 배송·퀘스트·주간 목표·강화 첫 달성 경험치만). 지금 기준에 닿는 주, 만렙 뒤 N주 평판"""
+    n = len(players)
+    reached = [p for p in players if p.max_at is not None]
+    if not reached:
+        print("\n  ▶ 평판: 만렙 간 사람 없음")
+        return
+    end = lambda p: math.floor(p.max_at[0] + 1e-9) + 1   # 만렙이 된 날 (1일째부터)
+    print(f"\n  ▶ 평판 (만렙 뒤 경험치, {SIM_DAYS}일 안 만렙 {len(reached) / n * 100:.0f}%): 만렙 날 중앙값 {st.median(end(p) for p in reached):g}일째")
+    cells = []
+    for w in REP_WEEKS:
+        vals = [p.rep_day[end(p) + 7 * w] for p in reached if end(p) + 7 * w in p.rep_day]
+        cells.append(f"{w}주 뒤 " + (f"{won(st.median(vals))} [{won(pct(vals, 0.1))} ~ {won(pct(vals, 0.9))}] ({len(vals) / n * 100:.0f}% 셈)"
+                                    if vals else "90일 넘음"))
+    print("    만렙 뒤 평판 중앙값: " + " | ".join(cells))
+    cells = []
+    for k, r in enumerate(b.contract_rep):
+        weeks = []
+        for p in reached:
+            hit = next((d for d in sorted(p.rep_day) if d >= end(p) and p.rep_day[d] >= r), None)
+            weeks.append(math.inf if hit is None else (hit - end(p)) / 7)
+        wk = lambda x: "못 감" if x == math.inf else f"{x:.1f}주"
+        cells.append(f"{k + 1}번째 {won(r)}: 중앙값 {wk(pct(weeks, 0.5))} [{wk(pct(weeks, 0.1))} ~ {wk(pct(weeks, 0.9))}], "
+                     f"90일 안 {sum(1 for x in weeks if x < math.inf) / n * 100:.0f}%")
+    print("    지금 기준에 닿는 때 (만렙 뒤): " + " | ".join(cells))
+
+
+def report_v7b(b, players):
+    """v7b: 트럭별 장거리 비율, 기업 계약 (맺은 수·날·금액·내 돈 중 몫 = 주간 보상 중 몫), 장거리 첫 퀘스트"""
+    n = len(players)
+    print(f"\n  ▶ v7b 장거리 (창업한 사람 중, 트럭별 장거리를 고른 비율. 규칙: 시간당 번 돈이 큰 노선)")
+    for d in (30, 60, 90):
+        rows = [p.snaps[d] for p in players if p.snaps[d]["stage"] >= 1]
+        if rows:
+            cols = max(len(r["routes"]) for r in rows)
+            print(f"    {d}일째: " + ", ".join(
+                f"{'내 트럭' if k == 0 else f'{k + 1}호차'} {sum(1 for r in rows if len(r['routes']) > k and r['routes'][k] == 'long') / max(1, sum(1 for r in rows if len(r['routes']) > k)) * 100:.0f}%"
+                for k in range(cols)))
+    print(f"    장거리 첫 바퀴 퀘스트: {SIM_DAYS}일 안 {sum(1 for p in players if p.long_sent) / n * 100:.0f}%")
+    print(f"  ▶ v7b 기업 계약 (평판 {' / '.join(won(r) for r in b.contract_rep)}, 순위 매출 × "
+          + " / ".join(f"{s * 100:g}%" for s in b.contract_share) + ")")
+    for k in range(len(b.contract_rep)):
+        days = [p.contract_days[k] + 1 for p in players if len(p.contract_days) > k]
+        print(f"    {k + 1}번째: {SIM_DAYS}일 안 {len(days) / n * 100:.0f}%" + (f", 맺은 날 중앙값 {st.median(days):.1f}일째 "
+              f"[{pct(days, 0.1):.1f} ~ {pct(days, 0.9):.1f}], 금액 중앙값 시간당 "
+              f"{won(st.median(p.contracts[k] for p in players if len(p.contracts) > k))}" if days else ""))
+    for d in (30, 60, 90):
+        rows = [p.snaps[d] for p in players if p.snaps[d]["contracts"] > 0]
+        if rows:
+            print(f"    {d}일째 계약 있는 사람 {len(rows) / n * 100:.0f}%: 계약 시간당 {won(st.median(r['contract_hourly'] for r in rows))}, "
+                  f"시간당 내 돈 중 계약 몫 (= 주간 보상 중 계약 몫) 중앙값 {st.median(r['contract_net'] / r['net_all'] for r in rows) * 100:.1f}%")
+    print(f"    {SIM_DAYS}일 동안 계약 번 돈 중앙값 (계약 있는 사람) {won(st.median([p.contract_gross for p in players if p.contracts] or [0]))}")
+
+
+def long_price(b, m):
+    """장거리 단가 배수만 m으로 바꾼 json 그대로 Bal 사본 (표 비교용)"""
+    c = copy.copy(b)
+    c.routes = {k: dict(v) for k, v in b.routes.items()}
+    c.routes["long"]["price_mult"] = m
+    return c
+
+
+def parity_mult(b, star, tot, ab=None):
+    """장거리 시간당 번 돈 = 시내가 되는 장거리 단가 배수 (이분법)"""
+    target = b.routed("city").hourly(star, tot, ab)
+    lo, hi = 0.5, 50.0
+    for _ in range(40):
+        mid = (lo + hi) / 2
+        if long_price(b, mid).routed("long").hourly(star, tot, ab) < target:
+            lo = mid
+        else:
+            hi = mid
+    return hi
+
+
+def table_v7b(b, mults):
+    """v7b ①: 장거리 ÷ 시내 시간당 번 돈 (단가 배수·세팅별), ②: 터보 장거리 속도 한 줄의 가치 (장거리에서 이동 속도 한 줄 = 1)"""
+    stars = [10, 12, 15, 18, 20, 22, 25, 28, 30]
+    bc = b.routed("city")
+    rt = b.routes["long"]
+    print(f"■ v7b ① 장거리 (도로 ×{rt['road_mult']:g}, 집 수 ×{rt['stops_mult']:g}, 경험치 {rt.get('xp_per_parcel', 0):g}) ÷ 시내 시간당 번 돈. "
+          f"세팅 없는 트럭 1대 (능력치 없음, 대형·VIP는 둘 다 같은 몫)")
+    print("  단계 | 출력 | 한 바퀴 시내 / 장거리 | 시내 시간당 | 같아지는 배수 | " + " | ".join(f"×{m:g}" for m in mults))
+    for s in stars:
+        bl = long_price(b, rt["price_mult"]).routed("long")
+        cells = [f"{long_price(b, m).routed('long').hourly(s, {}) / bc.hourly(s, {}):.2f}" for m in mults]
+        print(f"  +{s:<2} | {b.power(s):>4} | {bc.avg_lap_seconds(s, {}):6.1f} / {bl.avg_lap_seconds(s, {}):6.1f}초 | {won(bc.hourly(s, {})):>7} | "
+              f"{parity_mult(b, s, {}):11.2f} | " + " | ".join(f"{c:>5}" for c in cells))
+    top = b.max_grade
+    sp, ls, cg = b.options["speed"]["values"], b.options["long_speed"]["values"], b.options["cargo"]["values"]
+    um = {"unload": b.abilities["unload"][0] * b.abilities["unload"][1]}
+    cases = []
+    for g in (3, top):
+        gn = GRADE_NAMES[g]
+        cases += [
+            (f"이동 속도 3줄 {gn} ({sp[g] * 300:g}%)", {"speed": sp[g] * 3}, None),
+            (f"터보 장거리 속도 3줄 {gn} ({ls[g] * 300:g}%)", {"long_speed": ls[g] * 3}, None),
+            (f"속도 3 + 장거리 3 {gn}", {"speed": sp[g] * 3, "long_speed": ls[g] * 3}, None),
+            (f"적재량 3줄 {gn} ({cg[g] * 300:g}%)", {"cargo": cg[g] * 3}, None),
+        ]
+    cases.append((f"상하차 최대 ({um['unload'] * 100:g}%, 내 트럭)", {}, um))
+    cases.append((f"상하차 최대 + 적재량 3줄 {GRADE_NAMES[top]}", {"cargo": cg[top] * 3}, um))
+    for m in mults:
+        bl = long_price(b, m).routed("long")
+        print(f"\n  단가 ×{m:g}: 장거리 ÷ 시내 (1보다 크면 장거리가 이김)")
+        print("  세팅 | " + " | ".join(f"+{s}" for s in stars))
+        base = [bl.hourly(s, {}) / bc.hourly(s, {}) for s in stars]
+        print("  세팅 없음 | " + " | ".join(f"{x:.2f}" for x in base))
+        for name, tot, ab in cases:
+            rs = [bl.hourly(s, tot, ab) / bc.hourly(s, tot, ab) for s in stars]
+            print(f"  {name} | " + " | ".join(f"{r:.2f}" for r in rs))
+    print("\n  같아지는 배수 (세팅별): 이 배수보다 크면 장거리가 이김")
+    print("  세팅 | " + " | ".join(f"+{s}" for s in stars))
+    print("  세팅 없음 | " + " | ".join(f"{parity_mult(b, s, {}):.1f}" for s in stars))
+    for name, tot, ab in cases:
+        print(f"  {name} | " + " | ".join(f"{parity_mult(b, s, tot, ab):.1f}" for s in stars))
+    print("\n■ v7b ② 터보 장거리 속도 한 줄의 가치 = 장거리에서 시간당 증가 ÷ 같은 등급 이동 속도 한 줄의 증가 (세팅 없음에서 한 줄만). 목표: 전용 약 1.3")
+    bl = b.routed("long")
+    for s in (10, 15, 18, 20, 25, 30):
+        h0 = bl.hourly(s, {})
+        rs = [(bl.hourly(s, {"long_speed": ls[g]}) / h0 - 1) / (bl.hourly(s, {"speed": sp[g]}) / h0 - 1) for g in range(top + 1)]
+        print(f"  장거리 +{s:<2} " + " / ".join(f"{GRADE_NAMES[g]} {r:.2f}" for g, r in enumerate(rs))
+              + f"  (이동 속도 프로토타입 한 줄 +{(bl.hourly(s, {'speed': sp[top]}) / h0 - 1) * 100:.1f}%)")
+    print("  (값 = 장거리 속도 % ÷ 이동 속도 % 에 가까움: 둘 다 같은 속도 합에 더해져서. 시내로 돌면 장거리 속도는 0)")
+    print()
 
 
 def table_v7a(b):
@@ -1555,6 +1779,7 @@ def main():
     ap.add_argument("--quick", action="store_true", help="세팅 없음·v4 비교 줄을 안 돌림")
     ap.add_argument("--build", choices=list(BUILDS), default=DEFAULT_BUILD,
                     help="능력치 빌드: " + ", ".join(f"{k}={v[0]}" for k, v in BUILDS.items()) + f" (기본 {DEFAULT_BUILD})")
+    ap.add_argument("--long-mults", default=None, help="--table v7b 장거리 단가 배수 후보 (쉼표로. 기본: json 값 + 6, 8, 10, 12)")
     a = ap.parse_args()
     if a.hours is not None and not 0 < a.hours <= 24:
         ap.error("--hours 는 0보다 크고 24 이하")
@@ -1567,6 +1792,9 @@ def main():
         table(b)
         table_v7a(b)
         table_v7bal(b)
+        cur = b.routes["long"]["price_mult"]
+        mults = [float(x) for x in a.long_mults.split(",")] if a.long_mults else sorted({cur, 6.0, 8.0, 10.0, 12.0})
+        table_v7b(b, mults)
         return
     names = {h: name for name, h in PLAYER_TYPES}
     types = PLAYER_TYPES if a.hours is None else [(names.get(a.hours, "직접 정한 시간"), a.hours)]
