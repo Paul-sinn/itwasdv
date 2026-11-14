@@ -135,6 +135,10 @@ static func route_id(s: GameState, i: int) -> String                   ## "town"
 ## Trip.lap_progress(b, s, i) -> float     ## 화면 트럭 자리 0~1 (싣는 동안 0). main._lap_phase 대신
 ## 이번 바퀴 집 수 = Trip.lap_cargo (동네 20, 시내 30), 노선 = Trip.route_id. parcel 이벤트 "house" = 0 ~ lap_cargo−1
 ## 싣는 시간도 × stops_mult. 바퀴 중간에 창업하면 단가·도로는 바로, 집 수는 다음 바퀴부터
+## (2026-11-14 C4 뒤 약속에 넣음)
+## Enhance.drop_to(state, b, i) -> int               ## 지금 퍼지면 내려갈 단계 (고급 스페어·복구 보험 반영. 화면의 퍼지기 전 설명용)
+## Trip.lap_stop_progress(b, s, i) -> float          ## 길 위 자리 = 지난 집 수 + 다음 집까지 달린 몫 (정차 중 정수, 싣는 동안 0, 복귀 n ~ n+1)
+## 넣은 숫자 (json 0.15): routes.city 1.2 / 0.4 / 2.0 (시내 한 바퀴 40집), maint_cut 18/30/45/55/60%, 라이벌 2,300만 ~ 3,600만
 ## Save: 형식 11. 새 칸 저장, coupons 지움. 출시 전이라 옛 파일은 지금 규칙대로(이름 바꿔 남기고 새로 시작)
 ```
 
