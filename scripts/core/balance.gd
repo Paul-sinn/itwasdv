@@ -434,7 +434,7 @@ static func _validate_contracts(c: Dictionary, errs: PackedStringArray) -> int:
 	return n
 
 
-## "depot_upgrades" 묶음 검사 (물류센터 업그레이드 v8a). id 3개 다 있고 그 밖은 없음, per_level > 0 (box는 정수 건),
+## "depot_upgrades" 묶음 검사 (물류센터 업그레이드 v8a). id 3개 다 있고 그 밖은 없음, per_level > 0 (box 소수 건도 됨: 적재량 소수는 바퀴마다 확률, v8a C4),
 ## sort는 최고 레벨에서 1 이하 (싣는 시간이 0 아래로 안 감), prices는 1개 이상·0 이상 정수·오를수록 줄지 않음
 static func _validate_upgrades(u, errs: PackedStringArray) -> void:
 	if typeof(u) != TYPE_DICTIONARY:
@@ -449,8 +449,7 @@ static func _validate_upgrades(u, errs: PackedStringArray) -> void:
 		if typeof(one) != TYPE_DICTIONARY:
 			errs.append("%s 이 없거나 { } 묶음이 아님" % where)
 			continue
-		var per_ok := _check_number(one, where, "per_level", errs, "0보다 큰 정수여야 함 (건)" if id == "box" else "0보다 커야 함",
-				func(v): return v > 0.0 and (id != "box" or v == floorf(v)))
+		var per_ok := _check_number(one, where, "per_level", errs, "0보다 커야 함", func(v): return v > 0.0)
 		var prices = one.get("prices")
 		if typeof(prices) != TYPE_ARRAY or prices.is_empty():
 			errs.append("%s.prices 가 없거나 빈 목록" % where)

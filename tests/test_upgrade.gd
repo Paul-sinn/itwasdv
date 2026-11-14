@@ -13,11 +13,13 @@ var b: Balance = Balance.load_file()
 ## depot_upgrades 묶음을 지운 숫자 (기능 꺼짐)
 var b_off: Balance = _off_balance()
 
-const PRICES := {
-	"zone": [100000, 300000, 800000, 2000000, 5000000],
-	"sort": [50000, 150000, 400000, 1000000, 2500000],
-	"box": [80000, 250000, 700000, 1800000, 4500000],
+const PRICES := {   ## v8a C4 (효과 E2: 구역 1%·분류 3%·적재함 0.4건)
+	"zone": [3700, 110000, 150000, 240000, 410000],
+	"sort": [790, 47000, 56000, 73000, 160000],
+	"box": [6500, 230000, 260000, 370000, 490000],
 }
+## 딱 떨어지는 손 계산용 레벨: 구역 Lv4 +4%, 분류 Lv4 −12%, 적재함 Lv5 +2건
+const EVEN := { "zone": 4, "sort": 4, "box": 5 }
 
 
 func _off_balance() -> Balance:
@@ -53,14 +55,15 @@ func test_levels_prices_values() -> void:
 			prices.append(Upgrade.price(b, s, id))
 		check_eq(prices, PRICES[id] + [-1], "%s 다음 레벨 값 (Lv5는 -1)" % id)
 	var s2 := _with_levels(2)
-	check_near(Upgrade.value(b, s2, "zone"), 0.04, 1e-12, "zone Lv2 = 단가 +4%")
-	check_near(Upgrade.value(b, s2, "sort"), 0.12, 1e-12, "sort Lv2 = 싣는 시간 −12%")
-	check_eq(Upgrade.value(b, s2, "box"), 2.0, "box Lv2 = +2건")
+	check_near(Upgrade.value(b, s2, "zone"), 0.02, 1e-12, "zone Lv2 = 단가 +2%")
+	check_near(Upgrade.value(b, s2, "sort"), 0.06, 1e-12, "sort Lv2 = 싣는 시간 −6%")
+	check_near(Upgrade.value(b, s2, "box"), 0.8, 1e-12, "box Lv2 = +0.8건 (소수 그대로)")
 	var s5 := _with_levels(5)
-	check_near(Upgrade.value(b, s5, "zone"), 0.10, 1e-12, "zone Lv5 = +10%")
-	check_near(Upgrade.value(b, s5, "sort"), 0.30, 1e-12, "sort Lv5 = −30%")
-	check_eq(Upgrade.value(b, s5, "box"), 5.0, "box Lv5 = +5건")
-	check_near(Upgrade.value_at(b, "zone", 3), 0.06, 1e-12, "value_at: zone Lv3 (다음 효과 표시용)")
+	check_near(Upgrade.value(b, s5, "zone"), 0.05, 1e-12, "zone Lv5 = +5%")
+	check_near(Upgrade.value(b, s5, "sort"), 0.15, 1e-12, "sort Lv5 = −15%")
+	check_near(Upgrade.value(b, s5, "box"), 2.0, 1e-12, "box Lv5 = +2건")
+	check_near(Upgrade.value_at(b, "zone", 3), 0.03, 1e-12, "value_at: zone Lv3 (다음 효과 표시용)")
+	check_near(Upgrade.value_at(b, "box", 1), 0.4, 1e-12, "value_at: box Lv1 = 0.4건 (화면 \"+0.4건\")")
 
 
 ## 사기: 1원 모자라면 못 삼, 딱 맞으면 삼 (돈 −값, 레벨 +1), 다섯 번 사면 끝
@@ -88,13 +91,14 @@ func test_buy() -> void:
 
 ## 대리점이면 못 삼 (돈이 많아도), 산 효과는 그대로 모든 트럭에
 func test_agency_cannot_buy_keeps_effect() -> void:
-	var s := _with_levels(2)
+	var s := GameState.new_game()
+	s.depot_upgrades = EVEN.duplicate()
 	s.money = 1_000_000_000
 	s.company_stage = GameState.AGENCY
 	for id in Upgrade.IDS:
 		check(not Upgrade.can_buy(b, s, id), "%s: 대리점인데 살 수 있음" % id)
 		check(not Upgrade.buy(b, s, id), "%s: 대리점인데 삼" % id)
-		check_eq(Upgrade.level(s, id), 2, "%s: 대리점 뒤에도 레벨 그대로" % id)
+		check_eq(Upgrade.level(s, id), EVEN[id], "%s: 대리점 뒤에도 레벨 그대로" % id)
 	check_eq(s.money, 1_000_000_000, "대리점: 돈 그대로")
 	s.trucks.append(TruckState.new())   # 보조 트럭
 	# 시내: 단가 round(2500 × 1.2 × 1.04) = 3120, 적재량 (20 + 2) × 2 = 44, 싣는 시간 10 × 2 × 0.88 = 17.6
@@ -104,10 +108,11 @@ func test_agency_cannot_buy_keeps_effect() -> void:
 		check_near(Trip._load(b, s, i), 17.6, 1e-9, "트럭 %d 시내 싣는 시간 (−12%%)" % i)
 
 
-## 한 바퀴 계산 (+0, 동네, 세 업그레이드 Lv2): 단가 2600 → 배송 1건 2600 − 520 − 130 = 1950, 적재량 22,
+## 한 바퀴 계산 (+0, 동네, 구역·분류 Lv4·적재함 Lv5): 단가 2600 → 배송 1건 2600 − 520 − 130 = 1950, 적재량 22,
 ## 싣는 시간 8.8초 → 한 바퀴 8.8 + 120 + 22 × 0.5 = 139.8초, 시간당 22 × (1950 + 팁 2% × 2600) × 3600 / 139.8
 func test_lap_numbers() -> void:
-	var s := _with_levels(2)
+	var s := GameState.new_game()
+	s.depot_upgrades = EVEN.duplicate()
 	check_eq(Trip._unit(b, s, 0), 2600, "단가")
 	check_eq(Trip.parcel_pay(b, s, 0), 1950, "배송 1건 돈")
 	check_eq(Trip.cargo(b, s, 0), 22.0, "평균 적재량")
@@ -129,18 +134,37 @@ func test_lap_numbers() -> void:
 			parcels += 1
 			gross += ev["gross"]
 	check_eq([parcels, gross, s.parcels_total], [22, 22 * 1950, 22], "한 바퀴: 22건, 배송 돈 22 × 1950")
-	note("+0 Lv2×3: 1건 %d원, %d건, 한 바퀴 %.1f초, 시간당 %.0f원 (Lv0 %.0f원)"
+	note("+0 구역·분류 Lv4·적재함 Lv5: 1건 %d원, %d건, 한 바퀴 %.1f초, 시간당 %.0f원 (Lv0 %.0f원)"
 			% [Trip.parcel_pay(b, s, 0), Trip.lap_cargo(b, s, 0), Trip.lap_seconds(b, s, 0), Trip.hourly_income(b, s, 0), Trip.hourly_income(b, s0, 0)])
+
+
+## 적재함 소수 (Lv1 +0.4건 → 평균 20.4건): 바퀴마다 20 또는 21건, 21건이 40% (seed 고정 10만 번, 1%p 안쪽)
+func test_fractional_box() -> void:
+	var s := GameState.new_game()
+	s.depot_upgrades = { "box": 1 }
+	check_near(Trip.cargo(b, s, 0), 20.4, 1e-9, "평균 적재량 20.4")
+	var rng := _rng(11)
+	var n := 100000
+	var more := 0
+	var other := 0
+	for k in n:
+		var c := Trip._roll_cargo(b, s, 0, rng)
+		if c == 21:
+			more += 1
+		elif c != 20:
+			other += 1
+	check_eq(other, 0, "20·21건 말고 나옴")
+	check_near(float(more) / n, 0.4, 0.01, "21건 비율 (%.4f)" % (float(more) / n))
 
 
 ## 꺼둔 동안도 업그레이드 식으로 (시간당 수입 × 시간 × 야간팀 비율, 배송 = 적재량 × 3600 / 한 바퀴 초 × …)
 func test_offline_uses_upgrades() -> void:
 	var s := _with_levels(5)
 	var hourly := Trip.hourly_income(b, s, 0)
-	var parcels_per_hour := 25.0 * 3600.0 / (10.0 * 0.7 + 120.0 + 25 * 0.5)
+	var parcels_per_hour := 22.0 * 3600.0 / (10.0 * 0.85 + 120.0 + 22 * 0.5)
 	var r := Trip.apply_offline(s, b, 2 * 3600.0)
 	check_eq(r["money"], floori(hourly * 2.0 * 0.5), "꺼둔 2시간 돈 = 시간당 × 2 × 0.5")
-	check_eq(r["parcels"], floori(parcels_per_hour * 2.0 * 0.5), "꺼둔 2시간 배송 (25건, 싣기 7초)")
+	check_eq(r["parcels"], floori(parcels_per_hour * 2.0 * 0.5), "꺼둔 2시간 배송 (22건, 싣기 8.5초)")
 	var r0 := Trip.apply_offline(GameState.new_game(), b, 2 * 3600.0)
 	check(r["money"] > r0["money"], "업그레이드가 꺼둔 동안 돈을 안 늘림 (%d ≤ %d)" % [r["money"], r0["money"]])
 	note("꺼둔 2시간 (+0): Lv5×3 %d원 / Lv0 %d원" % [r["money"], r0["money"]])
@@ -164,13 +188,13 @@ func test_disabled_without_group() -> void:
 	check_eq(r["state"].depot_upgrades, {}, "꺼짐: 저장의 레벨은 버림")
 
 
-## 숫자 검사: 모르는 id, 빠진 id, sort 합 1 넘음, box 소수, 값 줄어듦, 빈 가격, 묶음이 아님
+## 숫자 검사: 모르는 id, 빠진 id, sort 합 1 넘음, box 0 이하 (소수는 됨), 값 줄어듦, 빈 가격, 묶음이 아님
 func test_validation() -> void:
 	var cases := [
 		[func(u): u["turbo"] = { "per_level": 0.1, "prices": [1] }, "모르는 업그레이드"],
 		[func(u): u.erase("box"), "depot_upgrades.box 이 없거나"],
 		[func(u): u["sort"]["per_level"] = 0.25, "싣는 시간이 0 아래로"],
-		[func(u): u["box"]["per_level"] = 1.5, "depot_upgrades.box.per_level"],
+		[func(u): u["box"]["per_level"] = -0.4, "depot_upgrades.box.per_level"],
 		[func(u): u["zone"]["per_level"] = 0, "depot_upgrades.zone.per_level"],
 		[func(u): u["zone"]["prices"] = [300000, 100000], "줄면 안 됨"],
 		[func(u): u["zone"]["prices"] = [], "빈 목록"],
