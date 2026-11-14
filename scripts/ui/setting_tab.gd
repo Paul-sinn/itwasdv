@@ -1,5 +1,6 @@
-## 차고 [세팅] 칸: 부품(적재함·ECU)을 골라 세팅 돌리기 (트럭 0).
-##   위: 부품 버튼 (잠긴 부품은 "엔진 +5에 열림")
+## 차고 [세팅] 칸: 부품(적재함·ECU·타이어·휠)을 골라 세팅 돌리기 (v7a: 튜닝숍 트럭 탭에서 고른 트럭 = truck).
+##   위: 부품 버튼 (잠긴 부품은 "엔진 +5에 열림"), 타이어·휠은 창업 전 꺼진 버튼 + 그 아래 작은 줄 "타이어·휠 · 대리점을 차리면 열려요"
+##       (버튼 안에 긴 글을 넣으면 1280x720 영어에서 차고가 창 밖으로 나가서)
 ##   가운데: 고른 부품의 지금 상태 (등급 이름 + 줄들), 옵션 효과 (v6-bal: 적재함 → 한 바퀴 적재량 "21.6건",
 ##           ECU → 오버부스트 설명), 등급업 확률 · 천장 n/N, 한 줄에 나올 확률, 비용, [돌리기]
 ##   고르는 중(pending)이면: 지금 쓰는 것 / 새로 나온 것을 나란히 + 버튼 두 개
@@ -8,6 +9,7 @@
 extends VBoxContainer
 
 const Balance = preload("res://scripts/core/balance.gd")
+const Company = preload("res://scripts/core/company.gd")
 const Economy = preload("res://scripts/core/economy.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Setting = preload("res://scripts/core/setting.gd")
@@ -19,7 +21,7 @@ const Town = preload("res://scripts/ui/town.gd")
 signal roll_pressed(part: String)
 signal choose_pressed(part: String, take_new: bool)
 
-const TRUCK := 0   ## 지금은 트럭 1대 (고르는 탭은 v7)
+var truck := 0   ## 고른 트럭 번호 (garage_panel.gd 트럭 탭이 넣음. 0 = 내 트럭)
 
 var selected := ""          ## 고른 부품 id (처음 refresh 때 첫 부품)
 var part_buttons := {}      ## 부품 id → Button
@@ -28,6 +30,7 @@ var keep_button: Button     ## 예전 것 쓰기
 var take_button: Button     ## 새 것 쓰기
 
 var _parts_row: HBoxContainer
+var _lock_note: Label       ## 부품 버튼 아래 "타이어·휠 · 대리점을 차리면 열려요" (대리점 전에만)
 var _grade: Label           ## "적재함 · 스트리트" (등급 색)
 var _lines: VBoxContainer   ## 지금 쓰는 줄
 var _effect: Label          ## 이 부품에서 나오는 옵션의 효과: "한 바퀴 적재량 21.6건" / 오버부스트 설명 (고르는 중엔 숨김)
@@ -50,6 +53,7 @@ var _font_sizes := {}       ## 글자 → 배수 곱하기 전 크기
 func _ready() -> void:
 	_parts_row = HBoxContainer.new()
 	add_child(_parts_row)
+	_lock_note = _label(self, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
 	_grade = _label(self, Feel.PANEL_TITLE_SIZE, Feel.COLOR_TEXT)
 	_grade.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN   # 글자 폭만큼만 (커질 때 기준점이 글자에 맞게)
 	_grade.autowrap_mode = TextServer.AUTOWRAP_OFF   # 글자 폭만큼이라 줄바꿈하면 한 글자씩 꺾임
@@ -180,17 +184,26 @@ func result_text() -> String:
 
 ## 상태에 맞게 글자와 버튼을 고친다 (보이는 동안 매 프레임). locked = 엔진 강화 뜸 중
 func refresh(b: Balance, s: GameState, locked: bool) -> void:
-	var t := s.truck(TRUCK)
+	var t := s.truck(truck)
 	if part_buttons.is_empty():
 		_build_part_buttons(b)
-	if selected == "" or not Setting.unlocked(b, t, selected):
+	if selected == "" or not Setting.unlocked(b, s, truck, selected):
 		selected = Setting.part_ids(b)[0]
+	var locks := PackedStringArray()   # 대리점 전이라 잠긴 부품 줄
 	for id: String in part_buttons:
 		var btn: Button = part_buttons[id]
-		var open := Setting.unlocked(b, t, id)
-		btn.text = part_name(id) if open else tr("SETTING_LOCKED") % [part_name(id), Setting.unlock_star(b, id)]
+		var open := Setting.unlocked(b, s, truck, id)
+		if open:
+			btn.text = part_name(id)
+		elif Setting.unlock_stage(b, id) > Company.stage(s):   # 타이어·휠: 창업 전
+			btn.text = part_name(id)
+			locks.append(tr("SETTING_LOCKED_AGENCY") % part_name(id))
+		else:
+			btn.text = tr("SETTING_LOCKED") % [part_name(id), Setting.unlock_star(b, id)]
 		btn.disabled = not open
 		btn.set_pressed_no_signal(id == selected)
+	_lock_note.text = "\n".join(locks)
+	_lock_note.visible = not locks.is_empty()
 
 	var p := t.part(selected)
 	var grade: int = p["grade"]
@@ -217,10 +230,10 @@ func refresh(b: Balance, s: GameState, locked: bool) -> void:
 
 	var cost := Setting.roll_cost(b, grade, s)
 	_cost.text = tr("GARAGE_COST") % Fmt.money(cost)
-	var block := Setting.block_reason(s, b, TRUCK, selected)
+	var block := Setting.block_reason(s, b, truck, selected)
 	match block:
 		Setting.Block.NO_MONEY:
-			var hourly := Trip.hourly_income(b, s, TRUCK)
+			var hourly := Trip.hourly_income(b, s, 0)   # shortcut: 내 트럭 번 돈 기준 (보조 트럭·세금 빼고), 모든 트럭 내 돈 합 함수가 생기면 그걸로
 			_wait.text = tr("SETTING_SHORT") % [Fmt.money(cost - s.money), Fmt.wait_text(Economy.seconds_to_afford(cost, s.money, hourly))]
 		Setting.Block.PENDING:
 			_wait.text = tr("SETTING_PENDING")

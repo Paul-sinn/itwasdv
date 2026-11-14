@@ -268,3 +268,8 @@ const COLOR_INSURED := Color(0.55, 0.85, 1.0)         ## "퍼져도 단계 유�
 ## 방문 중 띠의 튜닝숍 테두리 두께 (설계 좌표). 건물 가장자리를 가운데로 그려서 바깥 절반이 빛남 두께(보이는 곳) 안에 들어감
 const MASTER_MARK_WIDTH := BUILDING_GLOW_PX * 2.0
 const MASTER_DAY_BUTTON_SIZE := 14                    ## 요일 버튼 7개 글자 (v0 패널 크기 기준)
+
+# --- v7a: 대리점 창업 줄, 띠의 보조 트럭 ---
+const AGENCY_FOUND_ARM_SECONDS := 3.0      ## [창업]을 한 번 누른 뒤 이 시간 안에 또 눌러야 창업 (진짜 시간)
+## 보조 트럭 짐칸 색 (2호차, 3호차 순. 내 트럭은 COLOR_TRUCK_BOX). 그림은 내 트럭과 같고 색만 다름
+const HELPER_TRUCK_COLORS := [Color(0.45, 0.75, 0.95), Color(0.95, 0.55, 0.45)]

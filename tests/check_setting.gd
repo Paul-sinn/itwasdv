@@ -57,7 +57,7 @@ func _run() -> void:
 	var st = p.setting
 	var t = m.state.truck(0)
 
-	# ① [세팅] 칸: 적재함·ECU, +4에서 ECU 잠김, +5에서 열림
+	# ① [세팅] 칸: 적재함·ECU·타이어·휠(v7a, 창업 전 잠김), +4에서 ECU 잠김, +5에서 열림
 	_click(p.setting_tab_button.get_global_rect().get_center())
 	await _frames(3)
 	_check(p.current_tab() == p.Tab.SETTING and st.visible and not p._engine_box.visible, "[세팅]을 눌렀는데 세팅 칸이 아님")
@@ -66,7 +66,7 @@ func _run() -> void:
 	await _frames(2)
 	var cargo_btn: Button = st.part_buttons.get("cargo_box")
 	var ecu_btn: Button = st.part_buttons.get("ecu")
-	var locked_ok: bool = st.part_buttons.size() == 2 and t.star == 4 and not cargo_btn.disabled and ecu_btn.disabled \
+	var locked_ok: bool = st.part_buttons.size() == 3 and st.part_buttons["tire"].disabled and t.star == 4 and not cargo_btn.disabled and ecu_btn.disabled \
 			and ecu_btn.text.contains("엔진 +5에 열림")
 	var locked_text: String = ecu_btn.text
 	_key(KEY_F4)

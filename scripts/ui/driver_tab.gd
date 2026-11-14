@@ -2,14 +2,17 @@
 ##   위: 기사 레벨, 경험치 막대(driver_xp / xp_need) (만렙이면 회사 평판)
 ##   그 아래 두 칸 고르기 (v5b. 한 화면에 다 넣으면 1280x720에서 창 밖으로 나감):
 ##     [능력치]: 남은 포인트 + [초기화](두 번 눌러야), 능력치 5줄 (이름 n/최대 · 지금 효과 / 한 줄 설명, [+]), 예시 빌드 4줄
-##     [창고·할 일]: 다음 할 일 (끝낸 수 n/22, 이름·설명·진행·보상), 주간 배송 목표 (v6b),
+##     [창고·할 일]: 대리점 창업 한 줄 (v7a: "대리점 창업 5억원 · 4.9억원 모자람" [창업] 두 번 눌러야 / 창업 뒤 "대리점 (시내)".
+##                   1280x720에 맞게 모자란 금액도 같은 줄, "약 N분 뒤"는 안 붙임),
+##                   다음 할 일 (끝낸 수 n/25, 이름·설명·진행·보상), 주간 배송 목표 (v6b),
 ##                   창고 확장·야간 배송팀 (지금 값 → 다음 값, 가격, [올리기], 모자란 금액)
 ## 숫자는 scripts/core 의 Driver·Quest·Depot·Ability 값을 그대로 보여 준다 (효과를 여기서 계산하지 않음).
-## 버튼은 신호만 → main.gd → Depot.upgrade / Ability.add / Ability.reset
+## 버튼은 신호만 → main.gd → Depot.upgrade / Ability.add / Ability.reset / Company.found
 ## 다음 할 일 이름·설명은 번역 파일 QUEST_<ID>, QUEST_<ID>_DESC (Fmt.quest_name / quest_desc)
 extends VBoxContainer
 
 const Balance = preload("res://scripts/core/balance.gd")
+const Company = preload("res://scripts/core/company.gd")
 const Depot = preload("res://scripts/core/depot.gd")
 const Driver = preload("res://scripts/core/driver.gd")
 const Economy = preload("res://scripts/core/economy.gd")
@@ -25,10 +28,11 @@ const Town = preload("res://scripts/ui/town.gd")
 signal upgrade_pressed(kind: String)
 signal ability_pressed(id: String)   ## 능력치 [+]
 signal reset_pressed                 ## [초기화]를 두 번째 누름 (첫 번째는 여기서 글만 바꿈)
+signal found_pressed                 ## [창업]을 두 번째 누름 (첫 번째는 여기서 글만 바꿈)
 
 enum Page { ABILITY, DEPOT }
 
-const TRUCK := 0   ## "모자란 금액 · 약 N분 뒤"를 셀 때 쓰는 시간당 수입 (트럭 1대)
+const TRUCK := 0   ## "모자란 금액 · 약 N분 뒤"를 셀 때 쓰는 시간당 수입 (shortcut: 내 트럭 번 돈 기준, 모든 트럭 내 돈 합 함수가 생기면 그걸로)
 const KINDS := ["warehouse", "night"]
 ## 종류별 번역 키: 이름("창고 확장 Lv.N"), 값("꺼둔 동안 쌓이는 시간 …")
 const KIND_KEYS := {
@@ -49,6 +53,7 @@ var ability_page_button: Button
 var depot_page_button: Button
 var add_buttons := {}    ## 능력치 id → [+] (처음 refresh 때 balance 순서로 만듦)
 var reset_button: Button
+var found_button: Button  ## 대리점 [창업] (창업 뒤 숨김)
 
 var _level: Label
 var _xp_bar: ProgressBar
@@ -69,7 +74,9 @@ var _ability_lines := {} ## 능력치 id → "협상  7/20 · 단가 +7%"
 var _ability_descs := {} ## 능력치 id → 한 줄 설명
 var _builds: Label       ## 예시 빌드 4줄
 var _weekly: Label       ## "이번 주 배송 12,340 / 30,000건 → 보험 쿠폰 1장 + 경험치 2,000" / "이번 주 달성!"
+var _agency: Label       ## "대리점 창업 5억원" (+ " · 4.9억원 모자람") / 창업 뒤 "대리점 (시내)"
 var _reset_armed_ms := -1   ## [초기화]를 한 번 누른 시각 (진짜 시간 ms). -1 = 안 누름
+var _found_armed_ms := -1   ## [창업]을 한 번 누른 시각 (진짜 시간 ms). -1 = 안 누름
 var _scale := 1.0
 var _font_sizes := {}    ## 글자 → 배수 곱하기 전 크기
 
@@ -113,6 +120,15 @@ func _ready() -> void:
 	# [창고·할 일]
 	_depot_box = VBoxContainer.new()
 	add_child(_depot_box)
+	# 맨 위: 대리점 창업 줄 (글자 왼쪽, [창업] 오른쪽 끝)
+	var agency_row := HBoxContainer.new()
+	_depot_box.add_child(agency_row)
+	_agency = _label(agency_row, Feel.PANEL_TEXT_SIZE, Feel.COLOR_STAR)
+	_agency.size_flags_horizontal = Control.SIZE_EXPAND_FILL   # 긴 글(영어·모자란 금액)은 [창업] 앞에서 줄바꿈
+	_agency.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	found_button = _button(agency_row, tr("AGENCY_FOUND"))
+	found_button.size_flags_horizontal = Control.SIZE_EXPAND | Control.SIZE_SHRINK_END
+	found_button.pressed.connect(_on_found_pressed)
 	_quest_head = _label(_depot_box, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
 	_quest_name = _label(_depot_box, Feel.PANEL_TEXT_SIZE, Feel.COLOR_STAR)
 	_quest_desc = _label(_depot_box, Feel.PANEL_SMALL_SIZE, Feel.COLOR_TEXT)
@@ -179,6 +195,26 @@ func _on_reset_pressed() -> void:
 	reset_button.text = tr("ABILITY_RESET_CONFIRM" if _reset_armed_ms >= 0 else "ABILITY_RESET")
 
 
+## [창업]: 첫 번째는 "한 번 더 누르면 창업"으로 바꾸기만, AGENCY_FOUND_ARM_SECONDS 안에 또 누르면 found_pressed
+func _on_found_pressed() -> void:
+	if _found_armed_ms >= 0:
+		_found_armed_ms = -1
+		found_pressed.emit()
+	else:
+		_found_armed_ms = Time.get_ticks_msec()
+	found_button.text = tr("AGENCY_CONFIRM" if _found_armed_ms >= 0 else "AGENCY_FOUND")
+
+
+## 창업 직후: "대리점 (시내)" 글자가 커졌다 돌아옴
+func show_founded() -> void:
+	Town.pop(_agency, Feel.POP_PIVOT_LEFT)
+
+
+## [창업]을 한 번 누른 채 기다리는 중인가 (확인용)
+func is_found_armed() -> bool:
+	return _found_armed_ms >= 0
+
+
 ## [초기화]를 한 번 누른 채 기다리는 중인가 (확인용)
 func is_reset_armed() -> bool:
 	return _reset_armed_ms >= 0
@@ -194,6 +230,7 @@ func refresh(b: Balance, s: GameState) -> void:
 	_xp.text = tr("DRIVER_REPUTATION") % s.reputation if at_max else tr("DRIVER_XP") % [s.driver_xp, need]
 	_refresh_abilities(b, s)
 
+	_refresh_agency(b, s)
 	_quest_head.text = tr("DRIVER_QUEST_HEAD") % [s.quest_index, Quest.count(b)]
 	var q := Quest.current(b, s)
 	if q.is_empty():
@@ -235,6 +272,21 @@ func refresh(b: Balance, s: GameState) -> void:
 		if short:
 			var hourly := Trip.hourly_income(b, s, TRUCK)
 			_waits[kind].text = tr("DEPOT_SHORT") % [Fmt.money(price - s.money), Fmt.wait_text(Economy.seconds_to_afford(price, s.money, hourly))]
+
+
+## 대리점 창업 줄: 창업 전 "대리점 창업 5억원" [창업] (돈이 모자라면 꺼짐 + 같은 줄에 모자란 금액), 창업 뒤 "대리점 (시내)"만.
+## [창업]을 한 번 누르고 시간이 지나거나 누를 수 없게 되면 원래 글로
+func _refresh_agency(b: Balance, s: GameState) -> void:
+	var founded := Company.stage(s) >= GameState.AGENCY
+	var price := Company.agency_price(b)
+	_agency.text = tr("AGENCY_DONE") if founded else tr("AGENCY_ROW") % Fmt.money(price)
+	if not founded and s.money < price:
+		_agency.text += " · " + tr("AGENCY_SHORT") % Fmt.money(price - s.money)
+	found_button.visible = not founded
+	found_button.disabled = not Company.can_found(b, s)
+	if found_button.disabled or (_found_armed_ms >= 0 and Time.get_ticks_msec() - _found_armed_ms > Feel.AGENCY_FOUND_ARM_SECONDS * 1000.0):
+		_found_armed_ms = -1
+	found_button.text = tr("AGENCY_CONFIRM" if _found_armed_ms >= 0 else "AGENCY_FOUND")
 
 
 ## [능력치] 칸: 남은 포인트, 능력치 줄마다 "이름  n/최대 · 지금 효과"와 [+] (못 찍으면 꺼짐), [초기화]

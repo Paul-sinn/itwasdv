@@ -19,10 +19,14 @@
 ##      대형·VIP·급송 "+금액", 급송 전화 말풍선 [받기] → Rush.accept, [설정] 급송 전화 켜기/끄기, 주간 목표 달성 알림
 ##      명장: +10 첫 달성(master_unlocked)이면 큰 화면 튜닝숍에서 요일 고르기 창(day_picker.gd), 요일 → Master.set_day,
 ##      예고·방문 알림, 방문 중이면 띠의 튜닝숍 테두리. 강화는 [보험]을 켰으면 Enhance.try_enhance(…, insure, now_local)
+## v7a: 매 프레임 모든 트럭을 Trip.advance (보조 트럭도 띠에서 달리고 "+금액" = 내 돈으로 들어온 금액).
+##      강화·세팅·보험은 튜닝숍 트럭 탭에서 고른 트럭(panel.truck). 능력치·급송·구석 줄 "+N"은 늘 내 트럭(트럭 0).
+##      물류센터 [창업] 두 번째 누름 → Company.found → 알림·저장. 꺼둔 동안 요약에 대리점이면 직원 몫·세금 줄
 extends Control
 
 const Ability = preload("res://scripts/core/ability.gd")
 const Balance = preload("res://scripts/core/balance.gd")
+const Company = preload("res://scripts/core/company.gd")
 const Depot = preload("res://scripts/core/depot.gd")
 const Driver = preload("res://scripts/core/driver.gd")
 const Master = preload("res://scripts/core/master.gd")
@@ -43,7 +47,7 @@ const DayPicker = preload("res://scripts/ui/day_picker.gd")
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
 
 const AUTOSAVE_SECONDS := 30.0        ## 30초마다 저장 (배속과 상관없이 진짜 30초)
-const TRUCK := 0   ## 지금은 트럭 1대 (번호 0). 사는 화면·고르는 탭은 v7
+const TRUCK := 0   ## 내 트럭 번호 (구석 줄 "+N", 치트 키). 강화·세팅·보험은 panel.truck (튜닝숍 트럭 탭)
 ## 처음 말풍선을 봤는지 (설정 파일 settings.cfg에. 게임 저장 파일 아님)
 const HINT_SECTION := "first_run"
 const HINT_KEY := "building_hint_seen"
@@ -139,6 +143,7 @@ func _ready() -> void:
 	panel.driver.upgrade_pressed.connect(_on_upgrade_pressed)
 	panel.driver.ability_pressed.connect(_on_ability_pressed)
 	panel.driver.reset_pressed.connect(_on_ability_reset)
+	panel.driver.found_pressed.connect(_on_found_pressed)
 	panel.master.day_pressed.connect(_on_day_picked)
 	town.tuning_pressed.connect(func(): open_building("tuning"))
 	_open_pending_setting()
@@ -265,31 +270,9 @@ func _process(delta: float) -> void:
 	var now := now_local()
 	Master.tick(state, balance, now, rng)
 	Rush.tick(state, balance, delta, rng)
-	var events := Trip.advance(state, balance, TRUCK, delta, rng)
-	town.truck.follow(_lap_phase(t))
-	town.truck.boosting = t.boost_lap
-	var house := town.truck.nearest_house()   # "+돈"은 트럭(있어야 할 자리)에서 가장 가까운 집에
-	for e in events:
-		match e["type"]:
-			"parcel":
-				town.show_payout(house, e["pay"], e.get("kind", "normal"), e.get("rush", false))
-				earned_total += e["pay"]
-				parcels_total += 1
-				if _measuring:
-					_measure_earned += e["pay"]
-			"spare":   # 바로 앞 배송에서 나옴 → 같은 집에
-				town.show_spare(house)
-				spares_found += 1
-			"boost":   # 이 바퀴는 오버부스트 (트럭 뒤 불꽃은 boosting으로 바퀴 내내)
-				town.show_boost()
-				boosts_found += 1
-			"tip":   # 바로 앞 배송에서 팁 (돈은 계산 쪽이 이미 더함) → 같은 집 "+금액" 옆에 "팁!"
-				town.show_tip(house, e["pay"])
-				earned_total += e["pay"]
-				tips_found += 1
-				tips_total += e["pay"]
-				if _measuring:
-					_measure_earned += e["pay"]
+	town.set_truck_count(state.trucks.size())
+	for i in state.trucks.size():
+		_advance_truck(i, delta)
 	_show_events(state.take_events())
 	town.set_hud(state.money, t.star, state.driver_level)
 	town.set_point_dot(Ability.points_left(state) > 0)
@@ -318,11 +301,41 @@ func _process(delta: float) -> void:
 		_update_debug_label()
 
 
-## 화면 트럭이 한 바퀴 중 어디쯤 있어야 하나 (0 = 물류센터 → 0.5 = 마지막 집 → 1 = 물류센터).
+## 트럭 i를 delta초 진행 (Trip.advance) → 띠의 그 트럭 자리, 배송 이벤트("+금액" = 내 돈으로 들어온 금액)를 그 트럭 가까운 집에
+func _advance_truck(i: int, delta: float) -> void:
+	var events := Trip.advance(state, balance, i, delta, rng)
+	var sprite: Node2D = town.trucks[i]
+	sprite.follow(_lap_phase(i))
+	sprite.boosting = state.truck(i).boost_lap
+	var house: int = sprite.nearest_house()   # "+돈"은 트럭(있어야 할 자리)에서 가장 가까운 집에
+	for e in events:
+		match e["type"]:
+			"parcel":
+				town.show_payout(house, e["pay"], e.get("kind", "normal"), e.get("rush", false), i)
+				earned_total += e["pay"]
+				parcels_total += 1
+				if _measuring:
+					_measure_earned += e["pay"]
+			"spare":   # 바로 앞 배송에서 나옴 → 같은 집에
+				town.show_spare(house)
+				spares_found += 1
+			"boost":   # 이 바퀴는 오버부스트 (트럭 뒤 불꽃은 boosting으로 바퀴 내내)
+				town.show_boost(i)
+				boosts_found += 1
+			"tip":   # 바로 앞 배송에서 팁 (돈은 계산 쪽이 이미 더함) → 같은 집 "+금액" 옆에 "팁!"
+				town.show_tip(house, e["pay"])
+				earned_total += e["pay"]
+				tips_found += 1
+				tips_total += e["pay"]
+				if _measuring:
+					_measure_earned += e["pay"]
+
+
+## 트럭 i가 한 바퀴 중 어디쯤 있어야 하나 (0 = 물류센터 → 0.5 = 마지막 집 → 1 = 물류센터).
 ## 짐 싣는 동안은 0, 그 뒤 바퀴 끝까지 고르게. 지금 바퀴 길이는 계산 쪽 Trip.lap_seconds (오버부스트 반영)
-func _lap_phase(t) -> float:
-	var drive := Trip.lap_seconds(balance, state, TRUCK) - balance.load_seconds
-	return clampf((t.lap_clock - balance.load_seconds) / maxf(drive, 0.001), 0.0, 1.0)
+func _lap_phase(i: int) -> float:
+	var drive := Trip.lap_seconds(balance, state, i) - balance.load_seconds
+	return clampf((state.truck(i).lap_clock - balance.load_seconds) / maxf(drive, 0.001), 0.0, 1.0)
 
 
 # ---------------- 저장 · 꺼둔 동안 수익 ----------------
@@ -377,6 +390,8 @@ func _offline_lines() -> PackedStringArray:
 	var note := tr("RETURN_DETAIL") % [offline_report["parcels"], offline_report["spares"]]
 	if offline_report["xp"] > 0:   # 노하우가 있을 때만 (꺼둔 동안 경험치)
 		note += "\n" + tr("RETURN_XP") % offline_report["xp"]
+	if Company.stage(state) >= GameState.AGENCY:   # 대리점이면 뗀 것 (위 큰 글자 돈 = 떼고 난 내 돈)
+		note += "\n" + tr("RETURN_STAFF_TAX") % [Fmt.money(offline_report["staff"]), Fmt.money(offline_report["tax"])]
 	note += "\n" + rule
 	return PackedStringArray([main_text, note])
 
@@ -418,6 +433,9 @@ func _show_events(events: Array) -> void:
 				cur = { "head": tr("NOTICE_MASTER_TODAY") % Fmt.master_bonus(balance.master_bonuses, e["bonus"]) }
 			"master_unlocked":   # 큰 화면 튜닝숍을 볼 때 요일 고르기 창 (_process)
 				_want_day_picker = true
+			"agency_founded":   # 창업 할 일 끝 알림은 다음 Quest.check에서 따로
+				_notify(cur)
+				cur = { "head": tr("NOTICE_AGENCY") }
 	_notify(cur)
 
 
@@ -461,7 +479,10 @@ func visible_rects() -> Array:
 	var view := get_viewport_rect().size
 	if is_full():
 		return [Rect2(Vector2.ZERO, view)]
-	var pad := town.truck.speed() * Engine.time_scale * Feel.CLICK_REGION_INTERVAL * 2.0 + 4.0
+	var fastest := 0.0
+	for t in town.trucks:
+		fastest = maxf(fastest, t.speed())
+	var pad := fastest * Engine.time_scale * Feel.CLICK_REGION_INTERVAL * 2.0 + 4.0
 	# 흔들림 연출 중이면 흔들리는 만큼 넉넉하게 (잘려 보이지 않게)
 	var shake := position.length()
 	var rects := town.visible_rects(pad)
@@ -533,19 +554,21 @@ func _on_style_picked(style: ScreenMode.FullStyle) -> void:
 ## 굴리기는 뜸이 끝난 뒤에 한다 (뜸 동안 꺼도 돈이 안 빠짐). [보험]을 켰으면 보험을 걸고 (요금·쿠폰은 계산 쪽)
 func _on_enhance_pressed() -> void:
 	var insure := panel.insure
-	if enhancing or rolling or Enhance.block_reason(state, balance, TRUCK, insure, now_local()) != Enhance.Block.NONE:
+	var i := panel.truck   # 누른 순간 고른 트럭 (뜸 동안 탭을 바꿔도 이 트럭에)
+	if enhancing or rolling or Enhance.block_reason(state, balance, i, insure, now_local()) != Enhance.Block.NONE:
 		return
 	enhancing = true
-	var danger := Enhance.needs_spare(balance, state.truck(TRUCK).star) and not insure
+	var danger := Enhance.needs_spare(balance, state.truck(i).star) and not insure
 	panel.begin_suspense()
 	var wait := (Feel.SUSPENSE_DANGER if danger else Feel.SUSPENSE_SAFE) * suspense_scale
 	if danger:
-		town.truck.shake(wait, Feel.ENGINE_SHAKE_PX)   # 트럭 자기 좌표라 동네가 커지면 같이 커짐
+		town.trucks[i].shake(wait, Feel.ENGINE_SHAKE_PX)   # 트럭 자기 좌표라 동네가 커지면 같이 커짐
 	await get_tree().create_timer(wait, true, false, true).timeout   # 배속과 상관없이 진짜 시간
 
-	var t := state.truck(TRUCK)   # 뜸 동안 F3(처음부터)이면 상태가 바뀌어서 다시 읽음
+	i = mini(i, state.trucks.size() - 1)   # 뜸 동안 F3(처음부터)이면 트럭이 줄어듦
+	var t := state.truck(i)   # 뜸 동안 F3(처음부터)이면 상태가 바뀌어서 다시 읽음
 	var star_before := t.star
-	var r := Enhance.try_enhance(state, balance, TRUCK, rng, insure, now_local())
+	var r := Enhance.try_enhance(state, balance, i, rng, insure, now_local())
 	panel.end_suspense()
 	var fx := panel.ui_scale()   # 흔들림 세기: 차고 크기에 맞춰
 	match r["result"]:
@@ -553,9 +576,10 @@ func _on_enhance_pressed() -> void:
 			# 명장 "2단계" 보너스로 두 단계 올랐으면 "+2!"
 			panel.show_result(tr("RESULT_DOUBLE" if r["double"] else "RESULT_SUCCESS") % [star_before, t.star], Feel.COLOR_SUCCESS)
 			panel.celebrate()
-			town.pop_star()
-			town.truck.flash(Feel.FLASH_DURATION)
-			town.truck.boost(Feel.BOOST_DURATION)
+			if i == TRUCK:   # 구석 줄 "+N"은 내 트럭 단계
+				town.pop_star()
+			town.trucks[i].flash(Feel.FLASH_DURATION)
+			town.trucks[i].boost(Feel.BOOST_DURATION)
 		Enhance.Result.FAIL when r["insured"]:   # 퍼짐이 떴지만 보험이 막음 (단계 그대로, 스페어 안 씀)
 			panel.show_result(tr("RESULT_INSURED") % t.star, Feel.COLOR_INSURED)
 		Enhance.Result.FAIL:
@@ -565,7 +589,7 @@ func _on_enhance_pressed() -> void:
 			# 스페어 엔진을 자동으로 써서 broken_drop_to로. 트럭은 계속 달림
 			panel.show_result(tr("RESULT_DESTROY"), Feel.COLOR_DANGER, Feel.DESTROY_TEXT_SIZE,
 					tr("RESULT_DESTROY_NOTE") % [t.star, state.spares])
-			town.truck.smoke_burst(Feel.DESTROY_SMOKE_BURST)
+			town.trucks[i].smoke_burst(Feel.DESTROY_SMOKE_BURST)
 			_shake(func(o): position = o, Feel.DESTROY_SHAKE_PX * fx, Feel.DESTROY_SHAKE_DURATION)
 		Enhance.Result.BLOCKED:
 			panel.clear_result()
@@ -598,17 +622,19 @@ func _on_spare_pressed() -> void:
 ## [돌리기]: 짧은 뜸 → 굴리기(setting.gd) → 예전 것 / 새 것 고르는 화면 → 저장
 ## 굴리기는 뜸이 끝난 뒤에 한다 (뜸 동안 꺼도 돈이 안 빠짐)
 func _on_roll_pressed(part: String) -> void:
-	if enhancing or rolling or Setting.block_reason(state, balance, TRUCK, part) != Setting.Block.NONE:
+	var i := panel.truck   # 누른 순간 고른 트럭
+	if enhancing or rolling or Setting.block_reason(state, balance, i, part) != Setting.Block.NONE:
 		return
 	rolling = true
 	panel.setting.begin_suspense()
 	await get_tree().create_timer(Feel.SETTING_SUSPENSE * suspense_scale, true, false, true).timeout   # 진짜 시간
 
-	var before: int = state.truck(TRUCK).part(part)["grade"]
-	var r := Setting.try_roll(state, balance, TRUCK, part, rng)
+	i = mini(i, state.trucks.size() - 1)   # 뜸 동안 F3(처음부터)이면 트럭이 줄어듦
+	var before: int = state.truck(i).part(part)["grade"]
+	var r := Setting.try_roll(state, balance, i, part, rng)
 	panel.setting.end_suspense()
 	if r["ok"]:
-		var after: int = state.truck(TRUCK).part(part)["pending"]["grade"]
+		var after: int = state.truck(i).part(part)["pending"]["grade"]
 		panel.setting.show_roll_result(part, before, after, r["pity"])
 		if r["grade_up"]:
 			var c: Color = Feel.SETTING_GRADE_COLORS[after]
@@ -622,9 +648,10 @@ func _on_roll_pressed(part: String) -> void:
 
 ## 예전 것 / 새 것 고르기 → 저장
 func _on_choose_pressed(part: String, take_new: bool) -> void:
-	if rolling or state.truck(TRUCK).part(part)["pending"] == null:
+	var i := panel.truck
+	if rolling or state.truck(i).part(part)["pending"] == null:
 		return
-	Setting.choose(state, TRUCK, part, take_new)
+	Setting.choose(state, i, part, take_new)
 	panel.setting.show_choice(take_new)
 	Quest.check(state, balance)   # 새 것을 고르면 등급이 바뀜 (세팅 등급 할 일)
 	_save()   # 고른 직후 저장
@@ -632,6 +659,15 @@ func _on_choose_pressed(part: String, take_new: bool) -> void:
 
 
 # ---------------- 기사·물류센터 ----------------
+
+## 물류센터 [창업] 두 번째 누름 → Company.found (돈이 모자라면 그대로) → 다음 할 일 바로 확인 → 저장. 알림은 agency_founded 이벤트로
+func _on_found_pressed() -> void:
+	if Company.found(balance, state):
+		panel.driver.show_founded()
+		Quest.check(state, balance)
+		_save()
+	panel.refresh(balance, state)
+
 
 ## 창고 확장 / 야간 배송팀 [올리기] → Depot.upgrade → 다음 할 일 바로 확인 → 저장
 func _on_upgrade_pressed(kind: String) -> void:
@@ -657,14 +693,16 @@ func _on_ability_reset() -> void:
 	panel.refresh(balance, state)
 
 
-## 고르다 만 부품이 있으면 차고를 [세팅] 칸 그 부품으로 열어 둔다 (껐다 켜도 고르는 화면이 다시 뜸)
+## 고르다 만 부품이 있으면 차고를 [세팅] 칸 그 트럭·그 부품으로 열어 둔다 (껐다 켜도 고르는 화면이 다시 뜸)
 func _open_pending_setting() -> void:
-	var t := state.truck(TRUCK)
-	for part in Setting.part_ids(balance):
-		if t.settings.has(part) and t.part(part)["pending"] != null:
-			panel.show_tab(panel.Tab.SETTING)
-			panel.setting.select(part)
-			return
+	for i in state.trucks.size():
+		var t := state.truck(i)
+		for part in Setting.part_ids(balance):
+			if t.settings.has(part) and t.part(part)["pending"] != null:
+				panel.show_tab(panel.Tab.SETTING)
+				panel.pick_truck(i)
+				panel.setting.select(part)
+				return
 
 
 # ---------------- 클릭 · 치트 키 ----------------

@@ -13,6 +13,7 @@ const CAB_RATIO := 0.32      ## 운전석 폭 / 트럭 폭
 const SMOKE_SPREAD := 10.0   ## 퍼짐 연기가 처음 옆으로 흩어지는 폭 (트럭 자기 좌표)
 
 var boosting := false  ## 오버부스트가 걸린 바퀴 (트럭 뒤 불꽃)
+var box_color := Feel.COLOR_TRUCK_BOX   ## 짐칸 색 (v7a: 보조 트럭은 색만 다름)
 
 var view_origin := Vector2.ZERO   ## 동네 설계 좌표 (0,0)이 동네 노드 안에서 어디에 오나
 var view_zoom := 1.0              ## 동네 확대 배수
@@ -236,7 +237,7 @@ func _draw() -> void:
 	# 앞(운전석)은 보는 쪽
 	var cab_x := w - cab_w if _face > 0 else 0.0
 	var box_x := 0.0 if _face > 0 else cab_w
-	draw_rect(Rect2(box_x, 0, w - cab_w, h), Feel.COLOR_TRUCK_BOX)
+	draw_rect(Rect2(box_x, 0, w - cab_w, h), box_color)
 	draw_rect(Rect2(cab_x, h * 0.3, cab_w, h * 0.7), Feel.COLOR_TRUCK_CAB)
 	draw_circle(Vector2(w * 0.22, h + wr * 0.6), wr, Feel.COLOR_WHEEL)
 	draw_circle(Vector2(w * 0.78, h + wr * 0.6), wr, Feel.COLOR_WHEEL)

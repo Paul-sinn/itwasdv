@@ -271,3 +271,21 @@ RESULT_INSURED,보험 덕분에 살았어요! (+%d 그대로),Insurance saved yo
 RESULT_DOUBLE,+2!  +%d → +%d,+2!  +%d → +%d
 NOTICE_MASTER_TOMORROW,내일 명장이 와요: %s,The Master comes tomorrow: %s
 NOTICE_MASTER_TODAY,오늘 명장이 와 있어요: %s,The Master is here today: %s
+SETTING_PART_TIRE,타이어·휠,Tires & wheels
+SETTING_OPT_MAINT_CUT,정비비 감소,Upkeep saving
+SETTING_LOCKED_AGENCY,%s · 대리점을 차리면 열려요,%s · opens with an agency
+QUEST_FOUND_AGENCY,대리점 창업,Open an agency
+QUEST_FOUND_AGENCY_DESC,물류센터에서 대리점 차리기,Found your agency at the Depot
+QUEST_FIRST_HELPER,첫 보조 트럭,First extra truck
+QUEST_FIRST_HELPER_DESC,보조 트럭 1대 사기,Buy 1 extra truck
+QUEST_TIRE_FIRST,첫 타이어·휠,First tire setup
+QUEST_TIRE_FIRST_DESC,타이어·휠 세팅 한 번 돌리기,Roll a tires & wheels setup once
+AGENCY_ROW,대리점 창업 %s원,Open an agency: ₩%s
+AGENCY_FOUND,창업,Found
+AGENCY_CONFIRM,한 번 더 누르면 창업,Press again to found
+AGENCY_DONE,대리점 (시내),Agency (City)
+NOTICE_AGENCY,대리점을 차렸어요! 보조 트럭·타이어·휠이 열렸어요,You opened an agency! Extra trucks and tires & wheels are unlocked
+TRUCK_TAB_MINE,내 트럭,My truck
+TRUCK_TAB_HELPER,%d호차,Truck %d
+RETURN_STAFF_TAX,직원 몫 −%s원 · 세금 −%s원,Staff share −₩%s · tax −₩%s
+AGENCY_SHORT,%s원 모자람,₩%s short

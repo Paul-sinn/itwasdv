@@ -2,13 +2,13 @@
 ## 진짜 게임 화면(main.tscn)에 진짜 클릭을 넣어서 확인한다. 상태를 미리 만들어 두는 것(할 일 차례, 레벨 등)은 준비로만 하고,
 ## 확인하는 동작은 진짜 클릭이나 진짜 프레임(main이 Trip.advance → Quest.check → take_events)으로 한다.
 ## ① 작은 화면 "Lv.N" + 다음 할 일 한 줄 (이름 + 진행 "3/20")
-## ② 물류센터 화면 (v6a 전 [기사·물류센터] 칸): 레벨, 경험치 막대(driver_xp / xp_need), 포인트, 지금 할 일(이름·설명·진행·보상), 끝낸 수 n/22
+## ② 물류센터 화면 (v6a 전 [기사·물류센터] 칸): 레벨, 경험치 막대(driver_xp / xp_need), 포인트, 지금 할 일(이름·설명·진행·보상), 끝낸 수 n/전체
 ##    (v5b: 할 일·창고·야간팀은 물류센터 화면 [창고·할 일] 칸. 처음 열면 [능력치] 칸이라 [창고·할 일]을 진짜 클릭으로 누름)
 ## ③ 할 일 끝 → 알림(이름 + 보상), 돈 + 보상, 다음 할 일로   ④ 레벨업 알림("Lv.N" + 포인트), 만렙 알림
 ## ⑤ 창고·야간팀: 지금 값 → 다음 값, 가격, 사면 돈 −가격·레벨 +1, 돈 모자라면 버튼 꺼짐 + 모자란 금액, 창고 Lv3 "대리점부터"
 ## ⑥ 올리기·강화·세팅 직후 Quest.check (main의 프레임을 멈춰도 바로 다음 할 일로)
 ## ⑦ 돌아왔을 때 요약: 3시간 / 20시간(창고 꽉 참) / 179초(창 안 뜸) / 시계가 거꾸로(0원 안내)
-## ⑧ 다 끝나면 "다음 할 일 없음"   ⑨ 산 직후 저장   ⑩ en: 칸이 뜨고 키·한글 없음 (할 일 22개 이름·설명 포함)
+## ⑧ 다 끝나면 "다음 할 일 없음"   ⑨ 산 직후 저장   ⑩ en: 칸이 뜨고 키·한글 없음 (할 일 전부 이름·설명 포함)
 ## ⑪ 알림이 여러 개 겹치면 하나씩 차례로 (작은 화면 보이는 곳 안)
 ## 확인하는 동안 게임 시간을 멈춘다 (배송 돈이 섞이지 않게. 알림·뜸은 진짜 시간이라 그대로 지나감).
 ## 진짜 저장·설정 파일은 건드리지 않는다.
@@ -51,7 +51,7 @@ func _run() -> void:
 	Save.delete_file(TEST_SAVE)
 	var b := Balance.load_file()
 
-	# ① 작은 화면: "Lv.N" + 다음 할 일 한 줄. 할 일 22개 모두 동네 안, 집과 안 겹침, 보이는 곳 안
+	# ① 작은 화면: "Lv.N" + 다음 할 일 한 줄. 할 일 전부 모두 동네 안, 집과 안 겹침, 보이는 곳 안
 	var m := await _launch(false)
 	var bad_lines := await _check_quest_lines(m, b)   # 새 게임이라 이미 찬 할 일 없음 (차례만 바꿔 봄)
 	m.state.quest_index = _qi(b, "parcels_20")
@@ -61,7 +61,7 @@ func _run() -> void:
 	var line_ok: bool = town._level_label.text == "Lv.1" and town._quest_label.text == "다음 할 일: 배송 20건 3/20"
 	var first_line: String = town._quest_label.text
 	_report(not m.is_full() and line_ok and bad_lines.is_empty(),
-			"① 작은 화면 '%s' + '%s', 할 일 22개 줄이 동네 안·집과 안 겹침·보이는 곳 안 %s" % [town._level_label.text, first_line, bad_lines])
+			"① 작은 화면 '%s' + '%s', 할 일 전부 줄이 동네 안·집과 안 겹침·보이는 곳 안 %s" % [town._level_label.text, first_line, bad_lines])
 
 	# ② 작은 화면 물류센터 건물 클릭 → 큰 화면 물류센터 화면 → [창고·할 일]
 	_click(town.building_rects()["depot"].get_center())
@@ -83,7 +83,7 @@ func _run() -> void:
 	_report(m.is_full() and p.building == "depot" and d.visible and not p.setting.visible and not p._engine_box.visible
 			and d._level.text == "기사 Lv.3" and d._xp_bar.value == xp3 and d._xp_bar.max_value == need3
 			and d._xp.text == "경험치 %d / %d" % [xp3, need3] and d._points.text.contains("포인트 2")
-			and d._quest_head.text == "다음 할 일 · 끝낸 것 1/22" and d._quest_name.text == "배송 20건"
+			and d._quest_head.text == "다음 할 일 · 끝낸 것 1/%d" % Quest.count(b) and d._quest_name.text == "배송 20건"
 			and d._quest_desc.text == Fmt.quest_desc("parcels_20") and d._quest_desc.visible
 			and d._quest_progress.text == "진행 3/20 · 보상 +%s원 · 경험치 +%d" % [Fmt.money(q["money"]), q["xp"]],
 			"② [%s] 화면: '%s', 막대 %d/%d, '%s', '%s', '%s' / '%s' / '%s' / '%s'" % [
@@ -210,7 +210,7 @@ func _run() -> void:
 	m.state.quest_index = Quest.count(b)
 	await _frames(3)
 	_report(d._quest_name.text == "다음 할 일 없음" and not d._quest_desc.visible and not d._quest_progress.visible
-			and d._quest_head.text == "다음 할 일 · 끝낸 것 22/22" and town._quest_label.text == "다음 할 일 없음",
+			and d._quest_head.text == "다음 할 일 · 끝낸 것 %d/%d" % [Quest.count(b), Quest.count(b)] and town._quest_label.text == "다음 할 일 없음",
 			"⑧ 할 일을 다 끝내면 물류센터 '%s' '%s', 동네 '%s'" % [d._quest_head.text, d._quest_name.text, town._quest_label.text])
 
 	# 물류센터 화면이 가장 길 때(돈이 없어 두 줄 다 모자람, 긴 설명) 여러 창 크기에서 창 안, 동네와 안 겹침
@@ -329,7 +329,7 @@ func _check_queue(b: Balance) -> void:
 	await _close(m)
 
 
-## ⑩ en: 작은 화면 할 일 줄, 차고 [Driver & Depot] 칸 (할 일 22개 + 다 끝남), 알림, 차고 크기
+## ⑩ en: 작은 화면 할 일 줄, 차고 [Driver & Depot] 칸 (할 일 전부 + 다 끝남), 알림, 차고 크기
 func _check_en(b: Balance) -> void:
 	TranslationServer.set_locale("en")
 	Save.delete_file(TEST_SAVE)
@@ -364,7 +364,7 @@ func _check_en(b: Balance) -> void:
 		names_ok = names_ok and texts.has(Fmt.quest_name(q["id"])) and texts.has(Fmt.quest_desc(q["id"]))
 	_report(p.driver.visible and p.building_buttons["depot"].text == "Depot" and names_ok and bad.is_empty() and bad_lines.is_empty()
 			and m.town._notice.text.contains("Max level"),
-			"⑩ en에서도 [%s] 화면이 뜨고, 할 일 22개 이름·설명과 알림 포함 보이는 글자 %d개에 한글·키 없음 %s, 작은 줄 %s" % [
+			"⑩ en에서도 [%s] 화면이 뜨고, 할 일 전부 이름·설명과 알림 포함 보이는 글자 %d개에 한글·키 없음 %s, 작은 줄 %s" % [
 			p.building_buttons["depot"].text, texts.size(), bad, bad_lines])
 	print("    en 알림: '%s'" % m.town._notice.text.replace("\n", " / "))
 	m.state.driver_level = 7
@@ -375,7 +375,7 @@ func _check_en(b: Balance) -> void:
 	TranslationServer.set_locale("ko")
 
 
-## 할 일 22개마다 작은 화면 한 줄이 동네 안, 집과 안 겹침, 보이는 곳 안인가. 문제 있는 줄을 돌려줌
+## 할 일 전부마다 작은 화면 한 줄이 동네 안, 집과 안 겹침, 보이는 곳 안인가. 문제 있는 줄을 돌려줌
 func _check_quest_lines(m: Node, b: Balance) -> Array:
 	var bad := []
 	var town = m.town

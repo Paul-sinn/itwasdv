@@ -7,6 +7,7 @@
 ## v5b: 팁이 나오면 "+금액" 옆에 "팁! +금액" (show_tip), 찍을 능력치 포인트가 남으면 레벨 옆 점 (set_point_dot)
 ## v6b: 대형·VIP·급송 "+금액"은 앞 글자·색이 다름 (show_payout), 급송 전화 말풍선 [받기] + 남은 시간 막대,
 ##      받은 뒤 구석 줄 "급송 N건 남음" (set_rush. 언제 울리나는 main.gd → Rush)
+## v7a: 보조 트럭도 같은 길을 같은 그림(짐칸 색만 다르게)으로 달림 (trucks, set_truck_count. 0 = 내 트럭 = truck)
 ## 동네 설계 좌표(feel.gd TOWN_SIZE = 작은 화면 크기)로 만들고, 전체 화면에서는 같은 동네를 통째로 확대한다.
 ## 길·집·트럭은 확대해서 그리고(선명함), 글자는 확대 배수에 맞춘 글자 크기로 따로 놓는다.
 ## 그리기만 한다. 돈·배송은 main.gd → scripts/core/trip.gd (배송 이벤트가 오면 show_payout)
@@ -28,7 +29,8 @@ signal rush_accept_pressed   ## 급송 전화 말풍선 [받기]
 const PAY_KEYS := { "large": "TOWN_PAY_LARGE", "vip": "TOWN_PAY_VIP" }
 const PAY_COLORS := { "large": Feel.COLOR_PAYOUT_LARGE, "vip": Feel.COLOR_PAYOUT_VIP }
 
-var truck: Truck
+var truck: Truck              ## 내 트럭 (= trucks[0])
+var trucks: Array[Truck] = []   ## 띠의 트럭들, 계산 쪽 트럭 번호 순 (1~ = 보조 트럭)
 var route: Route
 var zoom := 1.0              ## 동네 설계 좌표 → 화면 배수
 var origin := Vector2.ZERO   ## 동네 설계 좌표 (0,0)이 이 노드 안 어디에 오나
@@ -38,6 +40,7 @@ var payouts_shown := 0       ## 지금까지 띄운 "+금액" 수 (확인용)
 var spares_shown := 0        ## 지금까지 띄운 "스페어 엔진 +1" 수 (확인용)
 var boosts_shown := 0        ## 지금까지 띄운 "오버부스트!" 수 (확인용)
 var tips_shown: Array[String] = []   ## 지금까지 띄운 "팁! +금액" 글자 (확인용)
+var payout_log: Array = []   ## 지금까지 띄운 "+금액"마다 [트럭 번호, 금액] (확인용)
 var point_dot: Panel         ## 구석 줄 레벨 옆 점: 찍을 능력치 포인트가 남음 (set_point_dot)
 var rush_bubble: PanelContainer   ## 급송 전화 말풍선 "급송 요청! [받기]" + 남은 시간 막대 (벨이 울리는 동안)
 var rush_button: Button           ## 그 안 [받기]
@@ -48,6 +51,7 @@ var hint: Label              ## 처음 켰을 때 말풍선 "건물을 눌러보
 var master_visit := false    ## 명장 방문 중 → 튜닝숍에 색 테두리 (set_master_visit)
 
 var _houses: Array[Vector2] = []     ## 집 자리 (길 가운데 선 위, 설계 좌표)
+var _stops := PackedFloat64Array()   ## 집마다 길 위 거리 (트럭이 서는 곳)
 var _hud: HBoxContainer
 var _star_label: Label
 var _money_label: Label
@@ -68,16 +72,16 @@ var _rush_left: Label     ## 구석 줄 끝 "급송 N건 남음" (받은 급송�
 
 func _ready() -> void:
 	route = Route.build(PackedVector2Array(Feel.TOWN_ROAD), Feel.TOWN_ROAD_CORNER)
-	var stops := PackedFloat64Array()
 	for i in mini(Feel.TOWN_HOUSES, Feel.TOWN_HOUSE_SPOTS.size()):
 		_houses.append(Feel.TOWN_HOUSE_SPOTS[i])
-		stops.append(route.distance_of(Feel.TOWN_HOUSE_SPOTS[i]))
+		_stops.append(route.distance_of(Feel.TOWN_HOUSE_SPOTS[i]))
 	if _houses.size() < Feel.TOWN_HOUSES:
 		push_error("feel.gd: TOWN_HOUSE_SPOTS가 %d개뿐 (TOWN_HOUSES = %d)" % [_houses.size(), Feel.TOWN_HOUSES])
 
 	truck = Truck.new()
 	add_child(truck)
-	truck.set_route(route, stops)
+	truck.set_route(route, _stops)
+	trucks.append(truck)
 
 	_hud = HBoxContainer.new()
 	_hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -179,7 +183,8 @@ func layout(top_left: Vector2, z: float, text_k: float) -> void:
 	origin = top_left
 	zoom = z
 	text_scale = text_k
-	truck.set_view(origin, zoom)
+	for t in trucks:
+		t.set_view(origin, zoom)
 
 	_hud.add_theme_constant_override("separation", int(roundf(10.0 * text_scale)))
 	for l in [_star_label, _money_label, _level_label, _rush_left]:
@@ -215,6 +220,21 @@ func layout(top_left: Vector2, z: float, text_k: float) -> void:
 			p.queue_free()
 	_payouts.clear()
 	queue_redraw()
+
+
+## 띠의 트럭 수를 계산 쪽 트럭 수에 맞춤 (보조 트럭을 사면 늘고, F3 처음부터면 줄어듦).
+## 보조 트럭은 내 트럭 바로 밑에 그림 (글자·내 트럭을 가리지 않게)
+func set_truck_count(n: int) -> void:
+	while trucks.size() < n:
+		var t := Truck.new()
+		t.box_color = Feel.HELPER_TRUCK_COLORS[(trucks.size() - 1) % Feel.HELPER_TRUCK_COLORS.size()]
+		add_child(t)
+		move_child(t, truck.get_index())
+		t.set_route(route, _stops)
+		t.set_view(origin, zoom)
+		trucks.append(t)
+	while trucks.size() > maxi(n, 1):
+		trucks.pop_back().queue_free()
 
 
 ## 동네 설계 좌표 → 이 노드 좌표
@@ -413,8 +433,10 @@ func pop_star() -> void:
 
 ## 집 앞: "+금액"이 떠올랐다가 사라짐 (계산 쪽 배송 이벤트가 올 때).
 ## v6b: 대형·VIP·급송 배송은 앞에 글자("대형 +5,625", "급송 VIP +…")를 붙이고 색을 다르게 (대형·VIP 색이 급송 색보다 먼저)
-func show_payout(house: int, amount: int, kind := "normal", rush := false) -> void:
+## v7a: which = 어느 트럭의 배송인가 (보조 트럭도 같은 모양. amount는 내 돈으로 들어온 금액)
+func show_payout(house: int, amount: int, kind := "normal", rush := false, which := 0) -> void:
 	payouts_shown += 1
+	payout_log.append([which, amount])
 	var words := PackedStringArray()
 	if rush:
 		words.append(tr("TOWN_PAY_RUSH"))
@@ -451,10 +473,10 @@ func show_spare(house: int) -> void:
 	_float_text(_house_spot(house), tr("TOWN_SPARE"), Feel.SPARE_FONT_SIZE, Feel.COLOR_SPARE, Feel.SPARE_RISE, Feel.SPARE_DURATION)
 
 
-## 오버부스트가 걸린 바퀴 출발: 트럭 위에 "오버부스트!"
-func show_boost() -> void:
+## 오버부스트가 걸린 바퀴 출발: 그 트럭(which) 위에 "오버부스트!"
+func show_boost(which := 0) -> void:
 	boosts_shown += 1
-	var at := (truck.position - origin) / zoom   # 동네 설계 좌표
+	var at := (trucks[which].position - origin) / zoom   # 동네 설계 좌표
 	_float_text(at, tr("TOWN_BOOST"), Feel.BOOST_FONT_SIZE, Feel.COLOR_FLAME, Feel.BOOST_RISE, Feel.BOOST_DURATION_TEXT)
 
 
@@ -509,7 +531,6 @@ func visible_rects(truck_pad: float) -> Array:
 		out.append(view_rect(piece.grow(half)))
 	# 건물: 빛남 두께만큼 넉넉하게 + 간판. 맞붙은 건물(튜닝숍·카센터)은 한 사각형으로 (사각형 수를 늘리지 않게)
 	# 처음 말풍선(+ 꼬리)도 꼬리 끝이 튜닝숍에 닿아서 그 사각형에 합쳐짐 (글자가 가장 많이 떴을 때도 30개 이하로)
-	var blds: Array[Rect2] = []
 	var rects := building_rects()
 	var pieces: Array[Rect2] = []
 	for id: String in BUILDINGS:
@@ -518,16 +539,7 @@ func visible_rects(truck_pad: float) -> Array:
 	if hint.visible:
 		var tail := _hint_tail()
 		pieces.append(Rect2(hint.position, hint.size).merge(view_rect(Rect2(tail[0], Vector2.ZERO).expand(tail[1]).expand(tail[2]))).grow(1.0))
-	for r in pieces:
-		var joined := false
-		for i in blds.size():
-			if blds[i].intersects(r):
-				blds[i] = blds[i].merge(r)
-				joined = true
-				break
-		if not joined:
-			blds.append(r)
-	out.append_array(blds)
+	out.append_array(_join(pieces))
 	if _name_tag.visible:
 		out.append(Rect2(_name_tag.position, _name_tag.size).grow(o))
 	# 급송 말풍선: 양옆 집과 한 사각형으로 (사각형 수를 늘리지 않게. 말풍선이 두 집 사이를 꽉 채움)
@@ -547,16 +559,35 @@ func visible_rects(truck_pad: float) -> Array:
 	out.append(hud.merge(Rect2(_quest_label.position, _quest_label.size).grow(o)))
 	if _notice.visible:
 		out.append(Rect2(_notice.position, _notice.size).grow(o))
-	out.append(truck.click_rect().grow(truck_pad))
-	var smoke := truck.smoke_rect()
-	if smoke.has_area():
-		out.append(smoke.grow(truck_pad))
+	# 트럭·연기·떠오르는 글자: 겹치는 것끼리 한 사각형으로 (v7a: 트럭 3대 + 글자 10개여도 30개 이하로)
+	var moving: Array[Rect2] = []
+	for t in trucks:
+		moving.append(t.click_rect().grow(truck_pad))
+		var smoke := t.smoke_rect()
+		if smoke.has_area():
+			moving.append(smoke.grow(truck_pad))
 	for p in _payouts:
 		if is_instance_valid(p):
 			var r := Rect2(p.position, p.get_combined_minimum_size())
 			for c: Control in p.get_children():   # 옆에 붙은 "팁!" (같은 사각형을 넓힘)
 				r = r.merge(Rect2(p.position + c.position, c.get_combined_minimum_size()))
-			out.append(r.grow(o))
+			moving.append(r.grow(o))
+	out.append_array(_join(moving))
+	return out
+
+
+## 겹치는 사각형은 앞의 것과 합침 (한 번 훑기. 사각형 수를 늘리지 않게. 합친 사각형은 둘을 덮는 가장 작은 사각형)
+static func _join(rects: Array[Rect2]) -> Array[Rect2]:
+	var out: Array[Rect2] = []
+	for r in rects:
+		var joined := false
+		for i in out.size():
+			if out[i].intersects(r):
+				out[i] = out[i].merge(r)
+				joined = true
+				break
+		if not joined:
+			out.append(r)
 	return out
 
 
