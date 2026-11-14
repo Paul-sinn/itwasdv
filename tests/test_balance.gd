@@ -22,7 +22,7 @@ func test_real_file_is_ok() -> void:
 	check_eq([b.unit_price, b.base_cargo, b.road_length, b.load_seconds, b.stop_seconds],
 			[2500, 20, 12000.0, 10.0, 0.5], "trip 숫자 (v4에서 고침)")
 	check_eq([b.fuel_rate, b.maint_rate], [0.2, 0.05], "기름값·정비비 비율 (v6-bal: 기름값 20%)")
-	check_eq([b.cost_base, b.cost_mult, b.spare_drop_chance], [35000.0, 1.5, 0.00005], "강화 비용·스페어 드랍 (v4에서 고침)")
+	check_eq([b.cost_base, b.cost_mult, b.spare_drop_chance], [65000.0, 1.5, 0.000006], "강화 비용·스페어 드랍 (v7-bal: 65,000, 0.000006)")
 	check_eq(b.spare_price, 5000000, "spare_price (v4에서 고침)")
 	# v5: 꺼둔 동안 시간·비율은 depot 표로 (test_v5_numbers_match_spec)
 	check_eq(b.offline_ignore_under_seconds, 180.0, "꺼둔 동안 3분 미만 무시")
@@ -35,8 +35,8 @@ func test_real_file_shape() -> void:
 	var keys := d.keys()
 	keys.sort()
 	check_eq(keys, ["abilities", "company", "depot", "driver", "engine", "master", "offline", "quests", "rush", "setting", "special", "trip",
-			"version", "weekly"], "json 묶음 (v5b: abilities, v6b: special·rush·weekly·master, v7a: company)")
-	check_eq(d["version"], "0.13", "version")
+			"version", "visitors", "weekly"], "json 묶음 (v5b: abilities, v6b: special·rush·weekly·master, v7a: company, v7-bal: visitors)")
+	check_eq(d["version"], "0.14", "version")
 	check(not d["engine"].has("cost_hours"), "engine.cost_hours 가 남아 있음")
 	check_eq(d["offline"].keys(), ["ignore_under_seconds"], "offline 묶음에는 ignore_under_seconds만 (cap_hours·rate는 depot 표로)")
 
@@ -241,7 +241,7 @@ func test_v6bal_numbers_match_spec() -> void:
 	check_eq(b.fuel_rate, 0.2, "trip.fuel_rate (Q7-3)")
 	check_eq(b.roll_cost, PackedInt64Array([20000, 80000, 1600000, 6000000, 10000000]), "setting.roll_cost (Q7-1)")
 	check_eq(b.setting_options["speed"]["weight"], 10.0, "이동 속도 가중치 (Q7-3)")
-	check_eq(b.setting_options["fuel_cut"]["values"], PackedFloat64Array([0.10, 0.20, 0.30, 0.45, 0.60]), "기름값 절감 (스냅샷 5번)")
+	check_eq(b.setting_options["fuel_cut"]["values"], PackedFloat64Array([0.07, 0.12, 0.20, 0.30, 0.45]), "기름값 절감 (스냅샷 5번, v7-bal Q17-3)")
 	check_eq(b.setting_options["overboost"]["values"], PackedFloat64Array([0.03, 0.06, 0.09, 0.15, 0.24]), "오버부스트 (스냅샷 5번)")
 	check(not real_balance_dict()["setting"].has("overboost_seconds"), "setting.overboost_seconds 가 남아 있음 (규칙 1에서 지움)")
 	check_eq(b.overboost_mult, 2.0, "오버부스트 걸린 바퀴 운전 속도 2배")

@@ -12,13 +12,13 @@ func test_enhance_cost_formula() -> void:
 	for star in b.max_star:
 		var cost = Economy.base_enhance_cost(b, star)
 		check_eq(typeof(cost), TYPE_INT, "+%d 비용이 정수가 아님" % star)
-		check_eq(cost, roundi(35000.0 * pow(1.5, star)), "+%d 비용" % star)
-	# 손으로 계산한 값 (0.5는 0에서 먼 쪽으로 올림)
-	check_eq(Economy.base_enhance_cost(b, 0), 35000, "+0 비용")
-	check_eq(Economy.base_enhance_cost(b, 1), 52500, "+1 비용")
-	check_eq(Economy.base_enhance_cost(b, 3), 118125, "+3 비용")
-	check_eq(Economy.base_enhance_cost(b, 4), 177188, "+4 비용 (177187.5 → 177188)")
-	check_eq(Economy.base_enhance_cost(b, 5), 265781, "+5 비용 (265781.25 → 265781)")
+		check_eq(cost, roundi(65000.0 * pow(1.5, star)), "+%d 비용" % star)
+	# 손으로 계산한 값 (0.5는 0에서 먼 쪽으로 올림. v7-bal cost_base 65,000)
+	check_eq(Economy.base_enhance_cost(b, 0), 65000, "+0 비용")
+	check_eq(Economy.base_enhance_cost(b, 1), 97500, "+1 비용")
+	check_eq(Economy.base_enhance_cost(b, 3), 219375, "+3 비용")
+	check_eq(Economy.base_enhance_cost(b, 4), 329063, "+4 비용 (329062.5 → 329063)")
+	check_eq(Economy.base_enhance_cost(b, 5), 493594, "+5 비용 (493593.75 → 493594)")
 	for star in [0, 10, 17, 18, 29]:
 		note("+%d 강화 비용 %d원" % [star, Economy.base_enhance_cost(b, star)])
 

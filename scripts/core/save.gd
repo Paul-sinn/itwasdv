@@ -11,23 +11,28 @@
 ##   (형식 5) driver_level, driver_xp, ability_points, reputation, warehouse_level, night_level, quest_index,
 ##            parcels_total, setting_rolls, spares_bought, parts_rolled { 부품 id: true }, milestones_done [ 단계 ]
 ##   (형식 7) abilities { 능력치 id: 찍은 포인트 }
-##   (형식 8) coupons, weekly_week, weekly_parcels, weekly_done, rush_enabled, rush_next, rush_ring, rush_left
+##   (형식 8) weekly_week, weekly_parcels, weekly_done, rush_enabled, rush_next, rush_ring, rush_left (coupons는 형식 11에서 지움: 읽을 때 버림)
 ##   (형식 9) master_unlocked, master_day, master_next_day, master_week, master_bonus, master_bonus_week, master_next_bonus,
 ##            master_notice_week, master_visit_week (active_bonus는 저장 안 함: Master.tick이 채움)
 ##   (형식 10) company_stage, today_day, today_sales, today_staff, today_tax, rank_first_done
+##   (형식 11) premium_spares, use_premium, visitor_next { NPC id: 날짜 번호 }, visitor_day, insurer_event, insured_day
+##            (visitor_today는 저장 안 함: Visitor.tick이 채움)
 ## 모르는 키는 버리고 범위 밖 값은 자른다. 음수 돈·스페어, 빠진 칸, 틀린 모양은 깨진 저장.
 ## 세팅: 모르는 부품·그 부품에 없는 옵션 id는 버리고, 등급·카운터는 범위로 자르고, 줄은 그 등급 줄 수까지 (앞에서부터).
 ## 형식 5 칸: 숫자가 아니면 깨진 저장, 숫자는 범위로 자름 (레벨 1~만렙, 경험치 0~다음 레벨 필요량−1, 창고·야간팀 1~표 끝,
 ##            퀘스트 번호 0~목록 길이, 개수·평판 0 이상). 모르는 부품·보너스 단계가 아닌 값은 버림.
 ## 형식 7 능력치: 숫자가 아니면 깨진 저장. 모르는 id는 버리고 0~최대로 자르고, 합이 ability_points를 넘으면 전부 0 (포인트는 돌려받음).
-## 형식 8 칸: 숫자·참거짓이 아니면 깨진 저장. 쿠폰·주간 진행 0 이상, 급송 남은 건수 0~rush.parcels, 벨 남은 초 0~ring_seconds,
+## 형식 8 칸: 숫자·참거짓이 아니면 깨진 저장. 주간 진행 0 이상, 급송 남은 건수 0~rush.parcels, 벨 남은 초 0~ring_seconds,
 ##   다음 벨까지 −1(안 굴림)~max_minutes분으로 자름. 주 번호는 정수면 그대로 (시계 조작 허용).
 ## 형식 9 칸: 숫자·참거짓·글자가 아니면 깨진 저장. 요일은 −1~6으로 자르고, 모르는 보너스 id는 ""(다음 tick에서 새로 굴림).
 ## 형식 10 칸: 숫자·참거짓이 아니면 깨진 저장. 회사 단계 0~1(대리점), 오늘 집계 0 이상으로 자름. 날짜 번호는 정수면 그대로.
 ##   트럭은 1 + company.helper_prices 길이(3대)까지 (넘으면 뒤를 버림).
+## 형식 11 칸: 숫자·참거짓·글자·{ } 묶음이 아니면 깨진 저장. 고급 스페어 0 이상, 모르는 NPC id는 버리고, 모르는 보험사 이벤트는 "".
+##   날짜 번호는 정수면 그대로 (시계 조작 허용: 너무 먼 다음 방문은 Visitor.tick이 다시 굴림).
 ## 형식 3~9 파일은 그대로 읽는다 (없는 칸은 처음 값: 세팅 없음, 오버부스트 안 걸린 바퀴, 레벨 1, 창고·야간팀 Lv1, 퀘스트 처음부터,
 ##   lap_cargo 0 = 지금 바퀴 건수를 다음 진행 때 굴림, 능력치 없음, 쿠폰 0, 주간 진행 0·주 모름, 급송 켜짐·벨 시계 새로,
-##   명장 안 열림 → 이미 +10을 넘었으면 다음 Master.tick에서 열림, 개인 기사·오늘 집계 0·날짜 모름·1위 알림 안 보냄).
+##   명장 안 열림 → 이미 +10을 넘었으면 다음 Master.tick에서 열림, 개인 기사·오늘 집계 0·날짜 모름·1위 알림 안 보냄,
+##   고급 스페어 0·특별 NPC 다음 방문은 첫 tick에서 굴림). 형식 10까지의 coupons(보험 쿠폰)는 버림 (출시 전이라 바꿔 주지 않음).
 ##
 ## 백업: 쓸 때마다 지금 파일을 path.bak1(가장 최근) → bak2 → bak3 으로 돌린다.
 ## 본 파일이 깨졌으면 path.broken 으로 옮기고 bak1 → bak2 → bak3 중 읽히는 첫 파일로 살린다.
@@ -42,11 +47,13 @@ const GameState = preload("res://scripts/core/game_state.gd")
 const Quest = preload("res://scripts/core/quest.gd")
 const Setting = preload("res://scripts/core/setting.gd")
 const TruckState = preload("res://scripts/core/truck_state.gd")
+const Visitor = preload("res://scripts/core/visitor.gd")
 
 const DEFAULT_PATH := "user://save.json"
-const FORMAT_VERSION := 10  ## 1: v0·v1 / 2: 튜닝(v2) / 3: 한 바퀴 경제·트럭 여러 대(v3) / 4: 세팅 돌리기(v4) / 5: 기사 레벨·퀘스트·창고(v5)
+const FORMAT_VERSION := 11  ## 1: v0·v1 / 2: 튜닝(v2) / 3: 한 바퀴 경제·트럭 여러 대(v3) / 4: 세팅 돌리기(v4) / 5: 기사 레벨·퀘스트·창고(v5)
                             ## 6: 트럭 lap_cargo (지금 바퀴에 실은 건수, v6-bal) / 7: 기사 능력치 abilities (v5b)
                             ## 8: 쿠폰·주간 배송 목표·급송 전화 (v6b C1) / 9: 명장 방문일 (v6b C2) / 10: 회사·오늘 집계 (v7a)
+                            ## 11: 고급 스페어·특별 NPC·보험, 쿠폰 지움 (v7-bal)
 const OLDEST_READABLE := 3  ## 이보다 옛 형식은 변환하지 않고 옮겨 둔다
 
 enum Status { OK, NONE, BROKEN }   ## 읽음 / 저장 파일 없음(새 게임) / 깨짐(새 게임)
@@ -63,6 +70,8 @@ const MASTER_FIELDS := ["master_unlocked", "master_day", "master_next_day", "mas
 		"master_next_bonus", "master_notice_week", "master_visit_week"]
 ## 형식 10에 더한 회사 칸 (GameState 변수 이름 그대로). 읽기는 _v10_from
 const COMPANY_FIELDS := ["company_stage", "today_day", "today_sales", "today_staff", "today_tax", "rank_first_done"]
+## 형식 11에 더한 칸 (GameState 변수 이름 그대로, visitor_next 빼고). 읽기는 _v11_from
+const VISITOR_FIELDS := ["premium_spares", "use_premium", "visitor_day", "insurer_event", "insured_day"]
 const MAX_WHOLE := 1 << 53   # JSON 숫자가 정확한 정수로 왕복하는 한계
 const MAX_MONEY := 999_999_999_999_999_999   ## 돈 글자 18자리까지. 넘으면 이 값으로 자름 (to_int가 넘치면 음수로 돌아감)
 
@@ -92,7 +101,6 @@ static func to_dict(s: GameState, saved_at_unix: int) -> Dictionary:
 		"parts_rolled": s.parts_rolled.duplicate(),
 		"milestones_done": s.milestones_done.duplicate(),
 		"abilities": s.abilities.duplicate(),
-		"coupons": s.coupons,
 		"weekly_week": s.weekly_week,
 		"weekly_parcels": s.weekly_parcels,
 		"weekly_done": s.weekly_done,
@@ -101,8 +109,9 @@ static func to_dict(s: GameState, saved_at_unix: int) -> Dictionary:
 		"rush_ring": s.rush_ring,
 		"rush_left": s.rush_left,
 	}
-	for key in MASTER_FIELDS + COMPANY_FIELDS:
+	for key in MASTER_FIELDS + COMPANY_FIELDS + VISITOR_FIELDS:
 		d[key] = s.get(key)
+	d["visitor_next"] = s.visitor_next.duplicate()
 	for key in PROGRESS_INTS:
 		d[key] = s.get(key)
 	return d
@@ -173,6 +182,8 @@ static func from_dict(d, b: Balance) -> Dictionary:
 		why = _v9_from(d, b, s)   # 형식 8까지는 없음 → 처음 값
 	if why == "":
 		why = _v10_from(d, b, s)   # 형식 9까지는 없음 → 처음 값
+	if why == "":
+		why = _v11_from(d, s)   # 형식 10까지는 없음 → 처음 값
 	if why != "":
 		return _broken(why)
 	return _result(Status.OK, s, saved_at)
@@ -331,15 +342,14 @@ static func _progress_from(d: Dictionary, b: Balance, s: GameState) -> String:
 	return ""
 
 
-## 형식 8 칸 (쿠폰·주간 목표·급송) → s. 없는 칸은 GameState 처음 값. 틀린 모양이면 그 이유 (없으면 "")
+## 형식 8 칸 (주간 목표·급송) → s. 없는 칸은 GameState 처음 값. 틀린 모양이면 그 이유 (없으면 ""). coupons는 버림 (형식 11)
 static func _v8_from(d: Dictionary, b: Balance, s: GameState) -> String:
-	for key in ["coupons", "weekly_week", "weekly_parcels", "rush_left", "rush_next", "rush_ring"]:
+	for key in ["weekly_week", "weekly_parcels", "rush_left", "rush_next", "rush_ring"]:
 		if not _is_finite_number(d.get(key, 0)):
 			return "%s 가 숫자가 아님: %s" % [key, d.get(key)]
 	for key in ["weekly_done", "rush_enabled"]:
 		if typeof(d.get(key, false)) != TYPE_BOOL:
 			return "%s 가 true/false가 아님: %s" % [key, d.get(key)]
-	s.coupons = clampi(floori(d.get("coupons", 0)), 0, MAX_WHOLE)
 	s.weekly_week = floori(d.get("weekly_week", s.weekly_week))
 	s.weekly_parcels = clampi(floori(d.get("weekly_parcels", 0)), 0, MAX_WHOLE)
 	s.weekly_done = d.get("weekly_done", false)
@@ -383,6 +393,31 @@ static func _v10_from(d: Dictionary, b: Balance, s: GameState) -> String:
 		s.set(key, floori(v) if key == "today_day" else clampi(floori(v), 0, MAX_WHOLE))
 	s.company_stage = mini(s.company_stage, GameState.AGENCY)
 	s.trucks = s.trucks.slice(0, 1 + b.helper_prices.size())
+	return ""
+
+
+## 형식 11 칸 (고급 스페어·특별 NPC·보험) → s. 없는 칸은 GameState 처음 값. 틀린 모양이면 그 이유 (없으면 "")
+static func _v11_from(d: Dictionary, s: GameState) -> String:
+	for key in VISITOR_FIELDS:
+		var v = d.get(key, s.get(key))
+		var want := typeof(s.get(key))
+		var ok := (want == TYPE_BOOL and typeof(v) == TYPE_BOOL) or (want == TYPE_STRING and typeof(v) == TYPE_STRING) 				or (want == TYPE_INT and _is_finite_number(v))
+		if not ok:
+			return "%s 모양이 틀림: %s" % [key, v]
+		if want == TYPE_INT:
+			v = clampi(floori(v), 0, MAX_WHOLE) if key == "premium_spares" else floori(v)
+		elif want == TYPE_STRING and not Visitor.INSURER_EVENTS.has(v):
+			v = ""
+		s.set(key, v)
+	var nxt = d.get("visitor_next", {})
+	if typeof(nxt) != TYPE_DICTIONARY:
+		return "visitor_next 가 { } 묶음이 아님"
+	for id in nxt:
+		if not Visitor.IDS.has(id):
+			continue
+		if not _is_finite_number(nxt[id]):
+			return "visitor_next.%s 가 숫자가 아님: %s" % [id, nxt[id]]
+		s.visitor_next[id] = floori(nxt[id])
 	return ""
 
 

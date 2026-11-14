@@ -1,4 +1,5 @@
-## v6b C2: 명장 방문일 (master.gd), 보험·보너스 (enhance.gd·economy.gd·setting.gd·trip.gd), 저장 형식 9
+## v6b C2: 명장 방문일 (master.gd), 보너스 (enhance.gd), 저장 형식 9
+## v7-bal: 보너스 3개만 (퍼짐 감소·성공 확률·2단계). 보험·제휴 할인·마술사 등은 보험사 날로 옮겨서 test_visitor.gd
 extends "res://tests/test_base.gd"
 
 const Balance = preload("res://scripts/core/balance.gd")
@@ -78,10 +79,9 @@ func _events(s: GameState, type: String) -> Array:
 ## json "master" = 지시서 "옮길 숫자"
 func test_json_matches_spec() -> void:
 	check(b.is_ok(), "진짜 balance.json에 문제가 있음: %s" % ", ".join(b.errors))
-	check_eq([b.master_unlock_star, b.master_insure_fee_mult], [10, 2.0], "열리는 단계 +10, 보험 추가 요금 ×2")
-	check_eq(b.master_bonuses, { "destroy_cut": 0.3, "enhance_discount": 0.2, "setting_up_mult": 1.5, "success_mult": 1.2, "spare_mult": 2.0,
-			"setting_discount": 0.2, "double_step": 0.1 }, "보너스 7개")
-	check_eq(b.master_bonus_ids.size(), 7, "보너스 id 7개 (json 순서)")
+	check_eq(b.master_unlock_star, 10, "열리는 단계 +10")
+	check_eq(b.master_bonuses, { "destroy_cut": 0.3, "success_mult": 1.2, "double_step": 0.1 }, "보너스 3개 (v7-bal)")
+	check_eq(b.master_bonus_ids, ["destroy_cut", "success_mult", "double_step"], "보너스 id 3개 (json 순서)")
 
 
 ## ① 주 번호·요일이 월요일 0시에 바뀜 (현지 시각 몇 개로)
@@ -107,7 +107,6 @@ func test_unlock() -> void:
 	check(not Master.is_unlocked(s), "+9인데 열림")
 	Master.set_day(s, 2, WED_1118)
 	check_eq([Master.chosen_day(s), Master.is_visiting(s, WED_1118), s.active_bonus, Master.week_bonus(s)], [-1, false, "", ""], "잠겼을 때: 요일 못 고름, 방문 없음")
-	check(not Enhance.can_insure(s, WED_1118), "잠겼고 쿠폰 없는데 보험 가능")
 	var b1 := _always_win()
 	s.take_events()
 	var r := Enhance.try_enhance(s, b1, 0, _rng(2))
@@ -201,7 +200,7 @@ func test_visit_and_notice() -> void:
 		if v.size() == 1:
 			bonuses[v[0]["bonus"]] = true
 	check_eq(same, 30, "월요일 방문: 일요일 예고 보너스 = 월요일 방문 보너스 (30번 중)")
-	check(bonuses.size() >= 4, "30주 동안 보너스가 거의 안 바뀜: %s" % [bonuses.keys()])
+	check_eq(bonuses.size(), 3, "30주 동안 나온 보너스 종류 %s" % [bonuses.keys()])
 	# 안 켜면 그 주는 없음: 방문일을 건너뛰고 다음 날 켬 → 방문 알림 없음
 	var skip := _game(10)
 	Master.tick(skip, b, MON_1116 + 60, _rng(9))
@@ -212,7 +211,7 @@ func test_visit_and_notice() -> void:
 	note("월요일 방문 30주: 예고 = 방문 %d번, 나온 보너스 %s" % [same, bonuses.keys()])
 
 
-## ⑤ 보너스 7개: 방문 중에만, 수치가 맞음 (많이 굴리는 것은 평균)
+## ⑤ 보너스 3개: 방문 중에만, 수치가 맞음 (많이 굴리는 것은 평균)
 func test_bonuses() -> void:
 	var now := WED_1118 + 3600
 	# 방문 중 아니면 보너스가 있어도 active_bonus ""
@@ -232,29 +231,6 @@ func test_bonuses() -> void:
 	ecu["lines"] = ["engine_guard", "engine_guard", "engine_guard"]
 	check_near(Enhance.chances_for(b, dc, 0)["destroy"], 0.04 * 0.7 * 0.7, 1e-12, "엔진 보호 30%와 곱")
 	check_near(Enhance.chances_for(b, plain, 0)["destroy"], 0.04, 1e-12, "보너스 없음 4%")
-	# enhance_discount: 비용 × 0.8, 보험 추가 요금도 할인된 비용 × 2
-	var ed := _visiting(18, now, "enhance_discount")
-	var base18 := Economy.base_enhance_cost(b, 18)
-	check_eq(Economy.enhance_cost(b, 18, ed), roundi(base18 * 0.8), "강화 비용 × 0.8")
-	check_eq(Enhance.insure_fee(ed, b, 0, now), roundi(base18 * 0.8) * 2, "보험 추가 요금 = 할인된 비용 × 2")
-	check_eq(Economy.enhance_cost(b, 18, plain), base18, "보너스 없음: 기본 비용")
-	# setting_up_mult: 등급업 × 1.5 (천장 그대로), 10만 번 평균
-	var su := _visiting(10, now, "setting_up_mult")
-	check_eq([Setting.up_chance(b, 0, su), Setting.up_chance(b, 1, su), Setting.up_chance(b, 3, su), Setting.up_chance(b, 4, su)],
-			[0.3 * 1.5, 0.08 * 1.5, 0.003 * 1.5, 0.0], "등급업 × 1.5 (최고 등급 0)")
-	check_eq([Setting.ceiling(b, 1), Setting.up_chance(b, 1, plain)], [20, 0.08], "천장 그대로, 보너스 없음 8%")
-	var d := real_balance_dict()
-	d["setting"]["ceiling"] = [1000000000, 1000000000, 1000000000, 1000000000]
-	var bnc: Balance = Balance.from_dict(d)
-	var rng := _rng(11)
-	var ups := 0
-	for k in 100000:
-		var p := su.truck(0).part("cargo_box")
-		p["grade"] = 1
-		p["pending"] = null
-		if Setting.try_roll(su, bnc, 0, "cargo_box", rng)["grade_up"]:
-			ups += 1
-	check_near(ups / 100000.0, 0.12, 0.01, "스트리트 → 스포츠 10만 번 (8% × 1.5)")
 	# success_mult: 성공 × 1.2, 성공 + 퍼짐이 1을 넘으면 성공을 자름, 10만 번 평균
 	var sm := _visiting(20, now, "success_mult")
 	check_near(Enhance.chances_for(b, sm, 0)["success"], 0.36, 1e-12, "+20 성공 30% × 1.2")
@@ -273,22 +249,16 @@ func test_bonuses() -> void:
 		if Enhance.try_enhance(sm, b, 0, r2)["result"] == Enhance.Result.SUCCESS:
 			wins += 1
 	check_near(wins / 100000.0, 0.36, 0.01, "+20 10만 번 성공률 (30% × 1.2)")
-	# spare_mult: 드랍 × 2 (정비 지식과 곱, 켜 둔 동안만)
-	var sp := _visiting(10, now, "spare_mult")
-	check_near(Trip.spare_chance(b, sp, 0), 0.00005 * 2.0, 1e-15, "드랍 × 2")
-	sp.abilities["mech"] = 20
-	sp.ability_points = 20
-	check_near(Trip.spare_chance(b, sp, 0), 0.00005 * 2.0 * 2.0, 1e-15, "정비 지식 20과 곱 (× 4)")
-	var carry0 := sp.spare_drop_carry
-	var ro := Trip.apply_offline(sp, b, 3 * 3600.0)
-	check_near(sp.spare_drop_carry - carry0, ro["parcels"] * 0.00005 * 2.0, 1e-12, "꺼둔 동안은 보너스 없음 (정비 지식만)")
-	# setting_discount: 돌리기 비용 × 0.8, 실제로 빠지는 돈도
-	var sd := _visiting(10, now, "setting_discount")
-	check_eq([Setting.roll_cost(b, 2, sd), Setting.roll_cost(b, 0, sd)], [1280000, 16000], "돌리기 비용 × 0.8")
-	var m0 := sd.money
-	Setting.try_roll(sd, b, 0, "cargo_box", _rng(13))
-	check_eq(m0 - sd.money, 16000, "순정 돌리기에 빠진 돈 = 할인된 비용")
-	check_eq(Setting.roll_cost(b, 2, plain), 1600000, "보너스 없음")
+	# 뺀 보너스(강화 비용 할인·세팅 등급업·드랍 2배·세팅 비용 할인)는 그 id를 넣어도 효과 없음 (옛 저장의 id는 Save가 ""로 바꿈)
+	var gone := _visiting(18, now, "destroy_cut")
+	gone.active_bonus = "enhance_discount"
+	check_eq(Economy.enhance_cost(b, 18, gone), Economy.base_enhance_cost(b, 18), "강화 비용 할인 없음")
+	gone.active_bonus = "setting_discount"
+	check_eq(Setting.roll_cost(b, 2, gone), b.roll_cost[2], "세팅 비용 할인 없음")
+	gone.active_bonus = "setting_up_mult"
+	check_eq(Setting.up_chance(b, 1, gone), b.up_chance[1], "세팅 등급업 상승 없음")
+	gone.active_bonus = "spare_mult"
+	check_eq(Trip.spare_chance(b, gone, 0), b.spare_drop_chance, "스페어 드랍 2배 없음")
 	# double_step: 성공의 10%가 한 단계 더 (+30은 안 넘음)
 	var bw := _always_win()
 	var ds := _visiting(5, now, "double_step")
@@ -315,128 +285,7 @@ func test_bonuses() -> void:
 		if Enhance.try_enhance(nd, bw, 0, r3)["double"]:
 			nd_doubles += 1
 	check_eq(nd_doubles, 0, "보너스 없으면 2단계 없음")
-	note("세팅 등급업 1.5배: %d/10만, 성공 1.2배: %d/10만, 2단계: %d/10만" % [ups, wins, doubles])
-
-
-## ⑥ 보험 추가 요금: 방문 중 = 비용 × 2 (쿠폰 안 줄어듦), 쿠폰이면 0원·쿠폰 −1
-func test_insure_fee() -> void:
-	var now := WED_1118 + 3600
-	var v := _visiting(18, now, "", 10 ** 12)
-	v.coupons = 3
-	v.active_bonus = ""   # 할인 보너스가 아닌 주로 (그 주 보너스와 상관없이 비용만 봄)
-	var cost := Economy.enhance_cost(b, 18, v)
-	check_eq(Enhance.insure_fee(v, b, 0, now), cost * 2, "방문 중 추가 요금 = 비용 × 2")
-	var m0 := v.money
-	Enhance.try_enhance(v, b, 0, _rng(15), true, now)
-	check_eq([m0 - v.money, v.coupons], [cost * 3, 3], "방문 중 보험: 비용 + 비용 × 2 빠짐, 쿠폰 그대로")
-	var c := _game(18, 10 ** 12)
-	c.coupons = 2
-	check_eq(Enhance.insure_fee(c, b, 0, now), 0, "방문일 아님: 추가 요금 0 (쿠폰)")
-	var c0 := c.money
-	Enhance.try_enhance(c, b, 0, _rng(16), true, now)
-	check_eq([c0 - c.money, c.coupons], [Economy.enhance_cost(b, 18, c), 1], "쿠폰 보험: 비용만, 쿠폰 −1")
-
-
-## ⑦ 보험 건 회의 퍼짐 → 실패(단계 유지)·스페어 안 씀·insured true
-func test_insured_destroy() -> void:
-	var always := real_balance_dict()
-	always["engine"]["success"][18] = 0.0
-	always["engine"]["destroy"][18] = 1.0
-	var bd: Balance = Balance.from_dict(always)
-	var s := _game(18, 10 ** 12)
-	s.coupons = 1
-	s.spares = 2
-	var r := Enhance.try_enhance(s, bd, 0, _rng(17), true, WED_1118)
-	var t := s.truck(0)
-	check_eq([r["result"], r["insured"], t.star, s.spares, t.destroy_count, t.fail_count], [Enhance.Result.FAIL, true, 18, 2, 0, 1],
-			"보험: 퍼짐 → 실패, +18 그대로, 스페어 그대로")
-	var n := Enhance.try_enhance(s, bd, 0, _rng(17))
-	check_eq([n["result"], n["insured"], t.star, s.spares], [Enhance.Result.DESTROY, false, 15, 1], "보험 없으면 퍼짐 → +15, 스페어 −1")
-	check_eq(Enhance.chances_for(bd, _game(18), 0, true), { "success": 0.0, "fail": 1.0, "destroy": 0.0 }, "보험 켠 확률: 퍼짐 0, 실패 1")
-
-
-## ⑧ 보험이면 +18 스페어 0이어도 누를 수 있음, 방문일도 쿠폰도 없으면 보험 못 검
-func test_insure_block() -> void:
-	var now := WED_1118 + 3600
-	var s := _game(18, 10 ** 12)
-	s.spares = 0
-	s.coupons = 1
-	check_eq(Enhance.block_reason(s, b, 0), Enhance.Block.NO_SPARE, "보험 없이 +18 스페어 0")
-	check_eq(Enhance.block_reason(s, b, 0, true, now), Enhance.Block.NONE, "쿠폰 보험: 스페어 0이어도 누를 수 있음")
-	check_eq(Enhance.try_enhance(s, b, 0, _rng(18), true, now)["result"] != Enhance.Result.BLOCKED, true, "쿠폰 보험으로 눌림")
-	var none := _game(18, 10 ** 12)
-	none.spares = 0
-	var m0 := none.money
-	check(not Enhance.can_insure(none, now), "방문도 쿠폰도 없는데 보험 가능")
-	check_eq(Enhance.block_reason(none, b, 0, true, now), Enhance.Block.NO_INSURE, "보험 못 검")
-	check_eq([Enhance.try_enhance(none, b, 0, _rng(18), true, now)["result"], none.money], [Enhance.Result.BLOCKED, m0], "막혀서 돈 그대로")
-	var v := _visiting(18, now, "", 0)
-	v.active_bonus = ""
-	v.spares = 0
-	var cost := Economy.enhance_cost(b, 18, v)
-	v.money = cost * 3 - 1
-	check_eq(Enhance.block_reason(v, b, 0, true, now), Enhance.Block.NO_MONEY, "방문 중 보험: 비용 × 3에 1원 모자람")
-	v.money = cost * 3
-	check_eq(Enhance.block_reason(v, b, 0, true, now), Enhance.Block.NONE, "방문 중 보험: 비용 × 3 딱")
-	check(Enhance.can_insure(v, now), "방문 중인데 보험 불가")
-
-
-## ⑨ 화면이 읽는 확률·비용 함수가 보너스·보험을 반영 + "N번 시도 가능" (Economy.tries)이 실제로 누를 수 있는 횟수와 같음
-func test_screen_values() -> void:
-	var now := WED_1118 + 3600
-	var v := _visiting(18, now, "enhance_discount", 0)
-	var cost := Economy.enhance_cost(b, 18, v)
-	check_eq(cost, roundi(Economy.base_enhance_cost(b, 18) * 0.8), "할인 주 비용")
-	v.money = cost - 1
-	check_eq(Enhance.block_reason(v, b, 0), Enhance.Block.NO_SPARE, "스페어부터")
-	v.spares = 1
-	check_eq(Enhance.block_reason(v, b, 0), Enhance.Block.NO_MONEY, "할인된 비용에 1원 모자람")
-	v.money = cost
-	check_eq(Enhance.block_reason(v, b, 0), Enhance.Block.NONE, "할인된 비용 딱 (기본 비용보다 적음)")
-	check_eq(Enhance.chances_for(b, v, 0, true)["destroy"], 0.0, "보험 켠 퍼짐 0")
-	# 세팅: 할인된 돈으로 돌릴 수 있음
-	var sd := _visiting(10, now, "setting_discount", 16000)
-	check_eq(Setting.block_reason(sd, b, 0, "cargo_box"), Setting.Block.NONE, "할인된 돌리기 비용 16000원 딱")
-	sd.active_bonus = ""
-	check_eq(Setting.block_reason(sd, b, 0, "cargo_box"), Setting.Block.NO_MONEY, "할인 없으면 20000원이라 모자람")
-	# tries: 보험 없이 / 방문 중 보험 / 쿠폰 보험 / 둘 다 없음 / 스페어 없음 / +30
-	var t := _game(18, 0)
-	t.spares = 1
-	var c18 := Economy.enhance_cost(b, 18, t)
-	t.money = c18 * 7 + 5
-	check_eq(Economy.tries(t, b, 0), 7, "보험 없이 7번")
-	t.spares = 0
-	check_eq(Economy.tries(t, b, 0), 0, "+18 스페어 0 → 0번")
-	t.coupons = 3
-	check_eq(Economy.tries(t, b, 0, true, now), 3, "쿠폰 보험: 돈은 7번인데 쿠폰 3장")
-	t.coupons = 0
-	check_eq(Economy.tries(t, b, 0, true, now), 0, "방문·쿠폰 없음 → 0번")
-	var tv := _visiting(18, now, "", 0)
-	tv.active_bonus = ""
-	tv.money = c18 * 3 * 4 + c18 * 2
-	check_eq(Economy.tries(tv, b, 0, true, now), 4, "방문 중 보험: 1번 = 비용 × 3")
-	tv.truck(0).star = 30
-	check_eq(Economy.tries(tv, b, 0, true, now), 0, "+30 → 0번")
-	# 실제로 눌러 보기: 늘 실패하는 balance로 BLOCKED까지 → tries와 같음 (방문 중 보험, 할인 주)
-	var never := real_balance_dict()
-	for k in 30:
-		never["engine"]["success"][k] = 0.0
-		never["engine"]["destroy"][k] = 0.0
-	var bf: Balance = Balance.from_dict(never)
-	var p := _visiting(18, now, "enhance_discount", 0)
-	p.money = Economy.enhance_cost(bf, 18, p) * 3 * 5 + 777
-	var want := Economy.tries(p, bf, 0, true, now)
-	var pressed := 0
-	while Enhance.try_enhance(p, bf, 0, _rng(19), true, now)["result"] != Enhance.Result.BLOCKED:
-		pressed += 1
-	check_eq([want, pressed], [5, 5], "N번 시도 가능 = 실제로 누른 횟수 (방문 중 보험·할인 주)")
-	var q := _game(12, 0)
-	q.money = Economy.enhance_cost(bf, 12, q) * 9
-	var want_q := Economy.tries(q, bf, 0)
-	var pressed_q := 0
-	while Enhance.try_enhance(q, bf, 0, _rng(20))["result"] != Enhance.Result.BLOCKED:
-		pressed_q += 1
-	check_eq([want_q, pressed_q], [9, 9], "N번 시도 가능 = 실제 (보험 없이)")
+	note("성공 1.2배: %d/10만, 2단계: %d/10만" % [wins, doubles])
 
 
 ## ⑩ 시계가 거꾸로 가도·몇 주를 건너뛰어도 오류 없음 (무작위 시각 2000번, 요일 바꾸기 섞어서)
@@ -516,11 +365,11 @@ func test_bad_numbers() -> void:
 	var cases := [
 		[func(d): d["master"]["bonuses"].erase("double_step"), "master.bonuses.double_step 이 없음"],
 		[func(d): d["master"]["bonuses"]["luck"] = 0.5, "모르는 보너스: luck"],
-		[func(d): d["master"]["bonuses"]["enhance_discount"] = 1.0, "master.bonuses.enhance_discount = 1"],
+		[func(d): d["master"]["bonuses"]["destroy_cut"] = 1.0, "master.bonuses.destroy_cut = 1"],
+		[func(d): d["master"]["bonuses"]["spare_mult"] = 2, "모르는 보너스: spare_mult"],
 		[func(d): d["master"]["bonuses"]["success_mult"] = 0.8, "master.bonuses.success_mult = 0.8"],
 		[func(d): d["master"]["bonuses"]["double_step"] = 1.5, "master.bonuses.double_step = 1.5"],
 		[func(d): d["master"]["unlock_star"] = 31, "master.unlock_star = 31"],
-		[func(d): d["master"]["insure_fee_mult"] = -1, "master.insure_fee_mult = -1"],
 		[func(d): d.erase("master"), "\"master\" 묶음이 없음"],
 	]
 	var found := PackedStringArray()

@@ -1,8 +1,8 @@
 ## 게임 숫자(data/balance.json)를 읽고 검사한다.
 ## 묶음은 "trip"(한 바퀴·팁), "engine"(강화·스페어), "offline"(꺼둔 동안), "setting"(세팅 돌리기),
 ## "driver"(기사 레벨), "abilities"(기사 능력치), "depot"(창고·야간팀), "quests"(다음 할 일 목록),
-## "special"(대형·VIP), "rush"(급송 전화), "weekly"(주간 배송 목표), "master"(명장 방문일·보험·보너스),
-## "company"(회사 단계·세금·대리점·보조 트럭·순위 v7a).
+## "special"(대형·VIP), "rush"(급송 전화), "weekly"(주간 배송 목표), "master"(명장 방문일·보너스),
+## "company"(회사 단계·세금·대리점·보조 트럭·순위 v7a), "visitors"(특별 NPC: 보험사·마술사·중고 부품상 v7-bal).
 ##
 ## 쓰는 법:
 ##   var b := Balance.load_file()
@@ -25,8 +25,8 @@ const STAGES_START := ["solo", "agency"]
 const ABILITY_IDS := ["unload", "kind", "nego", "knowhow", "mech"]
 ## 출력 제한 배송 종류 (v6b). trip.gd가 이 id로 읽음
 const SPECIAL_IDS := ["large", "vip"]
-## 명장 보너스 (v6b). enhance·economy·setting·trip이 이 id로 효과를 읽어서 다 있어야 하고, 모르는 id는 막는다
-const MASTER_BONUS_IDS := ["destroy_cut", "enhance_discount", "setting_up_mult", "success_mult", "spare_mult", "setting_discount", "double_step"]
+## 명장 보너스 (v7-bal에서 3개로). enhance.gd가 이 id로 효과를 읽어서 다 있어야 하고, 모르는 id는 막는다
+const MASTER_BONUS_IDS := ["destroy_cut", "success_mult", "double_step"]
 
 ## 읽기/검사에서 나온 문제들. 비어 있으면 정상.
 var errors: PackedStringArray = PackedStringArray()
@@ -84,14 +84,22 @@ var rush_pay_mult: float        ## 그 배송 단가 몇 배
 # --- weekly (주간 배송 목표 v6b) ---
 var weekly_target: int          ## 한 주 배송 목표 (모든 트럭, 꺼둔 동안 포함)
 var weekly_xp: int              ## 달성 보상 경험치
-var weekly_coupons: int         ## 달성 보상 보험 쿠폰
+var weekly_reward_hours: float  ## 달성 보상 돈 = 그 순간 시간당 내 돈 × 이 시간 (v7-bal: 24 = 하루치)
 
 # --- master (명장 방문일 v6b) ---
-var master_unlock_star: int             ## 이 단계를 처음 달성하면 열림
-var master_insure_fee_mult: float       ## 방문 중 보험 추가 요금 = 그 회 강화 비용 × 이것
-var master_bonuses: Dictionary = {}     ## 보너스 id → 수치 (destroy_cut 0.3 = 퍼짐 × 0.7, enhance_discount 0.2 = 비용 × 0.8,
-                                        ## setting_up_mult 1.5배, success_mult 1.2배, spare_mult 2배, setting_discount 0.2, double_step 10%)
+var master_unlock_star: int             ## 이 단계를 처음 달성하면 열림 (특별 NPC도 같이: visitor.gd)
+var master_bonuses: Dictionary = {}     ## 보너스 id → 수치 (destroy_cut 0.3 = 퍼짐 × 0.7, success_mult 1.2배, double_step 10%)
 var master_bonus_ids: Array[String] = []   ## json 순서 (그 주 보너스를 고르게 뽑을 때)
+
+# --- visitors (특별 NPC v7-bal: visitor.gd) ---
+var visitor_min_days: int               ## 다음 방문까지 최소 날짜 수
+var visitor_max_days: int               ## 최대 날짜 수 (min~max 사이 고르게)
+var insure_fee_mult: float              ## 보험료 = 그 회 강화 비용(할인 전) × 그 단계 퍼짐 확률(표 값) × 이것
+var partner_discount: float             ## 보험사 "제휴 할인" 날 가입하면 강화 비용 × (1 − 이것)
+var recovery_star: int                  ## 보험사 "복구 보험" 날 가입 안 하고 퍼지면 이 단계로 (broken_drop_to 대신)
+var magician_up_mult: float             ## 마술사 날 세팅 등급업 확률 × 이것 (최대 1)
+var dealer_premium_spares: int          ## 중고 부품상이 주는 고급 스페어 수
+var premium_drop_to: int                ## 고급 스페어를 쓰고 퍼지면 이 단계로
 
 # --- company (회사 단계 v7a). [단계] 0 개인 기사 / 1 대리점 / 2~ 업데이트용 (세율표 공개만) ---
 var company_stages: PackedStringArray     ## 단계 id ("solo", "agency", …)
@@ -117,7 +125,8 @@ var lines_by_grade: PackedInt64Array    ## [등급] = 줄 수
 var up_chance: PackedFloat64Array       ## [등급] = 한 등급 오를 확률 (최고 등급 칸은 없음)
 var ceiling: PackedInt64Array           ## [등급] = 천장. 이 횟수째 돌리기는 무조건 등급업 (최고 등급 칸은 없음)
 var roll_cost: PackedInt64Array         ## [등급] = 돌리기 1번 비용 (원)
-var cost_cut_cap: float                 ## 기름값 + 정비비 절감 합의 상한
+var fuel_cut_cap: float                 ## 기름값 절감 합의 상한
+var maint_cut_cap: float                ## 정비비 감소 합의 상한 (기름값과 따로, v7-bal)
 var engine_guard_cap: float             ## 엔진 보호 합의 상한
 var overboost_mult: float               ## 오버부스트: 걸린 바퀴 내내 운전 속도 몇 배
 var setting_parts: Dictionary = {}      ## 부품 id → { "unlock_star": int, "unlock_stage": int, "options": PackedStringArray } (json 순서)
@@ -214,13 +223,21 @@ static func from_dict(d: Dictionary) -> RefCounted:
 	var weekly: Dictionary = d["weekly"]
 	b.weekly_target = int(weekly["target_parcels"])
 	b.weekly_xp = int(weekly["xp"])
-	b.weekly_coupons = int(weekly["coupons"])
+	b.weekly_reward_hours = float(weekly["reward_hours"])
 	var master: Dictionary = d["master"]
 	b.master_unlock_star = int(master["unlock_star"])
-	b.master_insure_fee_mult = float(master["insure_fee_mult"])
 	for id in master["bonuses"]:
 		b.master_bonus_ids.append(id)
 		b.master_bonuses[id] = float(master["bonuses"][id])
+	var visitors: Dictionary = d["visitors"]
+	b.visitor_min_days = int(visitors["min_days"])
+	b.visitor_max_days = int(visitors["max_days"])
+	b.insure_fee_mult = float(visitors["insurer"]["fee_mult"])
+	b.partner_discount = float(visitors["insurer"]["events"]["partner_discount"])
+	b.recovery_star = int(visitors["insurer"]["events"]["recovery_star"])
+	b.magician_up_mult = float(visitors["magician"]["up_mult"])
+	b.dealer_premium_spares = int(visitors["dealer"]["premium_spares"])
+	b.premium_drop_to = int(visitors["dealer"]["premium_drop_to"])
 	var company: Dictionary = d["company"]
 	b.company_stages = PackedStringArray(company["stages"])
 	b.tax_rates = PackedFloat64Array(company["tax_rates"])
@@ -243,7 +260,8 @@ static func from_dict(d: Dictionary) -> RefCounted:
 	b.up_chance = PackedFloat64Array(setting["up_chance"])
 	b.ceiling = PackedInt64Array(setting["ceiling"])
 	b.roll_cost = PackedInt64Array(setting["roll_cost"])
-	b.cost_cut_cap = float(setting["cost_cut_cap"])
+	b.fuel_cut_cap = float(setting["fuel_cut_cap"])
+	b.maint_cut_cap = float(setting["maint_cut_cap"])
 	b.engine_guard_cap = float(setting["engine_guard_cap"])
 	b.overboost_mult = float(setting["overboost_mult"])
 	for id in setting["options"]:
@@ -273,7 +291,7 @@ static func validate(d: Dictionary) -> PackedStringArray:
 	var abilities = d.get("abilities")
 	for pair in [["trip", trip], ["engine", engine], ["offline", offline], ["setting", setting], ["driver", driver], ["depot", depot],
 			["abilities", abilities], ["special", d.get("special")], ["rush", d.get("rush")], ["weekly", d.get("weekly")],
-			["master", d.get("master")], ["company", d.get("company")]]:
+			["master", d.get("master")], ["company", d.get("company")], ["visitors", d.get("visitors")]]:
 		if typeof(pair[1]) != TYPE_DICTIONARY:
 			errs.append("\"%s\" 묶음이 없음" % pair[0])
 	if typeof(d.get("quests")) != TYPE_ARRAY or d["quests"].is_empty():
@@ -336,6 +354,7 @@ static func validate(d: Dictionary) -> PackedStringArray:
 	var stages_ok := _validate_company(d["company"], errs)
 	_validate_setting(setting, max_star, d["company"]["stages"] if stages_ok else [], errs)
 	_validate_v6b(d, max_star, errs)
+	_validate_visitors(d["visitors"], max_star, errs)
 	var max_level := _validate_driver(driver, max_star, errs)
 	_validate_quests(d["quests"], max_star, max_level, setting, depot, d["company"], errs)
 	return errs
@@ -388,11 +407,10 @@ static func _validate_v6b(d: Dictionary, max_star: int, errs: PackedStringArray)
 	var weekly: Dictionary = d["weekly"]
 	_check_number(weekly, "weekly", "target_parcels", errs, "1 이상의 정수여야 함", func(v): return v >= 1.0 and v == floorf(v))
 	_check_number(weekly, "weekly", "xp", errs, "0 이상의 정수여야 함", whole)
-	_check_number(weekly, "weekly", "coupons", errs, "0 이상의 정수여야 함", whole)
+	_check_number(weekly, "weekly", "reward_hours", errs, "0 이상이어야 함", func(v): return v >= 0.0)
 	var master: Dictionary = d["master"]
 	_check_number(master, "master", "unlock_star", errs, "0~%d 정수여야 함" % max_star,
 			func(v): return v >= 0.0 and v <= max_star and v == floorf(v))
-	_check_number(master, "master", "insure_fee_mult", errs, "0 이상이어야 함", func(v): return v >= 0.0)
 	var bonuses = master.get("bonuses")
 	if typeof(bonuses) != TYPE_DICTIONARY:
 		errs.append("master.bonuses 가 없거나 { } 묶음이 아님")
@@ -400,14 +418,35 @@ static func _validate_v6b(d: Dictionary, max_star: int, errs: PackedStringArray)
 	for id in bonuses:
 		if not MASTER_BONUS_IDS.has(id):
 			errs.append("master.bonuses 에 모르는 보너스: %s (%s 중 하나여야 함)" % [id, "/".join(MASTER_BONUS_IDS)])
-	var cut := func(v): return v >= 0.0 and v < 1.0   # 할인·감소: 1이면 0원·0%라 막음
-	var mult := func(v): return v >= 1.0
-	var rules := { "destroy_cut": [cut, "0 이상 1 미만이어야 함"], "enhance_discount": [cut, "0 이상 1 미만이어야 함"],
-			"setting_discount": [cut, "0 이상 1 미만이어야 함"], "setting_up_mult": [mult, "1 이상이어야 함"],
-			"success_mult": [mult, "1 이상이어야 함"], "spare_mult": [mult, "1 이상이어야 함"],
+	var rules := { "destroy_cut": [func(v): return v >= 0.0 and v < 1.0, "0 이상 1 미만이어야 함"],   # 1이면 퍼짐 0%라 막음
+			"success_mult": [func(v): return v >= 1.0, "1 이상이어야 함"],
 			"double_step": [func(v): return v >= 0.0 and v <= 1.0, "0~1 사이여야 함"] }
 	for id in MASTER_BONUS_IDS:
 		_check_number(bonuses, "master.bonuses", id, errs, rules[id][1], rules[id][0])
+
+
+## "visitors" 묶음 검사 (특별 NPC v7-bal). 날짜 수는 1 이상 정수 (max ≥ min), 할인 0 이상 1 미만, 재시작 단계는 0~max_star−1 정수
+static func _validate_visitors(v: Dictionary, max_star: int, errs: PackedStringArray) -> void:
+	var star := func(x): return x >= 0.0 and x < max_star and x == floorf(x)
+	var min_ok := _check_number(v, "visitors", "min_days", errs, "1 이상의 정수여야 함", func(x): return x >= 1.0 and x == floorf(x))
+	if _check_number(v, "visitors", "max_days", errs, "1 이상의 정수여야 함", func(x): return x >= 1.0 and x == floorf(x)) and min_ok \
+			and float(v["max_days"]) < float(v["min_days"]):
+		errs.append("visitors.max_days = %s (min_days %s 이상이어야 함)" % [v["max_days"], v["min_days"]])
+	for k in ["insurer", "magician", "dealer"]:
+		if typeof(v.get(k)) != TYPE_DICTIONARY:
+			errs.append("visitors.%s 가 없거나 { } 묶음이 아님" % k)
+			return
+	var ins: Dictionary = v["insurer"]
+	_check_number(ins, "visitors.insurer", "fee_mult", errs, "0 이상이어야 함", func(x): return x >= 0.0)
+	if typeof(ins.get("events")) != TYPE_DICTIONARY:
+		errs.append("visitors.insurer.events 가 없거나 { } 묶음이 아님")
+	else:
+		var ev: Dictionary = ins["events"]
+		_check_number(ev, "visitors.insurer.events", "partner_discount", errs, "0 이상 1 미만이어야 함", func(x): return x >= 0.0 and x < 1.0)
+		_check_number(ev, "visitors.insurer.events", "recovery_star", errs, "0~%d 정수여야 함" % (max_star - 1), star)
+	_check_number(v["magician"], "visitors.magician", "up_mult", errs, "1 이상이어야 함", func(x): return x >= 1.0)
+	_check_number(v["dealer"], "visitors.dealer", "premium_spares", errs, "0 이상의 정수여야 함", func(x): return x >= 0.0 and x == floorf(x))
+	_check_number(v["dealer"], "visitors.dealer", "premium_drop_to", errs, "0~%d 정수여야 함" % (max_star - 1), star)
 
 
 ## "company" 묶음 검사 (v7a). stages가 맞으면 true (세팅 부품 "unlock" 검사에 씀)
@@ -542,7 +581,8 @@ static func _validate_setting(setting: Dictionary, max_star: int, stages: Array,
 			func(v): return v >= 1.0 and v == floorf(v))
 	if _check_list(setting, "setting", "roll_cost", g, per_grade, errs, "0 이상의 정수여야 함", whole):
 		_check_not_decreasing(setting["roll_cost"], "setting.roll_cost", errs)
-	_check_number(setting, "setting", "cost_cut_cap", errs, "0~1 사이여야 함", rate)
+	_check_number(setting, "setting", "fuel_cut_cap", errs, "0~1 사이여야 함", rate)
+	_check_number(setting, "setting", "maint_cut_cap", errs, "0~1 사이여야 함", rate)
 	_check_number(setting, "setting", "engine_guard_cap", errs, "0~1 사이여야 함", rate)
 	_check_number(setting, "setting", "overboost_mult", errs, "1 이상이어야 함", func(v): return v >= 1.0)
 

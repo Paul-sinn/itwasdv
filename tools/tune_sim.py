@@ -187,9 +187,10 @@ class Bal:
         self.rush_min, self.rush_max = float(ru["min_minutes"]), float(ru["max_minutes"])
         self.rush_parcels, self.rush_mult = int(ru["parcels"]), float(ru["pay_mult"])
         wk = d["weekly"]
-        self.weekly_target, self.weekly_xp, self.weekly_coupons = int(wk["target_parcels"]), int(wk["xp"]), int(wk["coupons"])
+        # shortcut: v7-bal json(0.14)에서 쿠폰·명장 날 보험이 없어짐 → 쿠폰 0, 보험 없음으로만 돔. 보험사·마술사·부품상·주간 돈 보상은 C3에서
+        self.weekly_target, self.weekly_xp, self.weekly_coupons = int(wk["target_parcels"]), int(wk["xp"]), int(wk.get("coupons", 0))
         ms = d["master"]
-        self.master_unlock, self.insure_fee_mult = int(ms["unlock_star"]), float(ms["insure_fee_mult"])
+        self.master_unlock, self.insure_fee_mult = int(ms["unlock_star"]), ms.get("insure_fee_mult")
         self.bonuses = {k: float(v) for k, v in ms["bonuses"].items()}
         self.bonus_ids = list(self.bonuses.keys())
         # --- abilities (기사 능력치 v5b): id → (per_point, max_points), json 순서 ---
@@ -243,7 +244,7 @@ class Bal:
         self.up_chance = [float(x) for x in st_["up_chance"]]
         self.ceiling = [int(x) for x in st_["ceiling"]]
         self.roll_cost = [int(x) for x in st_["roll_cost"]]
-        self.cost_cut_cap = float(st_["cost_cut_cap"])
+        self.fuel_cut_cap, self.maint_cut_cap = float(st_["fuel_cut_cap"]), float(st_["maint_cut_cap"])
         self.guard_cap = float(st_["engine_guard_cap"])
         self.ob_mult = float(st_["overboost_mult"])
         self.options = {}
@@ -312,12 +313,9 @@ class Bal:
         return [(1.0, (1.0 - vip) * (1.0 - large)), (lm, (1.0 - vip) * large), (vm, vip)]
 
     def parcel_pay(self, tot, ab=None, mult=1.0):
-        """Trip._pay: 단가 × mult인 배송 1건 돈 (보통이면 Trip.parcel_pay)"""
-        f, m = tot.get("fuel_cut", 0.0), tot.get("maint_cut", 0.0)
-        s = f + m
-        if s > self.cost_cut_cap:
-            f = f * self.cost_cut_cap / s
-            m = m * self.cost_cut_cap / s
+        """Trip._pay: 단가 × mult인 배송 1건 돈 (보통이면 Trip.parcel_pay). 기름값·정비비 절감은 각자 상한에서 자름 (v7-bal)"""
+        f = min(tot.get("fuel_cut", 0.0), self.fuel_cut_cap)
+        m = min(tot.get("maint_cut", 0.0), self.maint_cut_cap)
         u = self.unit(ab, mult)
         return u - roundi(u * self.fuel_rate * (1.0 - f)) - roundi(u * self.maint_rate * (1.0 - m))
 
@@ -346,11 +344,11 @@ class Bal:
         return accept * self.rush_parcels * extra / cycle
 
     def lap_seconds(self, star, tot, boosted=False, ab=None):
-        """한 바퀴 초 (정차는 평균 적재량 × 상하차 반영). 걸린 바퀴는 달리는 초 ÷ overboost_mult"""
+        """한 바퀴 초 (싣기·정차 둘 다 상하차 반영: Trip._load·_stop, 정차는 평균 적재량). 걸린 바퀴는 달리는 초 ÷ overboost_mult"""
         drive = self.road / self.speed(star, tot)
         if boosted:
             drive /= self.ob_mult
-        return self.load + drive + self.cargo(tot) * self.stop_seconds(ab)
+        return self.load * (1.0 - (ab or {}).get("unload", 0.0)) + drive + self.cargo(tot) * self.stop_seconds(ab)
 
     def avg_lap_seconds(self, star, tot, ab=None):
         p = min(tot.get("overboost", 0.0), 1.0)
@@ -897,7 +895,7 @@ class Player:
 
     def _insure_now(self, t):
         """pool 유저가 트럭 t 단계에서 보험을 거나: None = 안 누르고 모음, "fee" = 방문일 추가 요금, "coupon" = 쿠폰, "" = 보험 없이"""
-        if self.style != "pool" or t.star < POOL_FROM or not self.master:
+        if self.style != "pool" or t.star < POOL_FROM or not self.master or self.b.insure_fee_mult is None:
             return ""
         if self.visiting:
             return "fee"
@@ -1131,7 +1129,7 @@ def table(b):
           + ", ".join(f"+{s} ×{sum(m * sh for m, sh in b.kind_shares(s)):.4g}" for s in (14, lu, vu)) + " (시간당 수입 칸에 들어감)")
     print(f"  급송: 벨 {b.rush_min:g}~{b.rush_max:g}분, 받으면 다음 {b.rush_parcels}건 ×{b.rush_mult:g} (시간당 칸에는 안 들어감). "
           f"주간 목표 {b.weekly_target:,}건 → 쿠폰 {b.weekly_coupons} + 경험치 {b.weekly_xp:,}. "
-          f"명장 +{b.master_unlock}부터, 보험 = 비용 × {b.insure_fee_mult:g}")
+          f"명장 +{b.master_unlock}부터" + (f", 보험 = 비용 × {b.insure_fee_mult:g}" if b.insure_fee_mult is not None else " (보험 없음: v7-bal 보험사는 C3)"))
     print()
     print("■ 능력치 하나만 최대일 때 시간당 수입 (세팅 없음, 창고·야간팀 Lv1. 수입이 아닌 노하우·정비 지식은 효과만)")
     print("  능력치 (최대) |   효과   | " + " | ".join(f"+{s} 시간당 (차이)" for s in ABILITY_STARS))

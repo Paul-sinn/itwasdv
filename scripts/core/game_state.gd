@@ -1,7 +1,7 @@
 ## 게임 상태: 돈, 스페어 엔진, 트럭들, 기사 레벨·창고·야간팀·퀘스트 진행, 화면에 띄울 알림.
 ## 화면 없이 돌아가는 계산 코드. (scripts/core 규칙)
 ## 한 바퀴·배송·꺼둔 동안은 trip.gd, 강화 굴리기는 enhance.gd, 레벨은 driver.gd, 능력치는 ability.gd, 창고·야간팀은 depot.gd,
-## 퀘스트는 quest.gd, 회사(대리점·보조 트럭·세금·순위)는 company.gd에 있다.
+## 퀘스트는 quest.gd, 회사(대리점·보조 트럭·세금·순위)는 company.gd, 특별 NPC(보험사·마술사·부품상)는 visitor.gd에 있다.
 extends RefCounted
 
 const Balance = preload("res://scripts/core/balance.gd")
@@ -15,6 +15,8 @@ const AGENCY := 1
 var money: int = 0
 var spares: int = 0                  ## 들고 있는 스페어 엔진
 var spare_drop_carry: float = 0.0    ## 꺼둔 동안 스페어 평균값의 소수 나머지 (0 이상 1 미만)
+var premium_spares: int = 0          ## 고급 스페어 엔진 (중고 부품상 선물, v7-bal). 퍼지면 premium_drop_to(+17)에서 재시작
+var use_premium: bool = false        ## [고급 스페어 쓰기] 켜짐: 퍼질 때 고급을 먼저 씀 (enhance.gd)
 var trucks: Array = []               ## TruckState들. 새 게임은 1대. 0 = 내 트럭, 1~ = 보조 트럭 (company.gd)
 
 # --- v7a 회사 (company.gd). 전부 저장 ---
@@ -32,8 +34,7 @@ var ability_points: int = 0       ## 받은 포인트 (v5에서는 쌓이기만)
 var reputation: int = 0           ## 만렙 뒤 경험치
 var abilities: Dictionary = {}    ## 능력치 id → 찍은 포인트 (없으면 0). ability.gd
 
-# --- v6b: 보험 쿠폰, 주간 배송 목표 (weekly.gd), 급송 전화 (rush.gd). 전부 저장 ---
-var coupons: int = 0              ## 보험 쿠폰 (주간 목표 보상. 쓰는 곳은 C2 보험)
+# --- v6b: 주간 배송 목표 (weekly.gd), 급송 전화 (rush.gd). 전부 저장 (보험 쿠폰은 v7-bal에서 지움) ---
 var weekly_week: int = -1         ## 지금 진행이 어느 주 것인가 (Master.week_index). -1 = 아직 모름 → 첫 tick에서 그 주로
 var weekly_parcels: int = 0       ## 이번 주 배송 수 (모든 트럭, 꺼둔 동안 포함)
 var weekly_done: bool = false     ## 이번 주 보상을 받았나
@@ -53,6 +54,13 @@ var master_bonus_week: int = -1   ## master_bonus가 어느 주 것인가
 var master_next_bonus: String = ""   ## 다음 주 보너스 (월요일 방문을 일요일에 예고할 때 미리 굴림). "" = 아직
 var master_notice_week: int = -1  ## 예고를 보낸 방문의 주 (한 주에 한 번)
 var master_visit_week: int = -1   ## 방문 알림을 보낸 주 (한 주에 한 번)
+
+# --- v7-bal 특별 NPC (visitor.gd). visitor_today만 저장 안 함 ---
+var visitor_next: Dictionary = {} ## NPC id → 다음 방문 날짜 번호 (현지 날짜, 1970-01-01 = 0). 없으면 첫 tick에서 굴림
+var visitor_today: String = ""    ## 오늘 와 있는 NPC id, 없으면 "". 저장 안 함 (Visitor.tick이 채움)
+var visitor_day: int = -1         ## 방문을 처리한 날 (알림·선물·보험사 이벤트를 정한 날. 같은 날 껐다 켜도 두 번 안 줌)
+var insurer_event: String = ""    ## visitor_day에 정한 보험사 이벤트 ("partner_discount" / "recovery")
+var insured_day: int = -1         ## 보험사가 온 날 [예]를 누른 날짜 번호
 
 # --- 물류센터 (depot.gd) ---
 var warehouse_level: int = 1
@@ -81,6 +89,11 @@ func truck(i: int) -> TruckState:
 
 
 ## 스페어 엔진은 언제든 고정가로 살 수 있다
+## 지금 퍼졌을 때 쓸 수 있는 스페어 수: 보통 + ([고급 스페어 쓰기]가 켜져 있으면) 고급. "+18 이상은 스페어 1개" 조건에 씀
+func usable_spares() -> int:
+	return spares + (premium_spares if use_premium else 0)
+
+
 func can_buy_spare(b: Balance) -> bool:
 	return money >= b.spare_price   # = Economy.spare_price (economy.gd가 이 파일을 불러서 여기서는 안 부름)
 
@@ -103,9 +116,10 @@ func add_event(event: Dictionary) -> void:
 ## 쌓아 둔 알림을 순서대로 꺼내고 비운다. 화면이 프레임마다 부른다
 ##   { "type": "level_up", "level": int, "points": int } / { "type": "max_level" }
 ##   { "type": "quest_done", "id": String, "xp": int, "money": int } / { "type": "milestone", "star": int, "xp": int }
-##   { "type": "weekly_done", "coupons": int, "xp": int } / { "type": "rush_call" } / { "type": "rush_missed" } (v6b)
+##   { "type": "weekly_done", "money": int, "xp": int } / { "type": "rush_call" } / { "type": "rush_missed" } (v6b, 돈 보상은 v7-bal)
 ##   { "type": "master_unlocked" } / { "type": "master_notice", "bonus": String } / { "type": "master_visit", "bonus": String } (v6b)
 ##   { "type": "agency_founded" } / { "type": "helper_bought", "truck": int } / { "type": "rank_first" } (v7a)
+##   { "type": "visitor", "who": String, "event": String(보험사 이벤트 id 또는 ""), "gift": int(부품상만) } (v7-bal)
 func take_events() -> Array:
 	var out := _events
 	_events = []

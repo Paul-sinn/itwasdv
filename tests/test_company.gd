@@ -5,6 +5,7 @@ const Balance = preload("res://scripts/core/balance.gd")
 const Company = preload("res://scripts/core/company.gd")
 const Depot = preload("res://scripts/core/depot.gd")
 const Driver = preload("res://scripts/core/driver.gd")
+const Economy = preload("res://scripts/core/economy.gd")
 const Enhance = preload("res://scripts/core/enhance.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Master = preload("res://scripts/core/master.gd")
@@ -66,15 +67,15 @@ func test_json_matches_spec() -> void:
 	check(b.is_ok(), "진짜 balance.json에 문제가 있음: %s" % ", ".join(b.errors))
 	check_eq(b.company_stages, PackedStringArray(["solo", "agency", "regional", "national", "global"]), "회사 단계")
 	check_eq(b.tax_rates, PackedFloat64Array([0.0, 0.03, 0.05, 0.07, 0.10]), "세율표")
-	check_eq([b.agency_price, b.staff_share, b.city_xp_per_parcel], [500000000, 0.3, 15], "창업 5억, 직원 몫 30%, 시내 경험치 15")
-	check_eq(b.helper_prices, PackedInt64Array([5000000, 20000000]), "보조 트럭 500만·2,000만")
-	check_eq(b.rivals, PackedFloat64Array([8000000, 9300000, 10800000, 12500000, 14500000, 16800000, 19500000, 22600000, 26200000, 30400000]),
-			"라이벌 10곳")
+	check_eq([b.agency_price, b.staff_share, b.city_xp_per_parcel], [300000000, 0.3, 15], "창업 3억 (v7-bal), 직원 몫 30%, 시내 경험치 15")
+	check_eq(b.helper_prices, PackedInt64Array([5000000, 8000000]), "보조 트럭 500만·800만 (v7-bal)")
+	check_eq(b.rivals, PackedFloat64Array([6000000, 7000000, 7700000, 8500000, 9400000, 10400000, 11500000, 12700000, 14000000, 15500000]),
+			"라이벌 10곳 (v7-bal)")
 	check_eq([Setting.unlock_star(b, "tire"), Setting.unlock_stage(b, "tire"), Setting.unlock_stage(b, "ecu")], [0, 1, 0], "타이어 = 대리점에 열림")
 	check_eq(b.setting_parts["tire"]["options"], PackedStringArray(["speed", "fuel_cut", "maint_cut", "junk_ride", "junk_scent",
 			"junk_cupholder", "junk_radio", "junk_gloss"]), "타이어 옵션")
 	check_eq([b.setting_options["maint_cut"]["kind"], b.setting_options["maint_cut"]["weight"], b.setting_options["maint_cut"]["values"]],
-			["own", 10.0, PackedFloat64Array([0.03, 0.06, 0.09, 0.13, 0.18])], "정비비 감소")
+			["own", 10.0, PackedFloat64Array([0.15, 0.30, 0.45, 0.55, 0.60])], "정비비 감소 (v7-bal 임시)")
 	var tail := []
 	for q in b.quests.slice(-3):
 		tail.append([q["id"], q["kind"], q["target"], q["part"], q["xp"], q["money"]])
@@ -112,11 +113,11 @@ func test_bad_numbers() -> void:
 	note("찾은 문제: %s" % " / ".join(found))
 
 
-## ① 돈이 모자라면 창업 못 함, 창업하면 돈 −5억·단계 1·이벤트 한 번, 두 번 못 함
+## ① 돈이 모자라면 창업 못 함, 창업하면 돈 −3억·단계 1·이벤트 한 번, 두 번 못 함
 func test_found_agency() -> void:
 	var s := _game([0], false)
 	var price := Company.agency_price(b)
-	check_eq(price, 500000000, "창업 가격")
+	check_eq(price, 300000000, "창업 가격")
 	s.money = price - 1
 	check(not Company.can_found(b, s), "1원 모자란데 창업 가능")
 	check(not Company.found(b, s), "1원 모자란데 창업됨")
@@ -124,7 +125,7 @@ func test_found_agency() -> void:
 	s.money = price + 7
 	check(Company.can_found(b, s), "돈이 되는데 창업 불가")
 	check(Company.found(b, s), "창업 안 됨")
-	check_eq([s.money, Company.stage(s)], [7, 1], "돈 −5억, 단계 1")
+	check_eq([s.money, Company.stage(s)], [7, 1], "돈 −3억, 단계 1")
 	check_eq(s.take_events(), [{ "type": "agency_founded" }], "이벤트 한 번")
 	s.money = price * 2
 	check(not Company.can_found(b, s), "두 번째 창업 가능")
@@ -160,9 +161,9 @@ func test_buy_helpers() -> void:
 	var s := _game([12], true)
 	s.money = 4999999
 	check(not Company.can_buy_helper(b, s) and not Company.buy_helper(b, s), "1원 모자란데 사짐")
-	s.money = 25000000
+	s.money = 13000000
 	check(Company.buy_helper(b, s), "첫 보조 트럭 안 사짐")
-	check_eq([s.money, s.trucks.size(), Company.helper_count(s), Company.helper_price(b, s)], [20000000, 2, 1, 20000000], "1대 뒤")
+	check_eq([s.money, s.trucks.size(), Company.helper_count(s), Company.helper_price(b, s)], [8000000, 2, 1, 8000000], "1대 뒤")
 	check(Company.buy_helper(b, s), "둘째 보조 트럭 안 사짐")
 	check_eq([s.money, s.trucks.size(), Company.helper_count(s), Company.helper_price(b, s)], [0, 3, 2, -1], "2대 뒤 (3대째 −1)")
 	s.money = RICH
@@ -264,6 +265,7 @@ func test_offline_split() -> void:
 ## ⑧ hourly_net = 오래 돌린 내 돈 1% 안 (트럭 3대). hourly_sales = 모든 트럭 hourly_income 합
 func test_hourly_net() -> void:
 	var s := _game([5, 12, 18], true)
+	s.weekly_done = true   # 100시간이면 주간 목표 보상 돈(하루치)이 섞여서 (v7-bal)
 	var rng := _rng(8)
 	var hours := 100
 	var sales := 0.0
@@ -288,6 +290,7 @@ func test_company_hourly_net() -> void:
 	var s := _game([5, 12, 18], true)
 	var sum := Trip.hourly_net(b, s, 0) + Trip.hourly_net(b, s, 1) + Trip.hourly_net(b, s, 2)
 	check_near(Company.hourly_net(b, s), sum, 1e-6, "대리점 3대 = 세 값의 합")
+	s.weekly_done = true   # 주간 목표 보상 돈이 안 섞이게 (v7-bal)
 	var hours := 100
 	var rng := _rng(15)
 	for i in 3:
@@ -362,17 +365,14 @@ func test_tire_maint_cut() -> void:
 	check_eq(Trip.parcel_pay(b, s, 0), u - 500 - 125, "세팅 없음 1건 돈")
 	var tire := s.truck(0).part("tire")
 	tire["lines"] = ["maint_cut"]
-	check_eq(Trip.parcel_pay(b, s, 0), u - 500 - roundi(u * 0.05 * (1.0 - 0.03)), "순정 정비비 감소 3%")
+	check_eq(Trip.parcel_pay(b, s, 0), u - 500 - roundi(u * 0.05 * (1.0 - 0.15)), "순정 정비비 감소 15% (v7-bal 임시)")
 	tire["grade"] = 4
-	check_eq(Trip.parcel_pay(b, s, 0), u - 500 - roundi(u * 0.05 * (1.0 - 0.18)), "프로토타입 정비비 감소 18%")
+	check_eq(Trip.parcel_pay(b, s, 0), u - 500 - roundi(u * 0.05 * (1.0 - 0.6)), "프로토타입 정비비 감소 60%")
 	var box := s.truck(0).part("cargo_box")
 	box["grade"] = 4
-	box["lines"] = ["fuel_cut", "fuel_cut", "fuel_cut"]   # 기름값 절감 180%
-	tire["lines"] = ["maint_cut", "maint_cut", "maint_cut"]   # 정비비 감소 54%
-	var f := 1.8 * 0.6 / 2.34
-	var m := 0.54 * 0.6 / 2.34
-	check_near(f + m, 0.6, 1e-9, "줄인 합 = 60%")
-	check_eq(Trip.parcel_pay(b, s, 0), u - roundi(u * 0.2 * (1.0 - f)) - roundi(u * 0.05 * (1.0 - m)), "합 234% → 같은 비율로 줄여 60%")
+	box["lines"] = ["fuel_cut", "fuel_cut", "fuel_cut"]   # 기름값 절감 135%
+	tire["lines"] = ["maint_cut", "maint_cut", "maint_cut"]   # 정비비 감소 180%
+	check_eq(Trip.parcel_pay(b, s, 0), u - roundi(u * 0.2 * 0.4) - roundi(u * 0.05 * 0.4), "각자 60%에서 자름 (v7-bal: 합쳐서 자르지 않음)")
 	check(Setting.option_chances(b, "tire", 0).has("maint_cut"), "타이어에서 정비비 감소가 안 뜸")
 	check(not Setting.option_chances(b, "cargo_box", 4).has("maint_cut"), "적재함에서 정비비 감소가 뜸")
 	# 진짜로 돌려서 정비비 감소 줄이 나옴 (가중치 10 / 합 90)
@@ -440,15 +440,18 @@ func test_helper_enhance_setting_insure_kinds() -> void:
 		Setting.choose(s, 1, part, true)
 		check(not s.truck(1).part(part)["lines"].is_empty(), "2호차 %s 줄이 없음" % part)
 	check(not s.truck(0).settings.has("tire"), "2호차 세팅이 내 트럭에 들어감")
-	# 보험: +20 2호차, 스페어 없이 쿠폰으로
+	# 보험: +20 2호차, 스페어 없이 (보험사가 온 날 가입)
 	s.truck(1).star = 20
 	s.spares = 0
-	s.coupons = 1
-	check_eq(Enhance.block_reason(s, b, 1, false), Enhance.Block.NO_SPARE, "보험 없이: 스페어 필요")
-	check_eq(Enhance.block_reason(s, b, 1, true), Enhance.Block.NONE, "보험이면 누를 수 있음")
-	var out := Enhance.try_enhance(s, b, 1, rng, true)
+	check_eq(Enhance.block_reason(s, b, 1), Enhance.Block.NO_SPARE, "보험 없이: 스페어 필요")
+	s.visitor_today = "insurer"   # 보험사가 온 날 (Visitor.tick이 채우는 칸)
+	s.visitor_day = 20408
+	s.insured_day = 20408
+	check_eq(Enhance.block_reason(s, b, 1), Enhance.Block.NONE, "보험이면 누를 수 있음")
+	var m0 := s.money
+	var out := Enhance.try_enhance(s, b, 1, rng)
 	check(out["result"] != Enhance.Result.DESTROY and out["result"] != Enhance.Result.BLOCKED, "보험인데 퍼지거나 막힘: %s" % [out])
-	check_eq(s.coupons, 0, "쿠폰 1장 씀")
+	check_eq(m0 - s.money, Economy.enhance_cost(b, 20, s) + Economy.insure_fee(b, 20, s), "강화 비용 + 보험료")
 	# 대형·VIP: +18 2호차
 	s.truck(1).star = 18
 	var kinds := {}
@@ -495,7 +498,7 @@ func test_save() -> void:
 	s.today_tax = 3700
 	s.rank_first_done = true
 	var d: Dictionary = JSON.parse_string(JSON.stringify(Save.to_dict(s, 1794000000)))   # 파일처럼 글자로 한 번
-	check_eq(d["version"], 10, "저장 형식 10")
+	check_eq(d["version"], 11, "저장 형식 11")
 	var r := Save.from_dict(d, b)
 	check_eq(r["status"], Save.Status.OK, "읽힘 (%s)" % r["error"])
 	var got: GameState = r["state"]
