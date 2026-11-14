@@ -21,6 +21,8 @@
 ##   한 바퀴 싣는 수 = 적재량 × stops_mult (소수는 바퀴마다 확률), 싣는 시간 × stops_mult (집이 는 만큼), 정차는 실은 건수만큼
 ## v7b 장거리: 대리점 + 그 트럭 +10이면 스위치(TruckState.route)로 "long". 바꾸면 다음 바퀴부터 (바퀴 출발 때 lap_route로 옮김).
 ##   장거리 바퀴는 routes.long 숫자 + 경험치 xp_per_parcel, 터보 "장거리 속도"(long_speed)가 이동 속도 %에 더해짐. 꺼둔 동안은 스위치 노선으로
+## v8a 물류센터 업그레이드 (upgrade.gd, 모든 트럭, 대리점 뒤에도): 단가 × (1 + 배송 구역), 싣는 시간 × (1 − 분류 속도),
+##   기본 적재량 + 기본 적재함 (적재량 %·노선 stops_mult는 그 위에). 레벨 0이거나 묶음이 없으면 그대로
 ## v7a 회사: 번 돈(배송 1건 돈·팁)마다 직원 몫(보조 트럭만, × staff_share)·세금(× 세율)을 반올림해 떼고 나머지가 내 돈 (_split).
 ##   오늘 집계(state.today_*)에 번 돈·직원 몫·세금을 더함. 배송 경험치는 내 트럭만 (대리점이면 시내 경험치), 보조 트럭 0
 extends RefCounted
@@ -40,6 +42,7 @@ const GameState = preload("res://scripts/core/game_state.gd")
 const Quest = preload("res://scripts/core/quest.gd")
 const Setting = preload("res://scripts/core/setting.gd")
 const TruckState = preload("res://scripts/core/truck_state.gd")
+const Upgrade = preload("res://scripts/core/upgrade.gd")
 
 
 ## 엔진 출력 = base_power + power_gain[0] + … + power_gain[단계-1]
@@ -92,10 +95,10 @@ static func lap_seconds_left(b: Balance, s: GameState, i: int) -> float:
 	return maxf(0.0, lap_seconds(b, s, i) - s.truck(i).lap_clock)
 
 
-## 트럭 i의 평균 한 바퀴 싣는 수 = 기본 적재량 × (1 + 적재량 % 합) × 노선 stops_mult. 소수점 그대로 (예: 21.6, 시내 32.4).
+## 트럭 i의 평균 한 바퀴 싣는 수 = (기본 적재량 + 기본 적재함 업그레이드) × (1 + 적재량 % 합) × 노선 stops_mult. 소수점 그대로 (예: 21.6, 시내 32.4).
 ## 실제로 싣는 건수(= 그 바퀴 집 수)는 lap_cargo
 static func cargo(b: Balance, s: GameState, i: int) -> float:
-	var c: float = b.base_cargo * (1.0 + Setting.total(b, s.truck(i), "cargo")) * _route(b, s, i)["stops_mult"]
+	var c: float = (b.base_cargo + Upgrade.value(b, s, "box")) * (1.0 + Setting.total(b, s.truck(i), "cargo")) * _route(b, s, i)["stops_mult"]
 	# 20 × 1.4처럼 딱 떨어져야 할 곱이 27.999…로 나와 정수가 아니게 되지 않게 (실수 찌꺼기만 막음)
 	return float(roundi(c)) if absf(c - roundi(c)) < 1e-9 else c
 
@@ -341,9 +344,9 @@ static func _lap_from_drive(load_s: float, n: float, drive: float, stop: float) 
 	return load_s + drive + n * stop
 
 
-## 트럭 i가 물류센터에서 싣는 초 = load_seconds × 노선 stops_mult × (1 − 상하차)
+## 트럭 i가 물류센터에서 싣는 초 = load_seconds × 노선 stops_mult × (1 − 상하차) × (1 − 분류 속도)
 static func _load(b: Balance, s: GameState, i: int) -> float:
-	return b.load_seconds * _route(b, s, i)["stops_mult"] * (1.0 - _ability(b, s, i, "unload"))
+	return b.load_seconds * _route(b, s, i)["stops_mult"] * (1.0 - _ability(b, s, i, "unload")) * (1.0 - Upgrade.value(b, s, "sort"))
 
 
 ## 트럭 i가 집 앞에 서는 초 = stop_seconds × (1 − 상하차)
@@ -351,9 +354,9 @@ static func _stop(b: Balance, s: GameState, i: int) -> float:
 	return b.stop_seconds * (1.0 - _ability(b, s, i, "unload"))
 
 
-## 트럭 i의 배송 단가 = round(unit_price × 노선 price_mult × (1 + 협상))
+## 트럭 i의 배송 단가 = round(unit_price × 노선 price_mult × (1 + 협상) × (1 + 배송 구역))
 static func _unit(b: Balance, s: GameState, i: int) -> int:
-	return roundi(b.unit_price * _route(b, s, i)["price_mult"] * (1.0 + _ability(b, s, i, "nego")))
+	return roundi(b.unit_price * _route(b, s, i)["price_mult"] * (1.0 + _ability(b, s, i, "nego")) * (1.0 + Upgrade.value(b, s, "zone")))
 
 
 ## 트럭 i의 노선 숫자 { price_mult, road_mult, stops_mult }

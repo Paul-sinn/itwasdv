@@ -3,7 +3,8 @@
 ## "driver"(기사 레벨), "abilities"(기사 능력치), "depot"(창고·야간팀), "quests"(다음 할 일 목록),
 ## "special"(대형·VIP), "rush"(급송 전화), "weekly"(주간 배송 목표), "master"(명장 방문일·보너스),
 ## "company"(회사 단계·세금·대리점·보조 트럭·순위 v7a), "visitors"(특별 NPC: 보험사·마술사·중고 부품상 v7-bal),
-## "routes"(노선: 동네·시내 v7-bal C2, 장거리 v7b), "contracts"(기업 계약 v7b).
+## "routes"(노선: 동네·시내 v7-bal C2, 장거리 v7b), "contracts"(기업 계약 v7b),
+## "depot_upgrades"(물류센터 업그레이드 v8a: 없어도 됨 → 기능 꺼짐).
 ##
 ## 쓰는 법:
 ##   var b := Balance.load_file()
@@ -30,6 +31,8 @@ const SPECIAL_IDS := ["large", "vip"]
 const MASTER_BONUS_IDS := ["destroy_cut", "success_mult", "double_step"]
 ## 노선 id (v7-bal C2, v7b "long"). trip.gd가 이 id로 읽어서 json에 다 있어야 함
 const ROUTE_IDS := ["town", "city", "long"]
+## 물류센터 업그레이드 id (v8a, upgrade.gd IDS와 같음). trip.gd가 이 id로 읽어서 묶음이 있으면 다 있어야 함
+const UPGRADE_IDS := ["zone", "sort", "box"]
 
 ## 읽기/검사에서 나온 문제들. 비어 있으면 정상.
 var errors: PackedStringArray = PackedStringArray()
@@ -107,6 +110,9 @@ var premium_drop_to: int                ## 고급 스페어를 쓰고 퍼지면 
 ## 노선 id → { "price_mult": 단가 ×, "road_mult": 도로 길이 ×, "stops_mult": 한 바퀴 싣는 수(집 수)·싣는 시간 × } (모두 > 0)
 ## json에 있을 때만 (v7b): "xp_per_parcel" 내 트럭 배송 1건 경험치 (없으면 동네·시내 규칙), "unlock_star" 그 트럭이 이 단계부터 (없으면 0)
 var routes: Dictionary = {}
+
+## 물류센터 업그레이드 (v8a: upgrade.gd). id → { "per_level": float, "prices": PackedInt64Array (길이 = 최고 레벨) }. 묶음이 없으면 {} (꺼짐)
+var depot_upgrades: Dictionary = {}
 
 # --- contracts (기업 계약 v7b: contract.gd). [k] = k번째 계약 (길이 = 맺을 수 있는 계약 수) ---
 var contract_reputation: PackedInt64Array   ## 그 계약이 맺어지는 회사 평판 (오름차순)
@@ -255,6 +261,10 @@ static func from_dict(d: Dictionary) -> RefCounted:
 		for k in ["xp_per_parcel", "unlock_star"]:
 			if r.has(k):
 				b.routes[id][k] = int(r[k])
+	if d.has("depot_upgrades"):
+		for id in UPGRADE_IDS:
+			var u: Dictionary = d["depot_upgrades"][id]
+			b.depot_upgrades[id] = { "per_level": float(u["per_level"]), "prices": PackedInt64Array(u["prices"]) }
 	b.contract_reputation = PackedInt64Array(d["contracts"]["reputation"])
 	b.contract_shares = PackedFloat64Array(d["contracts"]["sales_share"])
 	var company: Dictionary = d["company"]
@@ -387,6 +397,8 @@ static func validate(d: Dictionary) -> PackedStringArray:
 			_check_number(d["routes"][id], "routes." + id, "unlock_star", errs, "0~%d 정수여야 함" % max_star,
 					func(x): return x >= 0.0 and x <= max_star and x == floorf(x))
 	var contract_count := _validate_contracts(d["contracts"], errs)
+	if d.has("depot_upgrades"):
+		_validate_upgrades(d["depot_upgrades"], errs)
 	var max_level := _validate_driver(driver, max_star, errs)
 	_validate_quests(d["quests"], max_star, max_level, setting, depot, d["company"], contract_count, errs)
 	return errs
@@ -404,6 +416,33 @@ static func _validate_contracts(c: Dictionary, errs: PackedStringArray) -> int:
 	_check_list(c, "contracts", "sales_share", n, "contracts.reputation %d개와 같아야 함" % n, errs, "0~1 사이여야 함",
 			func(v): return v >= 0.0 and v <= 1.0)
 	return n
+
+
+## "depot_upgrades" 묶음 검사 (물류센터 업그레이드 v8a). id 3개 다 있고 그 밖은 없음, per_level > 0 (box는 정수 건),
+## sort는 최고 레벨에서 1 이하 (싣는 시간이 0 아래로 안 감), prices는 1개 이상·0 이상 정수·오를수록 줄지 않음
+static func _validate_upgrades(u, errs: PackedStringArray) -> void:
+	if typeof(u) != TYPE_DICTIONARY:
+		errs.append("depot_upgrades 가 { } 묶음이 아님")
+		return
+	for id in u:
+		if not UPGRADE_IDS.has(id):
+			errs.append("depot_upgrades 에 모르는 업그레이드: %s (%s 중 하나여야 함)" % [id, "/".join(UPGRADE_IDS)])
+	for id in UPGRADE_IDS:
+		var where := "depot_upgrades.%s" % id
+		var one = u.get(id)
+		if typeof(one) != TYPE_DICTIONARY:
+			errs.append("%s 이 없거나 { } 묶음이 아님" % where)
+			continue
+		var per_ok := _check_number(one, where, "per_level", errs, "0보다 큰 정수여야 함 (건)" if id == "box" else "0보다 커야 함",
+				func(v): return v > 0.0 and (id != "box" or v == floorf(v)))
+		var prices = one.get("prices")
+		if typeof(prices) != TYPE_ARRAY or prices.is_empty():
+			errs.append("%s.prices 가 없거나 빈 목록" % where)
+			continue
+		if _check_list(one, where, "prices", prices.size(), "", errs, "0 이상의 정수여야 함", func(v): return v >= 0.0 and v == floorf(v)):
+			_check_not_decreasing(prices, where + ".prices", errs)
+		if id == "sort" and per_ok and float(one["per_level"]) * prices.size() > 1.0 + SUM_EPSILON:
+			errs.append("%s: per_level × 레벨 수 = %s (1 이하여야 함. 싣는 시간이 0 아래로 감)" % [where, float(one["per_level"]) * prices.size()])
 
 
 ## "driver" 묶음 검사 (기사 레벨 v5). 만렙을 돌려준다 (틀렸으면 0)

@@ -1,5 +1,5 @@
 {
-  "version": "0.17",
+  "version": "0.18",
   "trip": {
     "unit_price": 2500,
     "base_cargo": 20,
@@ -67,6 +67,11 @@
   "contracts": {
     "reputation": [200000, 1700000, 3600000],
     "sales_share": [0.05, 0.07, 0.10]
+  },
+  "depot_upgrades": {
+    "zone": { "per_level": 0.02, "prices": [100000, 300000, 800000, 2000000, 5000000] },
+    "sort": { "per_level": 0.06, "prices": [50000, 150000, 400000, 1000000, 2500000] },
+    "box": { "per_level": 1, "prices": [80000, 250000, 700000, 1800000, 4500000] }
   },
   "depot": {
     "warehouse_hours": [4, 6, 8, 12],

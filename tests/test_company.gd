@@ -500,7 +500,7 @@ func test_save() -> void:
 	s.today_tax = 3700
 	s.rank_first_done = true
 	var d: Dictionary = JSON.parse_string(JSON.stringify(Save.to_dict(s, 1794000000)))   # 파일처럼 글자로 한 번
-	check_eq(d["version"], 12, "저장 형식 12")
+	check_eq(d["version"], Save.FORMAT_VERSION, "지금 저장 형식")
 	var r := Save.from_dict(d, b)
 	check_eq(r["status"], Save.Status.OK, "읽힘 (%s)" % r["error"])
 	var got: GameState = r["state"]
