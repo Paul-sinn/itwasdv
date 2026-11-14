@@ -130,6 +130,11 @@ static func route_id(s: GameState, i: int) -> String                   ## "town"
 ## Visitor.tick은 Master.tick 끝에서 불림 (화면이 따로 안 불러도 됨)
 ## 화면이 효과 줄에 쓰는 balance 칸: b.magician_up_mult, b.dealer_premium_spares, b.premium_drop_to, b.insure_fee_mult, b.partner_discount, b.recovery_star (이름은 balance.gd 기준)
 ## 첫 방문: 열린 날 + 1~max_days(28)일 사이 (그 뒤는 21~28일). 형식 3~10 저장은 그대로 읽음 (쿠폰만 버림)
+## (2026-11-14 C2 뒤 약속에 넣음)
+## Trip.cargo(b, s: GameState, i: int) -> float / Trip.lap_cargo(b, s, i) -> int   ## 예전 (b, t). 노선이 회사 단계에 달려서
+## Trip.lap_progress(b, s, i) -> float     ## 화면 트럭 자리 0~1 (싣는 동안 0). main._lap_phase 대신
+## 이번 바퀴 집 수 = Trip.lap_cargo (동네 20, 시내 30), 노선 = Trip.route_id. parcel 이벤트 "house" = 0 ~ lap_cargo−1
+## 싣는 시간도 × stops_mult. 바퀴 중간에 창업하면 단가·도로는 바로, 집 수는 다음 바퀴부터
 ## Save: 형식 11. 새 칸 저장, coupons 지움. 출시 전이라 옛 파일은 지금 규칙대로(이름 바꿔 남기고 새로 시작)
 ```
 
