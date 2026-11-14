@@ -45,18 +45,18 @@ func _no_ceiling() -> Balance:
 func test_json_matches_spec() -> void:
 	check(b.is_ok(), "진짜 balance.json에 문제가 있음: %s" % ", ".join(b.errors))
 	check_eq(b.lines_by_grade, PackedInt64Array([1, 2, 3, 3, 3]), "lines_by_grade")
-	check_eq([b.cost_cut_cap, b.engine_guard_cap], [0.6, 0.3], "cost_cut_cap, engine_guard_cap")
+	check_eq([b.fuel_cut_cap, b.maint_cut_cap, b.engine_guard_cap], [0.6, 0.6, 0.3], "fuel_cut_cap·maint_cut_cap (v7-bal: 각자 60%), engine_guard_cap")
 	check_eq(b.up_chance, PackedFloat64Array([0.3, 0.08, 0.02, 0.003]), "up_chance")
 	check_eq(b.ceiling, PackedInt64Array([5, 20, 80, 500]), "ceiling")
 	check_eq(b.roll_cost, PackedInt64Array([20000, 80000, 1600000, 6000000, 10000000]), "roll_cost (v6-bal Q7-1)")
 	check_eq(b.overboost_mult, 2.0, "오버부스트 걸린 바퀴 2배 (v6-bal: 초 제한 없음)")
 	var want := {
 		"speed": ["common", 10.0, [0.03, 0.05, 0.08, 0.13, 0.20]],
-		"fuel_cut": ["common", 10.0, [0.10, 0.20, 0.30, 0.45, 0.60]],
-		"cargo": ["own", 10.0, [0.05, 0.08, 0.12, 0.20, 0.30]],
+		"fuel_cut": ["common", 10.0, [0.07, 0.12, 0.20, 0.30, 0.45]],   # v7-bal Q17-3
+		"cargo": ["own", 10.0, [0.035, 0.055, 0.085, 0.14, 0.21]],   # v7-bal 시작값 (시뮬로 다시)
 		"engine_guard": ["own", 10.0, [0.0, 0.0, 0.04, 0.06, 0.10]],
 		"overboost": ["own", 10.0, [0.03, 0.06, 0.09, 0.15, 0.24]],
-		"maint_cut": ["own", 10.0, [0.03, 0.06, 0.09, 0.13, 0.18]],
+		"maint_cut": ["own", 10.0, [0.15, 0.30, 0.45, 0.55, 0.60]],   # v7-bal 임시 (시뮬 제안 뒤 바뀜)
 	}
 	for j in JUNK:
 		want[j] = ["junk", 12.0, [0.0, 0.0, 0.0, 0.0, 0.0]]
@@ -293,14 +293,15 @@ func test_setting_validation() -> void:
 	st["up_chance"][1] = 1.5
 	st["ceiling"][0] = 0
 	st["roll_cost"] = [20000, 10000, 400000, 2000000, 10000000]
-	st["cost_cut_cap"] = 1.2
+	st["fuel_cut_cap"] = 1.2
+	st.erase("maint_cut_cap")
 	st["overboost_mult"] = 0.5
 	st["options"]["speed"]["values"] = [0.03, 0.02, 0.08, 0.13, 0.2]
 	st["options"]["cargo"]["kind"] = "special"
 	st["parts"]["ecu"]["options"].append("wing")
 	var b2: Balance = Balance.from_dict(d)
 	for part in ["setting.lines_by_grade 길이가 4개", "setting.up_chance[1] = 1.5", "setting.ceiling[0] = 0",
-			"setting.roll_cost[1] = 10000 (앞 등급", "setting.cost_cut_cap = 1.2", "setting.overboost_mult = 0.5",
+			"setting.roll_cost[1] = 10000 (앞 등급", "setting.fuel_cut_cap = 1.2", "setting.maint_cut_cap 이 없음", "setting.overboost_mult = 0.5",
 			"setting.options.speed.values[1] = 0.02 (앞 등급", "setting.options.cargo.kind = special",
 			"setting.parts.ecu.options 에 모르는 옵션: wing"]:
 		check(_has_error(b2, part), "못 찾음: %s" % part)

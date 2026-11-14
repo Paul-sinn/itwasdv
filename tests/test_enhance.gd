@@ -197,13 +197,14 @@ func test_each_press_updates_state() -> void:
 
 func test_blocked_when_no_money_or_max() -> void:
 	var rng := RandomNumberGenerator.new()
-	var s := _game(0, 34999)   # +0 비용 35000
-	check_eq(Enhance.block_reason(s, b, 0), Enhance.Block.NO_MONEY, "34999원으로 강화 가능으로 나옴")
+	var cost := roundi(b.cost_base)   # +0 비용
+	var s := _game(0, cost - 1)
+	check_eq(Enhance.block_reason(s, b, 0), Enhance.Block.NO_MONEY, "1원 모자란데 강화 가능으로 나옴")
 	check_eq(Enhance.try_enhance(s, b, 0, rng)["result"], Enhance.Result.BLOCKED, "돈이 모자란데 강화가 됨")
-	check_eq(s.money, 34999, "막혔는데 돈이 빠짐")
+	check_eq(s.money, cost - 1, "막혔는데 돈이 빠짐")
 	check_eq(s.truck(0).fail_count + s.truck(0).success_count, 0, "막혔는데 횟수가 셈")
-	s.money = 35000
-	check_eq(Enhance.block_reason(s, b, 0), Enhance.Block.NONE, "35000원 딱 맞는데 강화 불가로 나옴")
+	s.money = cost
+	check_eq(Enhance.block_reason(s, b, 0), Enhance.Block.NONE, "+0 비용 딱 맞는데 강화 불가로 나옴")
 
 	s.truck(0).star = b.max_star
 	s.money = 10 ** 15
@@ -220,7 +221,7 @@ func test_blocked_when_no_money_or_max() -> void:
 func test_enhance_picks_truck_i() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 5
-	var s := _game(0, 10 ** 9)
+	var s := _game(0, 10 ** 13)
 	s.spares = 50   # +18 넘어가도 막히지 않게
 	s.trucks.append(TruckState.new())
 	s.truck(1).star = 3
