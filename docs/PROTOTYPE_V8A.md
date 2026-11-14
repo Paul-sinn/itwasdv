@@ -107,6 +107,8 @@ static func check(state: GameState, b) -> void                   ## 새로 달�
 ```
 
 - 화면이 쓰는 계산은 위 함수만. 더 필요하면 계산 담당이 만들고 보고에 적는다
+- (2026-11-14 구현 뒤 약속에 넣음) `Upgrade.value_at(b, id, lv) -> float`, `Wrap.for_achievement(b, achievement_id) -> String`, `Stats.best_star(state) -> int`, `Stats.cell(option, grade) -> String`, `GameState.junk_triples`. 화면이 프레임마다 `Stats.tick`·`Achievement.check`. 업적 알림은 그 프레임 것을 하나로 묶음
+- (2026-11-14 시뮬 뒤 넣은 숫자, json 0.19. 위 "옮길 숫자"는 임시였음) 업그레이드 효과 zone 0.01·sort 0.03·box 0.4 (소수 허용), 값 zone [3700, 110000, 150000, 240000, 410000]·sort [790, 47000, 56000, 73000, 160000]·box [6500, 230000, 260000, 370000, 490000], 랩핑 800만·3,000만, 라이벌 2,700만 ~ 4,830만 (`_reports/core_v8a_c4.md`, QUESTIONS Q30)
 
 ## 화면
 

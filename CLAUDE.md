@@ -34,12 +34,14 @@ docs/PROTOTYPE_V5B.md    끝난 지시서: 기사 능력치 5개
 docs/PROTOTYPE_V6B.md    끝난 지시서: 대형·VIP, 급송 전화, 주간 목표·쿠폰, 명장·보험
 docs/PROTOTYPE_V7_BAL.md 끝난 지시서: 이벤트 다시 짜기(명장·보험사·마술사·부품상), 시내 노선, 허락받은 숫자
 docs/PROTOTYPE_V7B.md    끝난 지시서: 장거리 노선 + 터보, 기업 계약
+docs/PROTOTYPE_V8A.md    끝난 지시서: 물류센터 업그레이드, 랩핑 4개, 통계·도감, 업적 20개
+docs/PROTOTYPE_V8B.md    끝난 지시서: 설정 (화면만)
 docs/PROTOTYPE_V7A.md    끝난 지시서: 대리점 창업, 보조 트럭 + 직원, 세금, 타이어·휠, 순위표. v7b(장거리·터보·기업 계약)는 아직
 docs/SHEET_SNAPSHOT.md   숫자 시트 스냅샷 (아직 json에 없는 숫자의 기준)
 locale/strings.csv       화면 글자 (keys, ko, en). 고치면 --import 뒤 .translation 두 개도 같이 커밋
 docs/IDEAS.md            나중에 할 것 / 이미 정한 것
 tools/tune_sim.py        경제 시뮬레이터 (판정용. --table = 단계별 표)
-scripts/core/            계산 코드 (balance, trip 한 바퀴·스페어 드랍, economy 가격, enhance, setting 세팅 돌리기, driver 기사 레벨, ability 능력치, master 명장 방문일, visitor 특별 NPC·보험, rush 급송 전화, weekly 주간 목표, company 대리점·보조 트럭·세금·순위, contract 기업 계약, depot 창고·야간팀, quest 다음 할 일, truck_state, game_state, save)
+scripts/core/            계산 코드 (balance, trip 한 바퀴·스페어 드랍, economy 가격, enhance, setting 세팅 돌리기, driver 기사 레벨, ability 능력치, master 명장 방문일, visitor 특별 NPC·보험, rush 급송 전화, weekly 주간 목표, company 대리점·보조 트럭·세금·순위, contract 기업 계약, upgrade 물류센터 업그레이드, wrap 랩핑, stats 통계·도감, achievement 업적, depot 창고·야간팀, quest 다음 할 일, truck_state, game_state, save)
 scripts/ui/              화면 코드 (main, town 동네, route 꼬불길 계산, truck, garage_panel 차고,
                          settings_panel 설정, screen_mode 두 화면 오가기, desktop_window 창, tray_icon 알림 영역)
 scenes/                  Godot 씬
@@ -79,6 +81,12 @@ PowerShell (사용자 터미널): 어느 폴더에서든 그대로 복사해서 
 
 # 건물 클릭 (띠의 건물 3개 + 작은 버튼만 반응, 건물 화면 오가기, 카센터에서 스페어 사기)
 & "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -s tests/check_buildings.gd
+
+# v8a (물류센터 업그레이드 줄, 튜닝숍 [랩핑] 칸·트럭 랩핑 그림, 물류센터 [기록] 칸: 통계·도감·업적, 업적 알림)
+& "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -s tests/check_v8a.gd
+
+# v8b ([설정] 세 묶음, 언어·숫자 표기·알림, 띠 크기·자리·모니터 계산, 틀린 설정값, [기본값으로])
+& "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -s tests/check_v8b.gd
 
 # v7b (사무실 노선 스위치, 띠의 장거리 트럭·"장거리 배송 중", 터보 칸, 장부 계약 줄, 계약 체결 알림)
 & "C:\Users\PAUL SHIN\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.3-stable_win64_console.exe" --headless --path "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwasdv" -s tests/check_v7b.gd
@@ -171,7 +179,11 @@ python -I -X utf8 "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwas
 - 프로젝트 안의 `.csv`는 Godot가 번역 파일로 가져간다 → 기록 파일은 `.gdignore`가 있는 폴더(`tests/soak_logs`)에
 
 ## 현재 작업
-**2026-11-14 v7b (장거리 노선 + 터보, 기업 계약) 끝:** 가지 `prototype-v7b`. 화면 없는 확인 14개 전부 통과, QA 통과 63 / 실패 0. 같은 날 v7-bal(QA 69 / 0)도 끝. **다음은 v8 (랩핑, 통계·도감, 업적, 설정, 물류센터 업그레이드. 스팀 연동은 계정이 필요해 사용자 몫).**
+**2026-11-14 v8a·v8b (물류센터 업그레이드·랩핑·통계·도감·업적, 설정) 끝:** 가지 `prototype-v8b`. 화면 없는 확인 16개 전부 통과, QA 통과 70 / 실패 0. 같은 날 v7-bal(69 / 0), v7b(63 / 0)도 끝. **기획서 16.9 "만드는 순서"의 코딩은 여기까지. 남은 것은 사용자 몫: 플레이 테스트, 진짜 창 확인, QUESTIONS Q26~Q30 답, 스팀 연동(앱 ID)·소리(음원)·그림.**
+- v8a에서 넣은 것: 물류센터 업그레이드 3개 × Lv5 (`upgrade.gd`, 개인 기사일 때만 삼, 효과는 유지: 단가 +1%·싣기 −3%·적재 +0.4건씩), 랩핑 4개(`wrap.gd`, 튜닝숍 [랩핑] 칸, 구매 2 + 업적 보상 2), 통계 12개·잡옵 도감 25칸(`stats.gd`), 업적 20개(`achievement.gd`), 물류센터 [기록] 칸. 저장 형식 13, json 0.19
+- v8b에서 넣은 것 (화면만): `scripts/ui/prefs.gd`, [설정] 세 묶음 (게임: 언어·숫자 표기·알림·급송 / 띠: 항상 위·투명도·크기·자리·모니터 / 큰 화면), [기본값으로]. **띠 설정은 진짜 창으로 아직 한 번도 안 봄** (`_reports/ui_v8b_u2.md` "눈으로 볼 것")
+- 시뮬 (지금 json): 30일 판정 가볍게 +19 (목표 +18, 주간 보상 24시간 때문 → Q27-1), 열심히 +21 (목표 +20, 경계). 창업 유저 90일 안 시내 1위 80.2%
+지난 단계 — **2026-11-14 v7b (장거리 노선 + 터보, 기업 계약) 끝:** 가지 `prototype-v7b`. 화면 없는 확인 14개 전부 통과, QA 통과 63 / 실패 0. 같은 날 v7-bal(QA 69 / 0)도 끝. **다음은 v8 (랩핑, 통계·도감, 업적, 설정, 물류센터 업그레이드. 스팀 연동은 계정이 필요해 사용자 몫).**
 - v7b에서 넣은 것: 장거리 노선(대리점 + 그 트럭 +10, 트럭마다 [시내 / 장거리] 스위치, 다음 바퀴부터, 도로 ×5·단가 ×7·경험치 30), 터보(네 번째 세팅 부품, 장거리 속도는 장거리에서만), 기업 계약 3개(`contract.gd`: 평판 20만·170만·360만에 자동 체결, 맺을 때 매출의 5 / 7 / 10%, 순위 매출엔 안 넣음), 퀘스트 28개, 사무실 노선 스위치, 띠의 장거리 트럭(나갔다 돌아옴)·"장거리 배송 중" 줄, 장부 계약 줄. 저장 형식 12, json 0.17
 - 넣은 숫자 (시뮬): 장거리 단가 ×7, 계약 평판 기준, 라이벌 2,300만~4,000만
 - **사용자 답 기다림 (바깥 `QUESTIONS.md` Q26·Q27·Q28):** 주간 보상 시간, 보조 트럭 값, 오버부스트, 장거리 단가 ×7, 터보 장거리 속도 수치 등
@@ -200,6 +212,7 @@ python -I -X utf8 "C:\Users\PAUL SHIN\OneDrive\바탕 화면\itwasdeliverd\itwas
   `check_desktop.ps1` 44/44. 그때 전체 화면 맨 위 2줄 빈틈을 찾아 고침
 - 오래 켜두기: 사용자가 2026-11-10에 2시간 넘게 켜 두고 화면 어두워짐·작업표시줄 깨짐 없음을 확인
   (v0 기록 1시간 44분: GDI·USER·핸들 그대로, 작업 메모리만 98~472MB 오르내림. 원인 모름 → 평소 쓸 때 지켜보기)
+- v8a·v8b (2026-11-14): 계산 `v8a-core` C1~C4, 화면 `v8a-ui` U1~U2 + `v8b-ui` U1~U3. `core` 페인이 QA
 - v7b (2026-11-14): 계산 `v7b-core` C1~C4, 화면 `v7b-ui` U1~U3. `core` 페인이 QA
 - v7-bal (2026-11-14): 계산 `v7bal-core` C1~C4, 화면 `v7bal-ui` U1~U4. `core` 페인이 QA
 - v7a (2026-11-13): 계산 `v7a-core` C1~C3, 화면 `v7a-ui` U1~U3. `core` 페인이 QA
