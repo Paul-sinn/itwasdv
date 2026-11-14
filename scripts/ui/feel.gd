@@ -224,6 +224,7 @@ const NPC_FACE_SIZE := 34.0
 const NPC_FACE_COLORS := {
 	"tuning": Color(0.85, 0.62, 0.45), "depot": Color(0.55, 0.70, 0.90), "car_center": Color(0.75, 0.80, 0.55),
 	"office": Color(0.80, 0.70, 0.95),
+	"master": Color(0.40, 0.90, 1.0), "insurer": Color(0.55, 0.85, 1.0), "magician": Color(0.74, 0.45, 1.0), "dealer": Color(0.80, 0.62, 0.35),
 }
 
 # --- v6-bal: 처음 켰을 때 말풍선 "건물을 눌러보세요" (작은 화면에서만, 건물·작은 버튼을 한 번 누를 때까지) ---
@@ -249,18 +250,10 @@ const COLOR_POINT_DOT := Color(1.0, 0.45, 0.35)
 const COLOR_PAYOUT_LARGE := Color(0.45, 0.80, 1.0)   ## "대형 +금액"
 const COLOR_PAYOUT_VIP := Color(0.85, 0.60, 1.0)     ## "VIP +금액"
 const COLOR_PAYOUT_RUSH := Color(1.0, 0.55, 0.30)    ## "급송 +금액" (보통 배송일 때. 대형·VIP면 그 색)
-## 급송 전화 말풍선: 위 길(y 68)과 구석 줄 사이, 위 길의 두 집 사이를 꽉 채움 (양옆 집과 보이는 곳 사각형 하나로 합쳐짐)
-const RUSH_BUBBLE_RECT := Rect2(260, 30, 150, 0)     ## x·폭·위쪽 (동네 설계 좌표). 높이는 글자만큼
-const RUSH_JOIN_PX := 6.0                            ## 말풍선과 이만큼 가까운 집은 같은 사각형으로 (설계 좌표)
-const RUSH_FONT_SIZE := 11
-const RUSH_BUTTON_FONT_SIZE := 11
-const RUSH_PAD := Vector2(6, 2)                      ## 말풍선 안 여백 (좌우, 위아래)
-const RUSH_RADIUS := 5
-const RUSH_BAR_HEIGHT := 3.0                         ## 남은 시간 막대
-const COLOR_RUSH_BG := Color(1.0, 0.93, 0.80)
-const COLOR_RUSH_TEXT := Color(0.15, 0.13, 0.10)
-const COLOR_RUSH_BUTTON := Color(0.90, 0.42, 0.20)
-const COLOR_RUSH_BAR_BG := Color(0.80, 0.72, 0.60)
+## 급송 전화 아이콘 (v7-bal: 말풍선 대신. 자리·크기는 아래 v7-bal 칸 TOWN_ICON_*)
+const COLOR_RUSH_BG := Color(1.0, 0.93, 0.80)        ## 남은 시간 막대 (남은 쪽)
+const COLOR_RUSH_BUTTON := Color(0.90, 0.42, 0.20)   ## 전화 아이콘 바탕
+const COLOR_RUSH_BAR_BG := Color(0.55, 0.25, 0.12)   ## 남은 시간 막대 (지나간 쪽)
 const COLOR_RUSH_LEFT := Color(1.0, 0.65, 0.40)      ## 구석 줄 "급송 N건 남음"
 
 # --- v6b: 명장 방문일·보험 (튜닝숍 [명장] 칸, 요일 고르기 창, 강화 칸 [보험], 띠의 튜닝숍 표시) ---
@@ -283,3 +276,39 @@ const COLOR_RANK := Color(1.0, 0.72, 0.45)            ## 구석 줄 "시내 N위
 const COLOR_RANK_FIRST := Color(1.0, 0.55, 0.20)      ## 순위표 내 줄이 1위일 때 (보통 내 줄은 COLOR_STAR)
 const COLOR_LOCKED := Color(0.45, 0.47, 0.50)         ## 잠긴 순위표 줄 (지역·전국·세계)
 const OFFICE_ROW_SIZE := 12                           ## 순위표·세율표 한 줄 글자 (v0 패널 기준. 11줄이 1280x720에 들어가게)
+
+# --- v7-bal: 띠 오른쪽 위 아이콘 (편지봉투 = NPC가 온 날, 전화 = 급송 벨), NPC 대화 창 ---
+## 오른쪽 끝부터 편지봉투 → 전화 순으로 붙여 놓음 (보이는 것만). 알림은 그 왼쪽에 오른쪽 맞춤
+const TOWN_ICON_RIGHT_TOP := Vector2(472, 4)   ## 아이콘 줄 오른쪽 위 끝 (동네 설계 좌표)
+const TOWN_ICON_SIZE := Vector2(24, 18)        ## 아이콘 하나 (작은 화면 기준. 큰 화면은 동네 글자 배수만큼)
+const TOWN_ICON_GAP := 4.0                     ## 아이콘 사이·아이콘과 알림 사이
+const TOWN_ICON_BAR := 0.14                    ## 전화 아이콘 아래 남은 시간 막대 높이 (아이콘 높이의 몇 배)
+const COLOR_LETTER := Color(0.97, 0.93, 0.82)       ## 편지봉투 종이
+const COLOR_LETTER_LINE := Color(0.45, 0.36, 0.25)  ## 봉투 테두리·덮개 선
+const COLOR_ALERT := Color(0.92, 0.22, 0.20)        ## 느낌표 동그라미
+
+# --- v7-bal U3: 시내 (창업 뒤 = Trip.route_id "city"). 같은 꼬불길에 작은 집·회사 건물이 촘촘히, 뒤쪽 빌딩 실루엣 ---
+## 시내 집 자리를 놓는 길 구간 [길 y, 시작 x, 끝 x] (물류센터에서 가까운 순, 시작 → 끝 = 트럭이 가는 쪽).
+## 집 가운데가 이 안에 옴. 물류센터·사무실·튜닝숍·카센터·모서리를 피함. 정차할 곳 수만큼 구간 길이를 이어 붙여 고르게 나눔
+const CITY_SPANS := [[200.0, 84.0, 246.0], [200.0, 342.0, 425.0], [134.0, 425.0, 205.0], [68.0, 64.0, 440.0]]
+const CITY_HOUSE_SIZE := Vector2(20, 22)     ## 시내 집 (지붕 포함 바깥 크기. 동네 집보다 작게)
+const CITY_ROOF_HEIGHT := 8.0
+const CITY_ROOF_OVERHANG := 2.0
+const CITY_COMPANY_SIZE := Vector2(18, 25)   ## 회사 건물 (지붕 없이 높은 상자 + 창문)
+const CITY_COMPANY_EVERY := 3                ## 정차할 곳 세 곳마다 하나가 회사 건물 (2, 5, 8, …번째)
+const CITY_WINDOW := Vector2(4, 3)           ## 회사 건물 창문 하나 (2줄씩, 위에서부터 CITY_WINDOW_GAP 간격)
+const CITY_WINDOW_GAP := 3.0
+const COLOR_COMPANY := Color(0.52, 0.60, 0.70)
+const COLOR_COMPANY_WINDOW := Color(0.95, 0.88, 0.55)
+## 뒤쪽 빌딩 실루엣 (위 길 뒤, 아래 끝 = 위 길 집 바닥). 띠에서도 그림 → 보이는 곳. 위 끝은 구석 줄·알림·아이콘(y 22까지) 아래
+const CITY_SKYLINE: Array[Rect2] = [
+	Rect2(0, 40, 24, 22), Rect2(24, 30, 18, 32), Rect2(42, 36, 28, 26), Rect2(70, 26, 16, 36), Rect2(86, 34, 30, 28),
+	Rect2(116, 42, 20, 20), Rect2(136, 28, 22, 34), Rect2(158, 38, 26, 24), Rect2(184, 25, 18, 37), Rect2(202, 34, 30, 28),
+	Rect2(232, 30, 20, 32), Rect2(252, 40, 26, 22), Rect2(278, 26, 22, 36), Rect2(300, 36, 28, 26), Rect2(328, 30, 18, 32),
+	Rect2(346, 42, 24, 20), Rect2(370, 28, 26, 34), Rect2(396, 36, 20, 26), Rect2(416, 25, 22, 37), Rect2(438, 34, 24, 28),
+	Rect2(462, 40, 18, 22),
+]
+const COLOR_CITY_SKYLINE := Color(0.20, 0.24, 0.33)
+const COLOR_CITY_SKY := Color(0.33, 0.42, 0.60)      ## 큰 화면 시내 하늘 (위 끝 ~ CITY_SKY_BOTTOM)
+const COLOR_CITY_GROUND := Color(0.19, 0.19, 0.22)   ## 큰 화면 시내 바닥 (동네는 COLOR_TOWN_GROUND)
+const CITY_SKY_BOTTOM := 62.0

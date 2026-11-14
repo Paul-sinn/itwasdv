@@ -615,8 +615,8 @@ func _u2(b: Balance) -> void:
 	var ranks_seen := []
 	var rank_ok: bool = locked == ["세계 순위표 · 잠김", "전국 순위표 · 잠김", "지역 순위표 · 잠김"] and o.locked_rows[0].is_visible_in_tree()
 	for target in ["start", "middle"]:
-		if target == "middle":
-			_set_stars_for_rank(b, m.state, func(r): return r > 2 and r < b.rivals.size())   # 준비: 중간 순위가 되는 단계
+		if target == "middle":   # 준비: 시작과 다른 중간 순위가 되는 단계 (v7-bal 시내 단가로는 +0 세 대도 이미 중간쯤)
+			_set_stars_for_rank(b, m.state, func(r): return r > 2 and r < b.rivals.size() and r != ranks_seen[0][0])
 		await _frames(2)
 		var rank := Company.rank(b, m.state)
 		var row := _row_with(o.rank_rows, "우리 대리점")
@@ -738,14 +738,14 @@ func _u2(b: Balance) -> void:
 func _office_overlaps(m: Node) -> Array:
 	var town = m.town
 	var bad := []
-	town.set_rush(true, 1.0, 0)   # 준비: 급송 말풍선·처음 말풍선을 띄운 채로 (자리만 봄)
+	town.set_rush(true, 1.0, 0)   # 준비: 급송 전화 아이콘·처음 말풍선을 띄운 채로 (자리만 봄)
 	town.set_hint(true)
 	for size: Vector2i in SMALL_SIZES:
 		root.size = size
 		await _frames(3)
 		var sign: Label = town._signs[Town.OFFICE]
 		var r: Rect2 = town.building_rects()[Town.OFFICE].grow(Feel.BUILDING_GLOW_PX * town.zoom).merge(Rect2(sign.position, sign.size))
-		var others := [["말풍선", Rect2(town.rush_bubble.position, town.rush_bubble.size)], ["처음 말풍선", Rect2(town.hint.position, town.hint.size)],
+		var others := [["전화 아이콘", Rect2(town.rush_button.position, town.rush_button.size)], ["처음 말풍선", Rect2(town.hint.position, town.hint.size)],
 				["구석 줄", Rect2(town._hud.position, town._hud.size).merge(Rect2(town._quest_label.position, town._quest_label.size))]]
 		for id: String in Town.BUILDINGS:
 			others.append([id, town.building_rects()[id].grow(Feel.BUILDING_GLOW_PX * town.zoom)])

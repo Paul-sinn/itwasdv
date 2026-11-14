@@ -14,6 +14,7 @@ const Economy = preload("res://scripts/core/economy.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Setting = preload("res://scripts/core/setting.gd")
 const Trip = preload("res://scripts/core/trip.gd")
+const Visitor = preload("res://scripts/core/visitor.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const Town = preload("res://scripts/ui/town.gd")
@@ -211,8 +212,10 @@ func refresh(b: Balance, s: GameState, locked: bool) -> void:
 	_grade.add_theme_color_override("font_color", Feel.SETTING_GRADE_COLORS[grade])
 	_show_lines(_lines, b, grade, p["lines"])
 	if grade < Setting.max_grade(b):
-		_up.text = tr("SETTING_UP_CHANCE") % Fmt.percent(Setting.up_chance(b, grade, s)) + " · " \
-				+ tr("SETTING_CEILING") % [p["counters"][grade], Setting.ceiling(b, grade)]
+		var up := tr("SETTING_UP_CHANCE") % Fmt.percent(Setting.up_chance(b, grade, s))
+		if Visitor.today(s) == "magician":   # 마술사 날 (위 확률에 이미 곱해져 있음)
+			up += " " + tr("SETTING_MAGICIAN") % Fmt.num(b.magician_up_mult)
+		_up.text = up + " · " + tr("SETTING_CEILING") % [p["counters"][grade], Setting.ceiling(b, grade)]
 	else:
 		_up.text = tr("SETTING_MAX_GRADE")
 	var parts := PackedStringArray()
@@ -223,7 +226,7 @@ func refresh(b: Balance, s: GameState, locked: bool) -> void:
 	# 이 부품에서 나오는 옵션의 효과 (적재량 = 지금 평균 적재량, 소수점 한 자리까지 / 오버부스트 = 걸리면 어떻게 되나)
 	var notes := PackedStringArray()
 	if chances.has("cargo"):
-		notes.append(tr("SETTING_CARGO_NOW") % Fmt.num(Trip.cargo(b, t), 1))
+		notes.append(tr("SETTING_CARGO_NOW") % Fmt.num(Trip.cargo(b, s, truck), 1))
 	if chances.has("overboost"):
 		notes.append(tr("SETTING_OVERBOOST_NOTE") % Fmt.num(b.overboost_mult))
 	_effect.text = "\n".join(notes)

@@ -8,7 +8,7 @@
 ##   큰 화면: 왼쪽에 같은 동네를 크게 + 오른쪽에 건물 화면(garage_panel.gd) + [설정] [작게] 버튼
 ##     큰 화면은 전체 화면 또는 창 모드(사용자가 [설정]에서 고름). 창 모드는 창 크기가 수시로 바뀜
 ##     → 창 크기가 바뀔 때마다 _layout() (최소 1280x720에서도 안 깨지게)
-## v3: 돈은 정수. 화면 트럭은 연출이고, 자리만 계산 쪽 바퀴 진행(TruckState)에서 정한다 (_lap_phase)
+## v3: 돈은 정수. 화면 트럭은 연출이고, 자리만 계산 쪽 바퀴 진행(Trip.lap_progress)에서 정한다
 ## v4: 차고 [세팅] 칸 → Setting.try_roll / Setting.choose (굴리기·고르기는 scripts/core/setting.gd)
 ## v5: 계산 쪽 알림(state.take_events: 할 일 끝·레벨업·만렙·강화 첫 달성)을 프레임마다 꺼내 동네에 하나씩,
 ##     차고 [기사·물류센터] → Depot.upgrade, 강화·세팅·스페어·올리기 직후 Quest.check (바로 반응하게)
@@ -18,12 +18,17 @@
 ## v6b: 현지 시각(now_local)을 만들어 Master.tick(켤 때는 꺼둔 동안 계산보다 먼저, 그 뒤 프레임마다)·Rush.tick(프레임마다).
 ##      대형·VIP·급송 "+금액", 급송 전화 말풍선 [받기] → Rush.accept, [설정] 급송 전화 켜기/끄기, 주간 목표 달성 알림
 ##      명장: +10 첫 달성(master_unlocked)이면 큰 화면 튜닝숍에서 요일 고르기 창(day_picker.gd), 요일 → Master.set_day,
-##      예고·방문 알림, 방문 중이면 띠의 튜닝숍 테두리. 강화는 [보험]을 켰으면 Enhance.try_enhance(…, insure, now_local)
+##      예고·방문 알림, 방문 중이면 띠의 튜닝숍 테두리
 ## v7a: 매 프레임 모든 트럭을 Trip.advance (보조 트럭도 띠에서 달리고 "+금액" = 내 돈으로 들어온 금액).
-##      강화·세팅·보험은 튜닝숍 트럭 탭에서 고른 트럭(panel.truck). 능력치·급송·구석 줄 "+N"은 늘 내 트럭(트럭 0).
+##      강화·세팅은 튜닝숍 트럭 탭에서 고른 트럭(panel.truck). 능력치·급송·구석 줄 "+N"은 늘 내 트럭(트럭 0).
 ##      물류센터 [창업] 두 번째 누름 → Company.found → 알림·저장. 꺼둔 동안 요약에 대리점이면 직원 몫·세금 줄
 ##      U2: 대리점이면 띠에 사무실 건물·구석 줄 "시내 N위"(Company.rank), 사무실 [보조 트럭 사기] → Company.buy_helper → 저장,
 ##      처음 1위(rank_first 이벤트) → 알림
+## v7-bal: NPC가 온 날(명장·보험사·마술사·부품상) 띠·큰 화면 오른쪽 위 편지봉투 + 느낌표 → 누르면 큰 화면 + NPC 대화 창(npc_dialog.gd).
+##      한 번 열면 그날은 느낌표만 꺼짐. 보험사 [예] → 가입 → 저장. 급송 전화는 전화 아이콘 → 큰 화면 없이 Rush.accept.
+##      누가 왔는지·이벤트·가입은 _visitor_info() 한 곳 (Master.is_visiting, Visitor.today / insurer_event / is_insured).
+##      U1: 보험은 state가 정함 (Visitor.join_insurance → Enhance가 알아서 보험료·막음). 강화 칸 [고급 스페어 쓰기] → state.use_premium → 저장,
+##      퍼지면 r["drop_to"]·r["premium"]으로 "+17에서 다시"(고급 스페어 / 복구 보험) 구분. 특별 NPC 방문·주간 보상 돈 → 동네 알림
 extends Control
 
 const Ability = preload("res://scripts/core/ability.gd")
@@ -34,6 +39,8 @@ const Driver = preload("res://scripts/core/driver.gd")
 const Master = preload("res://scripts/core/master.gd")
 const Rush = preload("res://scripts/core/rush.gd")
 const Enhance = preload("res://scripts/core/enhance.gd")
+const Economy = preload("res://scripts/core/economy.gd")
+const Visitor = preload("res://scripts/core/visitor.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Quest = preload("res://scripts/core/quest.gd")
 const Save = preload("res://scripts/core/save.gd")
@@ -46,10 +53,11 @@ const GaragePanel = preload("res://scripts/ui/garage_panel.gd")
 const ReturnPopup = preload("res://scripts/ui/return_popup.gd")
 const SettingsPanel = preload("res://scripts/ui/settings_panel.gd")
 const DayPicker = preload("res://scripts/ui/day_picker.gd")
+const NpcDialog = preload("res://scripts/ui/npc_dialog.gd")
 const ScreenMode = preload("res://scripts/ui/screen_mode.gd")
 
 const AUTOSAVE_SECONDS := 30.0        ## 30초마다 저장 (배속과 상관없이 진짜 30초)
-const TRUCK := 0   ## 내 트럭 번호 (구석 줄 "+N", 치트 키). 강화·세팅·보험은 panel.truck (튜닝숍 트럭 탭)
+const TRUCK := 0   ## 내 트럭 번호 (구석 줄 "+N", 치트 키). 강화·세팅은 panel.truck (튜닝숍 트럭 탭)
 ## 처음 말풍선을 봤는지 (설정 파일 settings.cfg에. 게임 저장 파일 아님)
 const HINT_SECTION := "first_run"
 const HINT_KEY := "building_hint_seen"
@@ -69,6 +77,9 @@ var small_button: Button     ## 큰 화면 [작게]
 var settings_button: Button  ## 큰 화면 [설정]
 var settings: SettingsPanel  ## [설정]을 누르면 가운데 뜨는 "화면: 전체 화면 / 창 모드"
 var day_picker: DayPicker    ## 명장 요일 고르기 창 (큰 화면 튜닝숍 가운데)
+var npc_dialog: NpcDialog    ## NPC 대화 창 (편지봉투를 누르면 큰 화면 가운데)
+## 편지봉투를 연 방문 (_letter_key). 같은 방문이면 느낌표를 끔. 저장 안 함 (껐다 켜면 그날 느낌표가 한 번 더 뜸)
+var _letter_read := ""
 var rng := RandomNumberGenerator.new()
 ## 처음 말풍선 "건물을 눌러보세요"를 이미 봤나 (건물·작은 버튼을 한 번 누르면 true. 작은 화면에서 false일 때만 뜸)
 var hint_seen := false
@@ -140,6 +151,7 @@ func _ready() -> void:
 	add_child(panel)
 	panel.enhance_pressed.connect(_on_enhance_pressed)
 	panel.spare_pressed.connect(_on_spare_pressed)
+	panel.premium_toggled.connect(_on_premium_toggled)
 	panel.setting.roll_pressed.connect(_on_roll_pressed)
 	panel.setting.choose_pressed.connect(_on_choose_pressed)
 	panel.driver.upgrade_pressed.connect(_on_upgrade_pressed)
@@ -181,6 +193,14 @@ func _ready() -> void:
 	day_picker.day_picked.connect(_on_day_picked)
 	day_picker.close_pressed.connect(func(): day_picker.visible = false)
 
+	npc_dialog = NpcDialog.new()
+	npc_dialog.visible = false
+	add_child(npc_dialog)
+	npc_dialog.yes_pressed.connect(_on_npc_yes)
+	npc_dialog.no_pressed.connect(func(): npc_dialog.visible = false)
+	npc_dialog.close_pressed.connect(func(): npc_dialog.visible = false)
+	town.letter_pressed.connect(_open_letter)
+
 	popup = ReturnPopup.new()
 	popup.visible = false
 	add_child(popup)
@@ -218,6 +238,7 @@ func _layout() -> void:
 	if not full:
 		settings.visible = false
 		day_picker.visible = false   # 작게 하면 닫힘 (요일은 [명장] 칸에서 언제든)
+		npc_dialog.visible = false   # 작게 하면 닫힘 (편지봉투는 그날 동안 남음)
 	_debug_label.visible = full and OS.is_debug_build()
 	town.show_ground = full
 	town.set_hint(not full and not hint_seen)
@@ -241,6 +262,7 @@ func _layout() -> void:
 	settings_button.position = small_button.position - Vector2(settings_button.size.x + m * 0.5, 0)
 	settings.set_ui_scale(Feel.GARAGE_SCALE * _ui_scale)
 	day_picker.set_ui_scale(Feel.GARAGE_SCALE * _ui_scale)
+	npc_dialog.set_ui_scale(Feel.GARAGE_SCALE * _ui_scale)
 	_debug_label.add_theme_font_size_override("font_size", int(roundf(Feel.DEBUG_FONT_SIZE * _ui_scale)))
 
 	panel.set_ui_scale(Feel.GARAGE_SCALE * _ui_scale)
@@ -282,7 +304,12 @@ func _process(delta: float) -> void:
 	town.set_rush(Rush.is_ringing(state), state.rush_ring / balance.rush_ring_seconds, Rush.parcels_left(state))
 	town.set_quest(_quest_line())
 	town.set_master_visit(Master.is_visiting(state, now))
+	var visitor := _visitor_info()
+	town.set_letter(visitor["who"] != "", _letter_key(visitor) != _letter_read)
+	if npc_dialog.visible and npc_dialog.who != visitor["who"]:
+		npc_dialog.visible = false   # 날이 바뀌어 NPC가 떠남
 	town.set_office(Company.stage(state) >= GameState.AGENCY)
+	town.set_city(Trip.route_id(state, TRUCK) == "city", _city_spots())
 	town.set_rank(Company.rank(balance, state))
 	panel.now_local = now
 	if _want_day_picker and is_full() and panel.building == "tuning" and not enhancing:
@@ -300,6 +327,9 @@ func _process(delta: float) -> void:
 	if day_picker.visible:
 		day_picker.reset_size()
 		day_picker.position = ((get_viewport_rect().size - day_picker.size) / 2.0).max(Vector2.ZERO)
+	if npc_dialog.visible:
+		npc_dialog.reset_size()
+		npc_dialog.position = ((get_viewport_rect().size - npc_dialog.size) / 2.0).max(Vector2.ZERO)
 	if _measuring:
 		_measure_seconds += delta
 	if _debug_label.visible:
@@ -310,12 +340,22 @@ func _process(delta: float) -> void:
 func _advance_truck(i: int, delta: float) -> void:
 	var events := Trip.advance(state, balance, i, delta, rng)
 	var sprite: Node2D = town.trucks[i]
-	sprite.follow(_lap_phase(i))
+	var p := Trip.lap_progress(balance, state, i)
+	if town.city:   # 시내: 집마다 서고, "+돈"은 배송된 그 집에 (정차할 곳 = 실을 수 있는 수만큼)
+		var n := Trip.lap_cargo(balance, state, i)
+		var k: int = state.truck(i).lap_delivered
+		if k == n and p > 0.0 and events.any(func(e): return e["type"] == "parcel"):
+			sprite.leg = p / n   # 이번 바퀴 마지막 배송 = n × (집 하나 몫)
+		sprite.stop_and_go(p, k, n)
+	else:
+		sprite.follow(p)
 	sprite.boosting = state.truck(i).boost_lap
-	var house: int = sprite.nearest_house()   # "+돈"은 트럭(있어야 할 자리)에서 가장 가까운 집에
+	var house: int = sprite.nearest_house()   # 동네: "+돈"은 트럭(있어야 할 자리)에서 가장 가까운 집에
 	for e in events:
 		match e["type"]:
 			"parcel":
+				if town.city:
+					house = e["house"]
 				town.show_payout(house, e["pay"], e.get("kind", "normal"), e.get("rush", false), i)
 				earned_total += e["pay"]
 				parcels_total += 1
@@ -336,11 +376,12 @@ func _advance_truck(i: int, delta: float) -> void:
 					_measure_earned += e["pay"]
 
 
-## 트럭 i가 한 바퀴 중 어디쯤 있어야 하나 (0 = 물류센터 → 0.5 = 마지막 집 → 1 = 물류센터).
-## 짐 싣는 동안은 0, 그 뒤 바퀴 끝까지 고르게. 지금 바퀴 길이는 계산 쪽 Trip.lap_seconds (오버부스트 반영)
-func _lap_phase(i: int) -> float:
-	var drive := Trip.lap_seconds(balance, state, i) - balance.load_seconds
-	return clampf((state.truck(i).lap_clock - balance.load_seconds) / maxf(drive, 0.001), 0.0, 1.0)
+## 시내 정차할 곳 수 = 트럭들이 한 바퀴에 실을 수 있는 가장 많은 수 (평균 적재량 올림. 소수 적재량이면 바퀴마다 그 앞쪽 집만 감)
+func _city_spots() -> int:
+	var n := 0
+	for i in state.trucks.size():
+		n = maxi(n, ceili(Trip.cargo(balance, state, i)))
+	return n
 
 
 # ---------------- 저장 · 꺼둔 동안 수익 ----------------
@@ -429,7 +470,10 @@ func _show_events(events: Array) -> void:
 				cur["max"] = true
 			"weekly_done":   # 경험치 보상으로 레벨업하면 그 줄이 이 알림에 붙음
 				_notify(cur)
-				cur = { "head": tr("NOTICE_WEEKLY") % [e["coupons"], Fmt.count(e["xp"])] }
+				cur = { "head": tr("NOTICE_WEEKLY") % [Fmt.money(e["money"]), Fmt.count(e["xp"])] }
+			"visitor":   # 특별 NPC가 옴 (그날 한 번. 부품상은 선물이 이미 들어옴)
+				_notify(cur)
+				cur = { "head": _visitor_notice(e) }
 			"master_notice":
 				_notify(cur)
 				cur = { "head": tr("NOTICE_MASTER_TOMORROW") % Fmt.master_bonus(balance.master_bonuses, e["bonus"]) }
@@ -532,6 +576,51 @@ func _on_rush_accept() -> void:
 		_save()
 
 
+## 오늘 와 있는 NPC: { who: "master" / "insurer" / "magician" / "dealer" / "", event: 보험사 이벤트 id, insured: 오늘 가입했나,
+##   bonus: 명장 보너스 id }. 명장 날엔 특별 NPC가 안 옴 (계산 쪽 규칙). 효과 숫자는 대화 창이 balance에서 읽음
+func _visitor_info() -> Dictionary:
+	if Master.is_visiting(state, now_local()):
+		return { "who": "master", "event": "", "insured": false, "bonus": state.active_bonus }
+	return { "who": Visitor.today(state), "event": Visitor.insurer_event(state), "insured": Visitor.is_insured(state) }
+
+
+## 특별 NPC 방문 알림 한 줄 (계산 쪽 { "type": "visitor", "who", "event", "gift" })
+func _visitor_notice(e: Dictionary) -> String:
+	match e["who"]:
+		"insurer":
+			return tr("NOTICE_VISITOR_INSURER") % tr("NPC_EVENT_NAME_RECOVERY" if e["event"] == "recovery" else "NPC_EVENT_NAME_PARTNER_DISCOUNT")
+		"magician":
+			return tr("NOTICE_VISITOR_MAGICIAN") % Fmt.num(balance.magician_up_mult)
+		"dealer":
+			return tr("NOTICE_VISITOR_DEALER") % e.get("gift", 0)
+	return ""
+
+
+## 이 방문을 가리키는 글자 (NPC + 현지 날짜 번호). 편지봉투를 열었나 비교용
+func _letter_key(info: Dictionary) -> String:
+	return "%s:%d" % [info["who"], floori(float(now_local()) / Master.SECONDS_PER_DAY)]
+
+
+## 편지봉투 → 느낌표 끔 → (작은 화면이면 큰 화면으로) NPC 대화 창
+func _open_letter() -> void:
+	var info := _visitor_info()
+	if info["who"] == "":
+		return
+	_letter_read = _letter_key(info)
+	town.set_letter(true, false)
+	npc_dialog.open(balance, info)
+	if not is_full():
+		screen.enter_full()
+
+
+## 보험사 [예] → 가입 (보험사가 온 날만) → 저장 → 창에 "가입됨"
+func _on_npc_yes() -> void:
+	if not Visitor.join_insurance(state, now_local()):
+		return
+	_save()
+	npc_dialog.open(balance, _visitor_info())
+
+
 ## 지금 현지 시각 = 현지 시각을 1970-01-01 0시(현지)부터 센 초 (Master가 요일·주를 셈). 확인 스크립트는 now_local_override
 func now_local() -> int:
 	if now_local_override >= 0:
@@ -559,14 +648,14 @@ func _on_style_picked(style: ScreenMode.FullStyle) -> void:
 # ---------------- 강화 · 스페어 ----------------
 
 ## 강화 버튼: 뜸 → 굴리기(enhance.gd) → 결과 연출 → 저장
-## 굴리기는 뜸이 끝난 뒤에 한다 (뜸 동안 꺼도 돈이 안 빠짐). [보험]을 켰으면 보험을 걸고 (요금·쿠폰은 계산 쪽)
+## 굴리기는 뜸이 끝난 뒤에 한다 (뜸 동안 꺼도 돈이 안 빠짐). 오늘 보험에 가입했으면 보험료·막기는 계산 쪽이 알아서
 func _on_enhance_pressed() -> void:
-	var insure := panel.insure
 	var i := panel.truck   # 누른 순간 고른 트럭 (뜸 동안 탭을 바꿔도 이 트럭에)
-	if enhancing or rolling or Enhance.block_reason(state, balance, i, insure, now_local()) != Enhance.Block.NONE:
+	if enhancing or rolling or Enhance.block_reason(state, balance, i) != Enhance.Block.NONE:
 		return
 	enhancing = true
-	var danger := Enhance.needs_spare(balance, state.truck(i).star) and not insure
+	var star := state.truck(i).star
+	var danger := Enhance.needs_spare(balance, star) and not Economy.insured_at(balance, star, state)
 	panel.begin_suspense()
 	var wait := (Feel.SUSPENSE_DANGER if danger else Feel.SUSPENSE_SAFE) * suspense_scale
 	if danger:
@@ -576,7 +665,7 @@ func _on_enhance_pressed() -> void:
 	i = mini(i, state.trucks.size() - 1)   # 뜸 동안 F3(처음부터)이면 트럭이 줄어듦
 	var t := state.truck(i)   # 뜸 동안 F3(처음부터)이면 상태가 바뀌어서 다시 읽음
 	var star_before := t.star
-	var r := Enhance.try_enhance(state, balance, i, rng, insure, now_local())
+	var r := Enhance.try_enhance(state, balance, i, rng)
 	panel.end_suspense()
 	var fx := panel.ui_scale()   # 흔들림 세기: 차고 크기에 맞춰
 	match r["result"]:
@@ -594,9 +683,13 @@ func _on_enhance_pressed() -> void:
 			panel.show_result(tr("RESULT_FAIL"), Feel.COLOR_FAIL)
 			_shake(func(o): _panel_shake = o, Feel.FAIL_SHAKE_PX * fx, Feel.FAIL_SHAKE_DURATION)
 		Enhance.Result.DESTROY:
-			# 스페어 엔진을 자동으로 써서 broken_drop_to로. 트럭은 계속 달림
-			panel.show_result(tr("RESULT_DESTROY"), Feel.COLOR_DANGER, Feel.DESTROY_TEXT_SIZE,
-					tr("RESULT_DESTROY_NOTE") % [t.star, state.spares])
+			# 스페어 엔진을 자동으로 써서 내려감 (보통 +15, 고급 스페어·복구 보험이면 +17). 트럭은 계속 달림
+			var note := tr("RESULT_DESTROY_NOTE") % [r["drop_to"], state.spares]
+			if r["premium"]:
+				note = tr("RESULT_DESTROY_PREMIUM") % [r["drop_to"], state.premium_spares]
+			elif r["drop_to"] > balance.broken_drop_to:   # 복구 보험 날 (보통 스페어를 쓰고도 덜 내려감)
+				note = tr("RESULT_DESTROY_RECOVERY") % [r["drop_to"], state.spares]
+			panel.show_result(tr("RESULT_DESTROY"), Feel.COLOR_DANGER, Feel.DESTROY_TEXT_SIZE, note)
 			town.trucks[i].smoke_burst(Feel.DESTROY_SMOKE_BURST)
 			_shake(func(o): position = o, Feel.DESTROY_SHAKE_PX * fx, Feel.DESTROY_SHAKE_DURATION)
 		Enhance.Result.BLOCKED:
@@ -614,6 +707,12 @@ func _shake(setter: Callable, px: float, seconds: float) -> void:
 	var tw := create_tween().set_ignore_time_scale(true)
 	tw.tween_method(jitter, 0.0, 1.0, seconds)
 	tw.tween_callback(func(): setter.call(Vector2.ZERO))
+
+
+## [고급 스페어 쓰기] 켜기/끄기 → state.use_premium (퍼질 때 고급을 먼저 쓸지는 계산 쪽) → 저장
+func _on_premium_toggled(on: bool) -> void:
+	state.use_premium = on
+	_save()
 
 
 ## 스페어 엔진 구매 (언제든, 돈이 있으면)

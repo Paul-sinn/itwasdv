@@ -1,6 +1,7 @@
 ## 트럭 그림: 계산 쪽 한 바퀴 진행(follow(0~1))을 따라 물류센터 → 마지막 집 → (돌아서) 물류센터를 돈다.
 ## 돈·배송은 여기서 하지 않는다 ("+돈"은 계산 쪽 배송 이벤트가 올 때 town.gd가 트럭에서 가까운 집에 띄움).
 ## 빠르기는 계산 쪽을 따르되(강화·세팅으로 빨라짐) feel.gd TOWN_DRIVE_SECONDS_MIN(상한)보다 빨리 돌지 않는다.
+## v7-bal U3 시내: 물류센터 → 집마다 서며 배송 → 물류센터 (stop_and_go. "+돈"은 배송된 그 집에)
 ##
 ## 움직임은 동네 설계 좌표(길 위 거리)로 하고, 그릴 때만 view_origin + 점 × view_zoom 으로 옮긴다.
 ## 그래서 작은 화면 ↔ 전체 화면을 오가도 트럭은 길 위 같은 자리에서 계속 간다.
@@ -14,6 +15,7 @@ const SMOKE_SPREAD := 10.0   ## 퍼짐 연기가 처음 옆으로 흩어지는 �
 
 var boosting := false  ## 오버부스트가 걸린 바퀴 (트럭 뒤 불꽃)
 var box_color := Feel.COLOR_TRUCK_BOX   ## 짐칸 색 (v7a: 보조 트럭은 색만 다름)
+var leg := 0.0         ## 시내: 집 하나 몫(달리기 + 정차)의 바퀴 진행 (0 = 아직 모름. stop_and_go)
 
 var view_origin := Vector2.ZERO   ## 동네 설계 좌표 (0,0)이 동네 노드 안에서 어디에 오나
 var view_zoom := 1.0              ## 동네 확대 배수
@@ -69,6 +71,30 @@ func shake(seconds: float, px: float) -> void:
 ## 강화 성공: seconds 동안 트럭 뒤 불꽃 (보이는 것만)
 func boost(seconds: float) -> void:
 	_flame_left = seconds
+
+
+## 서는 곳만 바꿈 (시내 ↔ 동네. 길 위 자리는 그대로, 다음 follow·stop_and_go가 갈 곳을 정함)
+func set_stops(stops: PackedFloat64Array) -> void:
+	_stops = stops
+	leg = 0.0
+
+
+## 시내 (v7-bal U3): 집마다 섬. p = 계산 쪽 바퀴 진행 (Trip.lap_progress, 싣는 동안 0), k = 이번 바퀴에 배송한 수, n = 실은 수.
+## 계산 쪽 바퀴는 달리는 초를 n+1 조각으로 똑같이 나눠, 집마다 (한 조각 달림 + 정차) 뒤 배송, 마지막 조각으로 복귀한다.
+## 그래서 집 하나 몫 진행(leg)은 바퀴 안에서 같고, 그중 달리는 몫 = 복귀 몫 = 1 − n × leg.
+## k번 집(0부터)까지는 달리는 몫 동안 가고, 그 집 배송이 될 때까지 섬 → n집을 다 돌면 복귀 몫 동안 물류센터로.
+## leg = 지난 바퀴 마지막 배송 때 잰 값 (main.gd). 아직 모르면 1/(n+1) (서지 않고 고르게 감)
+func stop_and_go(p: float, k: int, n: int) -> void:
+	n = mini(n, _stops.size())
+	if p <= 0.0 or n <= 0:
+		_goal = 0.0
+		return
+	var l := leg if leg > 0.0 else 1.0 / (n + 1)
+	var drive := clampf(1.0 - n * l, 0.001, l)
+	if k >= n:
+		_goal = lerpf(_stops[n - 1], 0.0, clampf((p - n * l) / drive, 0.0, 1.0))
+	else:
+		_goal = lerpf(_stops[k - 1] if k > 0 else 0.0, _stops[k], clampf((p - k * l) / drive, 0.0, 1.0))
 
 
 ## 한 바퀴 중 어디쯤 있어야 하나: 0 = 물류센터, 0.5 = 마지막 집(돌아서는 곳), 1 = 다시 물류센터

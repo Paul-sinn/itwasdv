@@ -11,6 +11,8 @@
 ##      (1280x720에 맞게 탭은 NPC 줄 안, 얼굴 옆 이름·인사말 자리에. 탭이 보이는 동안 이름·인사말은 숨김)
 ##      main이 강화·돌리기·보험을 그 트럭에. "모자란 금액 · 약 N분 뒤"는 모든 트럭 시간당 내 돈(Company.hourly_net) 기준
 ##      U2: 창업하면 건물 줄에 [사무실] (office_tab.gd: 보조 트럭·순위표·장부). 대리점 전(F3 처음부터 포함)에는 버튼을 숨기고 튜닝숍으로
+## v7-bal: [보험] 켜기·쿠폰 지움 (보험은 보험사 날 [예]로 가입 → 계산 쪽 state). 가입한 날 +18 이상은 "보험 가입 중 · 보험료 +N · 합계" 줄,
+##      제휴 할인 날은 비용 옆 "(제휴 할인 N%)", 복구 보험 날은 퍼짐 설명에 한 줄. 고급 스페어가 있으면 개수 + [고급 스페어 쓰기] 켜기/끄기
 ## 보여주기만 한다. 버튼을 누르면 신호만 보내고, 실제 강화·구매·돌리기는 main.gd → scripts/core 가 한다.
 extends PanelContainer
 
@@ -20,6 +22,7 @@ const Economy = preload("res://scripts/core/economy.gd")
 const Enhance = preload("res://scripts/core/enhance.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Trip = preload("res://scripts/core/trip.gd")
+const Visitor = preload("res://scripts/core/visitor.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const Town = preload("res://scripts/ui/town.gd")
@@ -30,6 +33,7 @@ const OfficeTab = preload("res://scripts/ui/office_tab.gd")
 
 signal enhance_pressed
 signal spare_pressed
+signal premium_toggled(on: bool)   ## [고급 스페어 쓰기] (main이 state.use_premium에 넣고 저장)
 
 
 enum Tab { ENGINE, SETTING, MASTER }   ## 튜닝숍 안 세 칸
@@ -48,9 +52,8 @@ var building_buttons := {}       ## 건물 id → 위쪽 줄 버튼
 var engine_tab_button: Button    ## 튜닝숍 [엔진 강화]
 var setting_tab_button: Button   ## 튜닝숍 [세팅]
 var master_tab_button: Button    ## 튜닝숍 [명장]
-var insure_button: Button        ## [강화] 옆 [보험] 켜기 (방문 중이거나 쿠폰이 있을 때만 켤 수 있음)
-var insure := false              ## 보험을 켰나 (main이 강화할 때 읽음. 걸 수 없게 되면 저절로 꺼짐)
-var now_local := 0               ## 현지 시각 (main.now_local()을 매 프레임 넣음. 방문 중인지·보험 요금을 볼 때)
+var premium_button: Button       ## [강화] 옆 [고급 스페어 쓰기] 켜기/끄기 (고급 스페어가 있을 때만 보임. 눌린 모양 = state.use_premium)
+var now_local := 0               ## 현지 시각 (main.now_local()을 매 프레임 넣음. [명장] 칸이 방문 중인지 볼 때)
 var master: MasterTab            ## 튜닝숍 [명장] 칸
 var to_car_button: Button        ## 스페어가 없어 강화가 막혔을 때 [카센터로]
 var setting: SettingTab          ## 튜닝숍 [세팅] 칸
@@ -83,8 +86,9 @@ var _income: Label
 var _chances: Label
 var _danger: Label
 var _danger_note: Label   ## "퍼지면 스페어 엔진 1개를 써서 +15로"
-var _cost: Label
-var _tries: Label     ## "지금 돈이면 N번 시도 가능" (보험을 켰으면 보험 포함)
+var _cost: Label      ## "비용 N원" (제휴 할인 날 가입했으면 "(제휴 할인 50%)")
+var _insure: Label    ## 가입한 날 +18 이상: "보험 가입 중 · 보험료 +N원 · 합계 N원"
+var _tries: Label     ## "지금 돈이면 N번 시도 가능" (보험료 포함)
 var _wait: Label      ## 못 누르는 이유: 스페어 없음 / 돈 모자람 (약 N분 뒤)
 var _enhance_button: Button
 var _spare_button: Button
@@ -169,22 +173,23 @@ func _ready() -> void:
 	_danger = _label(e, Feel.PANEL_DANGER_SIZE, Feel.COLOR_DANGER)
 	_danger_note = _label(e, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
 	_cost = _label(e, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
+	_insure = _label(e, Feel.PANEL_TEXT_SIZE, Feel.COLOR_INSURED)
 	_tries = _label(e, Feel.PANEL_SMALL_SIZE, Feel.COLOR_DIM)
 	_wait = _label(e, Feel.PANEL_TEXT_SIZE, Feel.COLOR_DIM)
 
-	# [강화] [보험] [카센터로] 한 줄 (칸이 길어지지 않게). [카센터로]는 스페어가 없어 막혔을 때만
+	# [강화] [고급 스페어 쓰기] [카센터로] 한 줄 (칸이 길어지지 않게). [카센터로]는 스페어가 없어 막혔을 때만
 	_enhance_row = HBoxContainer.new()
 	e.add_child(_enhance_row)
 	_enhance_button = _button(_enhance_row, tr("GARAGE_ENHANCE"))
 	_enhance_button.pressed.connect(func(): enhance_pressed.emit())
-	insure_button = _button(_enhance_row, tr("GARAGE_INSURE"))
-	insure_button.toggle_mode = true
-	insure_button.add_theme_color_override("font_pressed_color", Feel.COLOR_INSURED)
-	insure_button.add_theme_color_override("font_hover_pressed_color", Feel.COLOR_INSURED)
-	insure_button.toggled.connect(func(on: bool): insure = on)
+	premium_button = _button(_enhance_row, tr("GARAGE_USE_PREMIUM"))
+	premium_button.toggle_mode = true
+	premium_button.add_theme_color_override("font_pressed_color", Feel.COLOR_SPARE)
+	premium_button.add_theme_color_override("font_hover_pressed_color", Feel.COLOR_SPARE)
+	premium_button.toggled.connect(func(on: bool): premium_toggled.emit(on))
 	to_car_button = _button(_enhance_row, tr("GARAGE_TO_CAR"))
 	to_car_button.pressed.connect(func(): show_building("car_center"))
-	for btn in [_enhance_button, insure_button, to_car_button]:
+	for btn in [_enhance_button, premium_button, to_car_button]:
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 	_result = _label(e, Feel.PANEL_TEXT_SIZE, Feel.COLOR_TEXT)
@@ -347,56 +352,55 @@ func refresh(b: Balance, s: GameState) -> void:
 	_master_line.visible = s.active_bonus != ""   # 방문 중에만 (Master.tick이 채움)
 	if _master_line.visible:
 		_master_line.text = tr("GARAGE_MASTER_VISIT") % Fmt.master_bonus(b.master_bonuses, s.active_bonus)
-	_spares.text = tr("GARAGE_SPARES") % s.spares
+	_spares.text = tr("GARAGE_SPARES") % s.spares if s.premium_spares == 0 else tr("GARAGE_SPARES_BOTH") % [s.spares, s.premium_spares]
 	var now := Trip.hourly_income(b, s, truck)
 	var mine := Company.hourly_net(b, s)   # "약 N분 뒤": 모든 트럭 시간당 내 돈 (직원 몫·세금 뗀 뒤)
-	# 보험: 걸 수 없게 되면(방문일이 지남·쿠폰을 다 씀) 저절로 끔. 뜸 중에는 못 바꿈
-	var can_insure := Enhance.can_insure(s, now_local)
-	if insure and not can_insure and not _busy:
-		insure = false
-	insure_button.set_pressed_no_signal(insure)
-	insure_button.disabled = not can_insure or is_busy()
+	var premium := s.use_premium and s.premium_spares > 0   # 퍼지면 고급을 먼저 씀 (Enhance.force_destroy와 같은 조건)
+	premium_button.set_pressed_no_signal(s.use_premium)
+	premium_button.disabled = is_busy()
 	if at_max:
 		_income.text = tr("GARAGE_HOURLY") % Fmt.money(int(now))
-		_set_visible([_income], [_chances, _danger, _danger_note, _cost, _tries, _wait, _enhance_row, _enhance_button, to_car_button])
+		_set_visible([_income], [_chances, _danger, _danger_note, _cost, _insure, _tries, _wait, _enhance_row, _enhance_button, to_car_button])
 	else:
-		var c := Enhance.chances_for(b, s, truck, insure)
-		var risky: bool = Enhance.chances_for(b, s, truck)["destroy"] > 0.0   # 보험 없이는 퍼질 수 있는 단계
+		var c := Enhance.chances_for(b, s, truck)   # 오늘 보험이 덮으면 퍼짐 0 (그만큼 실패)
+		var insured := Economy.insured_at(b, t.star, s)
 		var cost := Economy.enhance_cost(b, t.star, s)
-		var fee := Enhance.insure_fee(s, b, truck, now_local) if insure else 0
-		var block := Enhance.block_reason(s, b, truck, insure, now_local)
+		var fee := Enhance.insure_fee(s, b, truck)
+		var block := Enhance.block_reason(s, b, truck)
 		_income.text = tr("GARAGE_HOURLY_NEXT") % [Fmt.money(int(now)), Fmt.money(int(Trip.hourly_income_at(b, s, truck, t.star + 1)))]
 		_chances.text = tr("GARAGE_CHANCES") % [
 			Fmt.percent(c["success"]), Fmt.percent(c["fail"]), Fmt.percent(c["destroy"])]
 		danger = c["destroy"] > 0.0
-		if insure:   # 퍼짐 확률 자리에 "보험: 퍼져도 단계 유지"
+		if insured:   # 퍼짐 확률 자리에 "보험: 퍼져도 단계 유지"
 			_danger.text = tr("GARAGE_INSURED_SAFE")
 			_danger.add_theme_color_override("font_color", Feel.COLOR_INSURED)
 		else:
 			_danger.text = tr("GARAGE_DANGER") % Fmt.percent(c["destroy"])
 			_danger.add_theme_color_override("font_color", Feel.COLOR_DANGER)
-		_danger_note.text = tr("GARAGE_DANGER_NOTE") % b.broken_drop_to
-		if not insure:
-			_cost.text = tr("GARAGE_COST") % Fmt.money(cost)
-		elif fee > 0:   # 방문 중: 보험 추가 요금
-			_cost.text = tr("GARAGE_COST_INSURED") % [Fmt.money(cost), Fmt.money(fee)]
-		else:           # 방문일이 아님: 쿠폰 1장 (괄호 = 쓰고 남는 장수)
-			_cost.text = tr("GARAGE_COST_COUPON") % [Fmt.money(cost), s.coupons - 1]
-		_tries.text = tr("GARAGE_TRIES") % Economy.tries(s, b, truck, insure, now_local)
+		var notes := PackedStringArray([tr("GARAGE_DANGER_NOTE_PREMIUM") % [s.premium_spares, b.premium_drop_to] if premium \
+				else tr("GARAGE_DANGER_NOTE") % b.broken_drop_to])
+		if Visitor.insurer_event(s) == "recovery":   # 오늘 복구 보험 (가입 안 하고 퍼져도 이 단계 밑으로 안 내려감)
+			notes.append(tr("GARAGE_RECOVERY_NOTE") % b.recovery_star)
+		_danger_note.text = "\n".join(notes)
+		var partner := cost < Economy.base_enhance_cost(b, t.star)   # 할인은 제휴 할인뿐 (가입한 날, 계산 쪽 Economy.enhance_cost)
+		_cost.text = tr("GARAGE_COST_PARTNER") % [Fmt.money(cost), Fmt.percent(b.partner_discount)] if partner \
+				else tr("GARAGE_COST") % Fmt.money(cost)
+		_insure.text = tr("GARAGE_INSURE_LINE") % [Fmt.money(fee), Fmt.money(cost + fee)]
+		_tries.text = tr("GARAGE_TRIES") % Economy.tries(s, b, truck)
 		match block:
 			Enhance.Block.NO_SPARE:
 				_wait.text = tr("GARAGE_NEED_SPARE")
 			Enhance.Block.NO_MONEY:
 				_wait.text = tr("GARAGE_SHORT_WAIT") % Fmt.wait_text(Economy.seconds_to_afford(cost + fee, s.money, mine))
-			Enhance.Block.NO_INSURE:
-				_wait.text = tr("GARAGE_NO_INSURE")
 		_enhance_button.disabled = block != Enhance.Block.NONE or is_busy()
 		_set_visible([_income, _chances, _cost, _enhance_row, _enhance_button], [])
-		_danger.visible = risky
+		_insure.visible = fee > 0   # +17 이하·가입 안 함이면 보험료 줄 없음
+		_danger.visible = danger or insured
 		_danger_note.visible = danger
 		_wait.visible = block != Enhance.Block.NONE
 		_tries.visible = not _wait.visible   # 못 누르면 이유 줄이 대신 (0번 줄은 안 보여 줌)
 		to_car_button.visible = block == Enhance.Block.NO_SPARE
+	premium_button.visible = s.premium_spares > 0   # 부품상 선물을 받은 뒤에만
 
 	# 카센터: 스페어 엔진
 	var price := Economy.spare_price(b)

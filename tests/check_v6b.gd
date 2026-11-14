@@ -1,16 +1,17 @@
 ## v6b U1·U2 완료 기준 자동 확인. U1: 대형·VIP·급송 "+금액", 급송 전화 말풍선, [설정] 급송 끄기, 주간 배송 목표.
-## U2: 명장 요일 고르기·[명장] 칸·예고/방문 알림·강화 칸 [보험]·"+2!"·"N번 시도 가능"·띠의 튜닝숍 표시.
+## U2: 명장 요일 고르기·[명장] 칸·예고/방문 알림·"+2!"·"N번 시도 가능"·띠의 튜닝숍 표시.
+## v7-bal: [보험] 켜기·보험 쿠폰이 없어짐 (보험은 보험사 날 → check_v7bal.gd). 벨 300초·급송 50건·주간 6만 건·주간 보상 돈
 ## 진짜 게임 화면(main.tscn)에 진짜 클릭을 넣어서 확인한다. 단계·벨 시계·주간 진행을 미리 넣는 것은 준비로만 하고,
 ## 확인하는 동작은 진짜 클릭이나 진짜 프레임(main이 Rush.tick → Trip.advance → take_events)으로 한다.
 ## ① 대형·VIP·급송 "+금액"의 색·글자가 보통과 다름
-## ② 벨 → 말풍선이 작은 화면 visible_rects() 안, [받기] 클릭 → 사라지고 구석 줄 "급송 N건 남음", 건수가 줄다 0이면 사라짐
-## ③ 안 받으면 벨 시간(30초) 뒤 사라짐 (남은 시간 막대가 줄어듦, 급송 0건)   ④ [설정]에서 끄면 저장되고 다시 켜도 꺼져 있음 (벨 안 울림)
-## ⑤ 물류센터 [창고·할 일] 주간 목표 줄이 진행·달성을 보여 줌, 달성 알림, 주가 바뀌면 0   ⑥ en에 한글·키 없음
-## ⑦ 창 크기: 작은 화면 3가지에서 말풍선·"급송 N건 남음"이 동네 안·보이는 곳 안·건물·집과 안 겹침 (글자 10개 떠도 사각형 30개 이하),
+## ② 벨 → 전화 아이콘(v7-bal: 말풍선 대신)이 작은 화면 visible_rects() 안, 아이콘 클릭 → 사라지고 구석 줄 "급송 N건 남음", 건수가 줄다 0이면 사라짐
+## ③ 안 받으면 벨 시간 뒤 사라짐 (아이콘 아래 남은 시간 막대가 줄어듦, 급송 0건)   ④ [설정]에서 끄면 저장되고 다시 켜도 꺼져 있음 (벨 안 울림)
+## ⑤ 물류센터 [창고·할 일] 주간 목표 줄이 진행·보상 돈(지금 받으면)·달성을 보여 줌, 달성 알림 (돈·경험치), 주가 바뀌면 0   ⑥ en에 한글·키 없음
+## ⑦ 창 크기: 작은 화면 3가지에서 전화 아이콘·"급송 N건 남음"이 동네 안·보이는 곳 안·건물·집과 안 겹침 (글자 10개 떠도 사각형 30개 이하),
 ##    큰 화면 5가지에서 물류센터 화면·[설정]이 창 안
 ## U2 ① [명장] 칸 잠김 글 → +10 뒤 요일 고르기 창   ② 요일 클릭 → 저장, 바꾸면 "다음 주부터"   ③ 예고·방문 알림
-##    ④ 방문 중 강화 칸에 보너스 줄, [보험] 켜면 비용·확률 글이 바뀌고 실제 빠지는 돈 = 비용 + 보험 요금
-##    ⑤ 쿠폰만 있을 때 [보험] → 쿠폰 −1   ⑥ 방문일도 쿠폰도 없으면 [보험] 꺼짐   ⑦ 보험이 막은 퍼짐 결과 글, 2단계면 "+2!"
+##    ④ 방문 중 강화 칸에 보너스 줄, 명장 날엔 보험 없음 (보험료 줄 없음), 실제 빠지는 돈 = 비용
+##    (⑤ 쿠폰 보험·⑥ [보험] 꺼짐은 v7-bal에서 지움)   ⑦ 2단계면 "+2!" (보험이 막은 퍼짐 글은 check_v7bal.gd)
 ##    ⑧ "지금 돈이면 N번 시도 가능" = 실제로 누른 횟수   ⑨ 방문 중 작은 화면 튜닝숍 테두리 (보이는 곳 안)   ⑩ en, 창 크기 5가지
 ## 현지 시각은 main.now_local_override로 고정 (수요일 낮 12시: 확인 도중 주가 안 바뀌게. U2는 목·금요일로 옮겨 가며).
 ## 결과를 정해야 하는 강화(⑦)는 main의 난수 씨앗을 미리 골라 둔다 (같은 씨앗의 난수를 따로 뽑아 보고 고름). 진짜 저장·설정 파일은 건드리지 않는다.
@@ -88,20 +89,18 @@ func _run() -> void:
 			seen.get("normal", ["없음"])[0], seen.get("large", ["없음"])[0], seen.get("vip", ["없음"])[0], seen.get("rush", ["없음"])[0], colors.size()])
 	await _close(m)
 
-	# ② 벨 → 말풍선 (작은 화면 보이는 곳 안) → [받기] → "급송 20건 남음" → 줄어 0이면 사라짐
+	# ② 벨 → 전화 아이콘 (작은 화면 보이는 곳 안) → 아이콘 클릭 → "급송 N건 남음" → 줄어 0이면 사라짐
 	Save.delete_file(TEST_SAVE)
 	m = await _launch()
 	town = m.town
 	m.state.quest_index = Quest.count(b)
 	await _ring(m)
-	var bubble: Rect2 = town.rush_bubble.get_global_rect()
-	var ring_ok: bool = town.rush_bubble.is_visible_in_tree() and _enclosed(m.visible_rects(), bubble) \
-			and bubble.encloses(town.rush_button.get_global_rect()) and town._rush_text.text == "급송 요청!" and town.rush_button.text == "받기"
+	var ring_ok: bool = town.rush_button.is_visible_in_tree() and _enclosed(m.visible_rects(), town.rush_button.get_global_rect())
 	_click(town.rush_button.get_global_rect().get_center())
 	var saved = _saved_state(b)
 	await _frames(2)
 	var left_rect: Rect2 = town._rush_left.get_global_rect()
-	var accept_ok: bool = not town.rush_bubble.visible and Rush.parcels_left(m.state) == b.rush_parcels \
+	var accept_ok: bool = not town.rush_button.visible and Rush.parcels_left(m.state) == b.rush_parcels \
 			and town._rush_left.is_visible_in_tree() and town._rush_left.text == "급송 %d건 남음" % b.rush_parcels \
 			and _enclosed(m.visible_rects(), left_rect) and saved != null and saved.rush_left == b.rush_parcels and not m.is_full()
 	var first_text: String = town._rush_left.text
@@ -119,28 +118,28 @@ func _run() -> void:
 	await _frames(2)
 	Engine.time_scale = 0.0
 	_report(ring_ok and accept_ok and count_ok and counts.size() > 2 and Rush.parcels_left(m.state) == 0 and not town._rush_left.visible,
-			"② 벨 → 말풍선 '%s [%s]' (작은 화면 보이는 곳 안), [받기] → 말풍선 사라짐·'%s'·저장, 남은 건수 %s… → 0이면 사라짐" % [
-			town._rush_text.text, town.rush_button.text, first_text, counts.slice(0, 5)])
+			"② 벨 → 전화 아이콘 (작은 화면 보이는 곳 안), 아이콘 클릭 → 아이콘 사라짐·'%s'·저장, 남은 건수 %s… → 0이면 사라짐" % [
+			first_text, counts.slice(0, 5)])
 
-	# ③ 안 받으면: 남은 시간 막대가 줄고, 벨 시간이 끝나면 말풍선 사라짐, 급송 0건
+	# ③ 안 받으면: 남은 시간 막대가 줄고, 벨 시간이 끝나면 전화 아이콘 사라짐, 급송 0건
 	await _ring(m)
-	var bar0: float = town._rush_bar.value
+	var bar0: float = town.rush_button.ratio
 	var ring0: float = m.state.rush_ring
-	Engine.time_scale = 10.0
+	Engine.time_scale = Feel.CHEAT_TIME_SCALE   # 벨 300초 → 진짜 5초
 	var bar_mid := -1.0
 	var shown_while := true
 	t0 = Time.get_ticks_msec()
 	while Rush.is_ringing(m.state) and Time.get_ticks_msec() - t0 < 20000:
 		await process_frame
 		if Rush.is_ringing(m.state):
-			shown_while = shown_while and town.rush_bubble.visible
+			shown_while = shown_while and town.rush_button.visible
 			if bar_mid < 0.0 and m.state.rush_ring < b.rush_ring_seconds / 2.0:
-				bar_mid = town._rush_bar.value
+				bar_mid = town.rush_button.ratio
 	await _frames(2)
 	Engine.time_scale = 0.0
 	_report(ring0 > b.rush_ring_seconds - 1.0 and ring0 <= b.rush_ring_seconds and bar0 > 0.95 and bar_mid > 0.0 and bar_mid < 0.55 and shown_while and not Rush.is_ringing(m.state)
-			and not town.rush_bubble.visible and Rush.parcels_left(m.state) == 0 and not town._rush_left.visible,
-			"③ 안 받으면: 벨 %s초 동안 말풍선, 막대 %.2f → %.2f → 끝나면 사라짐, 급송 0건" % [Fmt.num(ring0), bar0, bar_mid])
+			and not town.rush_button.visible and Rush.parcels_left(m.state) == 0 and not town._rush_left.visible,
+			"③ 안 받으면: 벨 %s초 동안 전화 아이콘, 막대 %.2f → %.2f → 끝나면 사라짐, 급송 0건" % [Fmt.num(ring0), bar0, bar_mid])
 	await _close(m)
 
 	# ④ [설정] 급송 요청 전화 끄기 → 저장 → 다시 켜도 꺼짐, 벨 안 울림
@@ -163,7 +162,7 @@ func _run() -> void:
 	await _frames(30)
 	await _wait(0.5)
 	Engine.time_scale = 0.0
-	var quiet: bool = not m.state.rush_enabled and not Rush.is_ringing(m.state) and not m.town.rush_bubble.visible
+	var quiet: bool = not m.state.rush_enabled and not Rush.is_ringing(m.state) and not m.town.rush_button.visible
 	_click(m.town.building_rects()["tuning"].get_center())
 	await _frames(3)
 	_click(m.settings_button.get_global_rect().get_center())
@@ -185,23 +184,23 @@ func _run() -> void:
 	_click(d.depot_page_button.get_global_rect().get_center())
 	await _frames(2)
 	var line0: String = d._weekly.text
-	var want0 := "이번 주 배송 12,340 / %s건 → 보험 쿠폰 %d장 + 경험치 %s" % [Fmt.count(Weekly.target(b)), b.weekly_coupons, Fmt.count(b.weekly_xp)]
+	var reward := Weekly.reward_money(b, m.state)   # 지금 받으면 (하루치 내 돈. 단계가 그대로라 달성 때도 같음)
+	var want0 := "이번 주 12,340 / %s건 → 지금 %s원 + 경험치 %s" % [Fmt.count(Weekly.target(b)), Fmt.money(reward), Fmt.count(b.weekly_xp)]
 	m.state.weekly_parcels = Weekly.target(b) - 1   # 준비: 한 건 남음
-	var coupons0: int = m.state.coupons
 	Engine.time_scale = Feel.CHEAT_TIME_SCALE
 	await _until(func(): return Weekly.is_done(m.state), 30.0)
 	Engine.time_scale = 0.0
-	var want_notice := "주간 배송 목표 달성! 보험 쿠폰 +%d장 · 경험치 +%s" % [b.weekly_coupons, Fmt.count(b.weekly_xp)]
+	var want_notice := "주간 배송 목표 달성! +%s원 · 경험치 +%s" % [Fmt.money(reward), Fmt.count(b.weekly_xp)]
 	await _until(func(): return town.notices_shown.any(func(x): return String(x).begins_with(want_notice)), 3.0)
 	await _frames(2)
 	var line1: String = d._weekly.text
-	var done_ok: bool = m.state.coupons == coupons0 + b.weekly_coupons and line1 == "이번 주 달성! (배송 %s건)" % Fmt.count(Weekly.progress(m.state)) \
+	var done_ok: bool = reward > 0 and line1 == "이번 주 달성! (배송 %s건)" % Fmt.count(Weekly.progress(m.state)) \
 			and d._weekly.is_visible_in_tree() and town.notices_shown.any(func(x): return String(x).begins_with(want_notice))
 	m.now_local_override = now + 7 * DAY   # 다음 주
 	await _frames(3)
 	var line2: String = d._weekly.text
-	_report(line0 == want0 and done_ok and line2.begins_with("이번 주 배송 0 / ") and Weekly.progress(m.state) == 0,
-			"⑤ 주간 목표 '%s' → 달성 알림 '%s'·쿠폰 %d → %d, '%s' → 다음 주 '%s'" % [line0, want_notice, coupons0, m.state.coupons, line1, line2])
+	_report(line0 == want0 and done_ok and line2.begins_with("이번 주 0 / ") and Weekly.progress(m.state) == 0,
+			"⑤ 주간 목표 '%s' → 달성 알림 '%s', '%s' → 다음 주 '%s'" % [line0, want_notice, line1, line2])
 	await _close(m)
 
 	# ⑦ ko: 작은 화면 3가지 (벨 울릴 때 / 받은 뒤) + 큰 화면 5가지 (물류센터 [창고·할 일], [설정])
@@ -211,20 +210,20 @@ func _run() -> void:
 	var fit_ko: Array = await _check_fits(m, b)
 	await _close(m)
 
-	# ⑥ en: "+금액" 앞 글자, 말풍선, "급송 N건 남음", [설정] 한 줄, 주간 목표 줄·알림에 한글·키 없음  ⑦ en도 창 크기
+	# ⑥ en: "+금액" 앞 글자, "급송 N건 남음", [설정] 한 줄, 주간 목표 줄·알림에 한글·키 없음  ⑦ en도 창 크기
 	TranslationServer.set_locale("en")
 	Save.delete_file(TEST_SAVE)
 	m = await _launch()
 	town = m.town
 	m.state.quest_index = Quest.count(b)
 	await _ring(m)
-	var texts := [town._rush_text.text, town.rush_button.text]
+	var texts := []
 	_click(town.rush_button.get_global_rect().get_center())
 	await _frames(2)
 	texts.append(town._rush_left.text)
 	for key in ["TOWN_PAY_LARGE", "TOWN_PAY_VIP", "TOWN_PAY_RUSH"]:
 		texts.append(tr(key))
-	texts.append(tr("NOTICE_WEEKLY") % [1, "2,000"])
+	texts.append(tr("NOTICE_WEEKLY") % [Fmt.money(123456789), "2,000"])
 	texts.append(tr("DEPOT_WEEKLY_DONE") % "30,000")
 	_click(town.building_rects()["depot"].get_center())
 	await _frames(3)
@@ -235,7 +234,7 @@ func _run() -> void:
 	await _frames(2)
 	texts.append_array(_visible_texts(m.settings))
 	var bad := texts.filter(func(x): return _untranslated(String(x)))
-	_report(bad.is_empty() and town.rush_button.text == "Accept",
+	_report(bad.is_empty(),
 			"⑥ en 급송·대형·VIP·[설정]·주간 목표 글자 %d개에 한글·키 없음 %s" % [texts.size(), bad])
 	print("    en: %s" % [texts])
 	await _close(m)
@@ -246,7 +245,7 @@ func _run() -> void:
 	var fit_en: Array = await _check_fits(m, b)
 	await _close(m)
 	_report(fit_ko.is_empty() and fit_en.is_empty(),
-			"⑦ ko·en 작은 화면 %d가지: 말풍선·'급송 N건 남음'이 동네 안·보이는 곳 안, 건물·집·할 일 줄과 안 겹침, 글자 10개 + 말풍선 + 처음 말풍선에도 사각형 30개 이하 / 큰 화면 %d가지: 물류센터 [창고·할 일]·[설정]이 창 안, [작게]·[설정] 버튼과 안 겹침 %s %s" % [
+			"⑦ ko·en 작은 화면 %d가지: 전화 아이콘·'급송 N건 남음'이 동네 안·보이는 곳 안, 건물·집·할 일 줄과 안 겹침, 글자 10개 + 전화 아이콘 + 처음 말풍선에도 사각형 30개 이하 / 큰 화면 %d가지: 물류센터 [창고·할 일]·[설정]이 창 안, [작게]·[설정] 버튼과 안 겹침 %s %s" % [
 			SMALL_SIZES.size(), FIT_SIZES.size(), fit_ko, fit_en])
 
 	await _u2(b)
@@ -278,7 +277,7 @@ func _kind_of(text: String) -> String:
 func _ring(m: Node) -> void:
 	m.state.rush_next = 0.2
 	Engine.time_scale = 1.0
-	await _until(func(): return Rush.is_ringing(m.state) and m.town.rush_bubble.visible, 5.0)
+	await _until(func(): return Rush.is_ringing(m.state) and m.town.rush_button.visible, 5.0)
 	Engine.time_scale = 0.0
 	await _frames(2)
 
@@ -295,7 +294,7 @@ func _check_fits(m: Node, b: Balance) -> Array:
 		m.screen.enter_small()
 		root.size = size
 		await _frames(3)
-		var r := Rect2(town.rush_bubble.position, town.rush_bubble.size)
+		var r := Rect2(town.rush_button.position, town.rush_button.size)
 		var others: Array = [["할 일 줄", Rect2(town._quest_label.position, town._quest_label.size)], ["구석 줄", Rect2(town._hud.position, town._hud.size)]]
 		for id: String in Town.BUILDINGS:
 			others.append([id, town.building_rects()[id]])
@@ -303,16 +302,16 @@ func _check_fits(m: Node, b: Balance) -> Array:
 			others.append(["집", town.view_rect(town._house_rect(spot))])
 		if not town.hint.visible:
 			bad.append("%s 처음 말풍선이 안 떠 있음 (확인 준비)" % size)
-		if not town.rush_bubble.visible or not town.area().encloses(r) or not _enclosed(m.visible_rects(), Rect2(r.position + town.global_position, r.size)):
-			bad.append("%s 말풍선 %s 동네 밖이거나 보이는 곳 밖" % [size, r])
+		if not town.rush_button.visible or not town.area().encloses(r) or not _enclosed(m.visible_rects(), Rect2(r.position + town.global_position, r.size)):
+			bad.append("%s 전화 아이콘 %s 동네 밖이거나 보이는 곳 밖" % [size, r])
 		for o in others:
 			if r.intersects(o[1]):
-				bad.append("%s 말풍선 ↔ %s" % [size, o[0]])
+				bad.append("%s 전화 아이콘 ↔ %s" % [size, o[0]])
 		for i in 10:   # 글자가 가장 많이 떴을 때도 사각형 30개 이하
 			town.show_payout(i % Feel.TOWN_HOUSES, 1875 * (i + 1), ["normal", "large", "vip"][i % 3], i % 2 == 0)
 		await _frames(1)
 		if m.visible_rects().size() > 30:
-			bad.append("%s 말풍선 + 글자 10개: 보이는 곳 사각형 %d개 (30개 이하)" % [size, m.visible_rects().size()])
+			bad.append("%s 전화 아이콘 + 글자 10개: 보이는 곳 사각형 %d개 (30개 이하)" % [size, m.visible_rects().size()])
 	_click(town.rush_button.get_global_rect().get_center())
 	await _frames(2)
 	for size: Vector2i in SMALL_SIZES:
@@ -425,126 +424,61 @@ func _u2(b: Balance) -> void:
 			and m.state.active_bonus == bonus,
 			"③ 수요일 알림 '%s' → 목요일 알림 '%s', [명장] 칸 '%s' → '%s', '%s'" % [want_tomorrow, want_today, hidden_line, known_line, mt._today.text])
 
-	# ④ 목요일(방문 중) +18: 보너스 줄, [보험] 클릭 → 비용·확률·퍼짐 글이 바뀜, [강화] → 빠진 돈 = 비용 + 보험 요금 (쿠폰 그대로)
+	# ④ 목요일(방문 중) +18: 보너스 줄, 명장 날엔 보험 없음 (보험료 줄 없음, 퍼질 확률 그대로) → [강화] 빠진 돈 = 비용
 	_click(p.engine_tab_button.get_global_rect().get_center())
 	t.star = 18
 	m.state.spares = 1
-	m.state.coupons = 3
 	var cost := Economy.enhance_cost(b, 18, m.state)
 	m.state.money = cost * 10
 	await _frames(2)
 	var line: String = p._master_line.text
-	var plain_cost: String = p._cost.text
-	var plain_chances: String = p._chances.text
-	var plain_danger: String = p._danger.text
-	_click(p.insure_button.get_global_rect().get_center())
-	await _frames(2)
-	var fee := Enhance.insure_fee(m.state, b, 0, thu)
-	var c: Dictionary = Enhance.chances_for(b, m.state, 0, true)
-	var ins_cost: String = p._cost.text
-	var ins_ok: bool = p.insure and p.insure_button.button_pressed and fee > 0 and fee == roundi(cost * b.master_insure_fee_mult) \
-			and plain_cost == "비용 %s원" % Fmt.money(cost) and ins_cost == "비용 %s원 + 보험 %s원" % [Fmt.money(cost), Fmt.money(fee)] \
-			and p._chances.text == tr("GARAGE_CHANCES") % [Fmt.percent(c["success"]), Fmt.percent(c["fail"]), Fmt.percent(0.0)] \
-			and p._chances.text != plain_chances and plain_danger.begins_with("퍼질 확률") and p._danger.text == "보험: 퍼져도 단계 유지" \
-			and p._style.border_color != Feel.COLOR_DANGER and not p._enhance_button.disabled
+	var c: Dictionary = Enhance.chances_for(b, m.state, 0)
+	var visit_ok: bool = p._cost.text == "비용 %s원" % Fmt.money(cost) and not p._insure.visible and p._danger.text.begins_with("퍼질 확률") \
+			and p._chances.text == tr("GARAGE_CHANCES") % [Fmt.percent(c["success"]), Fmt.percent(c["fail"]), Fmt.percent(c["destroy"])] \
+			and c["destroy"] > 0.0 and not p._enhance_button.disabled and Enhance.insure_fee(m.state, b, 0) == 0
+	var fail_from: float = c["success"] + c["destroy"]
+	m.rng.seed = _seed_for(func(r1: float, _r2: float): return r1 >= fail_from)   # 실패(유지)가 뜨는 씨앗 (단계·스페어 그대로)
 	var money0: int = m.state.money
 	await _press_enhance(m)
 	var paid: int = money0 - m.state.money
-	_report(line == "명장 방문 중: " + bonus_text and ins_ok and paid == cost + fee and m.state.coupons == 3,
-			"④ 방문 중 '%s', [보험] → '%s' → '%s', '%s' → '%s', [강화] 빠진 돈 %s원 = 비용 + 보험 (쿠폰 3장 그대로)" % [
-			line, plain_cost, ins_cost, plain_danger, p._danger.text, Fmt.money(paid)])
+	_report(line == "명장 방문 중: " + bonus_text and visit_ok and paid == cost and t.star == 18,
+			"④ 방문 중 '%s', 보험료 줄 없음 · '%s' · '%s', [강화] 빠진 돈 %s원 = 비용 (명장 날엔 보험 없음)" % [
+			line, p._cost.text, p._danger.text, Fmt.money(paid)])
 
-	# ⑤ 금요일(방문일 아님) +18 스페어 0, 쿠폰 2장: [보험] 끄면 스페어가 없어 못 누름 → 켜면 쿠폰 글, [강화] → 쿠폰 −1, 비용만
-	m.now_local_override = fri
-	t.star = 18
-	m.state.spares = 0
-	m.state.coupons = 2
-	await _frames(2)
-	cost = Economy.enhance_cost(b, 18, m.state)
-	m.state.money = cost * 5
-	if p.insure:
-		_click(p.insure_button.get_global_rect().get_center())
-	await _frames(2)
-	var off_ok: bool = not p.insure and not p._master_line.visible and p._enhance_button.disabled and p._wait.text == tr("GARAGE_NEED_SPARE")
-	_click(p.insure_button.get_global_rect().get_center())
-	await _frames(2)
-	var coupon_text: String = p._cost.text
-	var on_ok: bool = p.insure and coupon_text == "비용 %s원 · 보험 쿠폰 1장 사용 (1장 남음)" % Fmt.money(cost) and not p._enhance_button.disabled
-	money0 = m.state.money
-	await _press_enhance(m)
-	_report(off_ok and on_ok and m.state.coupons == 1 and money0 - m.state.money == cost and m.state.spares == 0,
-			"⑤ 금요일 쿠폰 2장 [보험] → '%s', [강화] → 쿠폰 2 → %d장, 빠진 돈 %s원 = 비용 (스페어 0개로도 누름)" % [
-			coupon_text, m.state.coupons, Fmt.money(money0 - m.state.money)])
-
-	# ⑥ 방문일도 아니고 쿠폰도 없으면 [보험] 꺼짐 (눌러도 안 켜짐)
-	m.state.coupons = 0
-	t.star = 18
-	await _frames(2)
-	var dis_ok: bool = p.insure_button.disabled and not p.insure and not p.insure_button.button_pressed
-	_click(p.insure_button.get_global_rect().get_center())
-	await _frames(2)
-	_report(dis_ok and not p.insure and p.insure_button.disabled and p._cost.text == "비용 %s원" % Fmt.money(cost),
-			"⑥ 방문일 아님 + 쿠폰 0장: [%s] 꺼짐, 눌러도 안 켜짐 ('%s')" % [p.insure_button.text, p._cost.text])
-
-	# ⑦ 쿠폰 보험 + 퍼짐이 뜨는 씨앗 → "보험 덕분에 살았어요" (+18 그대로, 스페어 안 씀)
-	m.state.coupons = 1
-	m.state.money = cost * 5
-	await _frames(2)
-	_click(p.insure_button.get_global_rect().get_center())
-	await _frames(2)
-	var c0: Dictionary = Enhance.chances_for(b, m.state, 0)
-	var lo: float = c0["success"]
-	var hi: float = lo + c0["destroy"]
-	m.rng.seed = _seed_for(func(r1: float, _r2: float): return r1 >= lo and r1 < hi)
-	var destroys0: int = t.destroy_count
-	await _press_enhance(m)
-	var insured_text: String = p._result.text
-	var insured_ok: bool = insured_text == "보험 덕분에 살았어요! (+18 그대로)" and t.star == 18 and m.state.spares == 0 and m.state.coupons == 0 \
-			and t.destroy_count == destroys0
-	# 목요일(방문 중) 보너스 "2단계" + 성공하고 한 번 더 뜨는 씨앗 → "+2!  +18 → +20"
-	m.now_local_override = thu
+	# ⑦ 목요일(방문 중) 보너스 "2단계" + 성공하고 한 번 더 뜨는 씨앗 → "+2!  +18 → +20"
 	m.state.master_bonus = "double_step"   # 준비: 이번 주 보너스를 "2단계"로 (그 주 번호는 그대로)
 	t.star = 18
 	m.state.spares = 1
 	m.state.money = cost * 5
 	await _frames(2)
-	if p.insure:
-		_click(p.insure_button.get_global_rect().get_center())
-		await _frames(2)
 	var c1: Dictionary = Enhance.chances_for(b, m.state, 0)
 	var win: float = c1["success"]
 	var extra: float = b.master_bonuses["double_step"]
 	m.rng.seed = _seed_for(func(r1: float, r2: float): return r1 < win and r2 < extra)
 	await _press_enhance(m)
 	var double_text: String = p._result.text
-	_report(insured_ok and m.state.active_bonus == "double_step" and double_text == "+2!  +18 → +20" and t.star == 20,
-			"⑦ 쿠폰 보험 + 퍼짐 → '%s' (+%d, 스페어 0개 그대로), 방문 중 '2단계' 보너스 → '%s'" % [insured_text, 18, double_text])
+	_report(m.state.active_bonus == "double_step" and double_text == "+2!  +18 → +20" and t.star == 20,
+			"⑦ 방문 중 '2단계' 보너스 → '%s'" % double_text)
 
-	# ⑧ 목요일 방문 중 +18: "지금 돈이면 N번 시도 가능" (보험 끔 / 켬) = Economy.tries, 켠 채로 누를 수 있는 만큼 누른 횟수와 같음
+	# ⑧ 목요일 방문 중 +18: "지금 돈이면 N번 시도 가능" = Economy.tries = 누를 수 있는 만큼 누른 횟수 (보험료가 붙는 날은 check_v7bal.gd)
 	m.state.master_bonus = bonus
 	t.star = 18
 	m.state.spares = 1
-	m.state.coupons = 0
 	await _frames(2)
 	cost = Economy.enhance_cost(b, 18, m.state)
-	fee = Enhance.insure_fee(m.state, b, 0, thu)
-	m.state.money = (cost + fee) * 3 + cost
+	m.state.money = cost * 3 + 1
 	await _frames(2)
-	var tries_off: String = p._tries.text
-	var n_off := Economy.tries(m.state, b, 0, false, thu)
-	_click(p.insure_button.get_global_rect().get_center())
-	await _frames(2)
-	var tries_on: String = p._tries.text
-	var n_on := Economy.tries(m.state, b, 0, true, thu)
+	var tries_text: String = p._tries.text
+	var n := Economy.tries(m.state, b, 0)
 	var pressed := 0
 	while not p._enhance_button.disabled and pressed < 10:
 		await _press_enhance(m)
 		pressed += 1
-		t.star = 18   # 준비: 단계를 되돌림 (글은 "지금 단계 비용으로 N번")
+		t.star = 18   # 준비: 단계·스페어를 되돌림 (글은 "지금 단계 비용으로 N번")
+		m.state.spares = 1
 		await _frames(2)
-	_report(tries_off == "지금 돈이면 %d번 시도 가능" % n_off and tries_on == "지금 돈이면 %d번 시도 가능" % n_on and n_on == 3 and n_off == 10
-			and pressed == n_on and p.insure and m.state.money == cost,
-			"⑧ 보험 끔 '%s' / 켬 '%s' (Economy.tries), [보험] 켠 채로 실제로 %d번 누르고 막힘" % [tries_off, tries_on, pressed])
+	_report(tries_text == "지금 돈이면 %d번 시도 가능" % n and n == 3 and pressed == n and m.state.money == 1,
+			"⑧ '%s' (Economy.tries), 실제로 %d번 누르고 막힘" % [tries_text, pressed])
 
 	# ⑨ 작은 화면 3가지: 방문 중이면 튜닝숍 테두리가 보이는 곳 안, 방문일이 아니면 없음
 	m.screen.enter_small()
@@ -602,16 +536,12 @@ func _u2(b: Balance) -> void:
 	_click(p.engine_tab_button.get_global_rect().get_center())
 	t.star = 18
 	m.state.money = Economy.enhance_cost(b, 18, m.state) * 10
-	m.state.coupons = 1
-	await _frames(2)
-	texts.append_array(_visible_texts(p))
-	_click(p.insure_button.get_global_rect().get_center())
 	await _frames(2)
 	texts.append_array(_visible_texts(p))
 	m.now_local_override = fri
 	await _frames(2)
 	texts.append_array(_visible_texts(p))
-	for key in ["GARAGE_NO_INSURE", "MASTER_BONUS_HIDDEN", "MASTER_LOCKED", "MASTER_PICK_FIRST"]:
+	for key in ["MASTER_BONUS_HIDDEN", "MASTER_LOCKED", "MASTER_PICK_FIRST"]:
 		texts.append(tr(key))
 	texts.append(tr("RESULT_INSURED") % 18)
 	texts.append(tr("RESULT_DOUBLE") % [18, 20])
@@ -621,19 +551,20 @@ func _u2(b: Balance) -> void:
 		texts.append(Fmt.day_name(d))
 		texts.append(Fmt.day_name(d, true))
 	var bad := texts.filter(func(x): return _untranslated(String(x)))
-	_report(bad.is_empty() and en_picker and p.insure_button.text == "Insurance" and p.master_tab_button.text == "Master",
-			"⑩ en [명장]·요일 창·알림·강화 칸·결과·보너스 7개·요일 글자 %d개에 한글·키 없음 %s" % [texts.size(), bad])
+	_report(bad.is_empty() and en_picker and p.master_tab_button.text == "Master",
+			"⑩ en [명장]·요일 창·알림·강화 칸·결과·보너스 %d개·요일 글자 %d개에 한글·키 없음 %s" % [b.master_bonus_ids.size(), texts.size(), bad])
 	print("    en: %s" % [texts])
 	m.now_local_override = thu
 	var fit_en: Array = await _check_fits_u2(m, b)
 	await _close(m)
 	TranslationServer.set_locale("ko")
 	_report(fit_ko.is_empty() and fit_en.is_empty(),
-			"⑩ ko·en 큰 화면 %d가지: 튜닝숍 [엔진 강화] (방문 줄·퍼짐·스페어 없음·결과, [보험] 켬), [명장] 칸, 요일 고르기 창이 창 안, 동네·[작게]·[설정]과 안 겹침 %s %s" % [
+			"⑩ ko·en 큰 화면 %d가지: 튜닝숍 [엔진 강화] (방문 줄·퍼짐·스페어 없음·결과), [명장] 칸, 요일 고르기 창이 창 안, 동네·[작게]·[설정]과 안 겹침 %s %s" % [
 			FIT_SIZES.size(), fit_ko, fit_en])
 
 
-## ⑩ 큰 화면 5가지: 강화 칸이 가장 긴 때 (방문 줄 + 퍼짐 + 스페어 없음 + [카센터로] + 결과 두 줄) / [보험] 켬, [명장] 칸 (바꾼 요일까지), 요일 고르기 창. 문제 목록
+## ⑩ 큰 화면 5가지: 강화 칸이 가장 긴 때 (방문 줄 + 퍼짐 + 스페어 없음 + [카센터로] + 결과 두 줄), [명장] 칸 (바꾼 요일까지), 요일 고르기 창. 문제 목록
+## (보험료 줄·[고급 스페어 쓰기]가 붙은 강화 칸은 check_v7bal.gd)
 func _check_fits_u2(m: Node, b: Balance) -> Array:
 	var p = m.panel
 	var town = m.town
@@ -648,22 +579,15 @@ func _check_fits_u2(m: Node, b: Balance) -> Array:
 		_click(p.engine_tab_button.get_global_rect().get_center())
 		t.star = 18
 		m.state.spares = 0
-		m.state.coupons = 1
+		m.state.master_bonus = "destroy_cut"   # 준비: 확률 줄이 가장 긴 보너스 (퍼짐 1.4%처럼 소수점)
 		m.state.money = Economy.enhance_cost(b, 18, m.state) * 3
-		if p.insure:
-			_click(p.insure_button.get_global_rect().get_center())
 		p.show_result(tr("RESULT_DESTROY"), Feel.COLOR_DANGER, Feel.DESTROY_TEXT_SIZE, tr("RESULT_DESTROY_NOTE") % [b.broken_drop_to, 0])   # 준비: 결과 두 줄
 		await _frames(3)
-		for state_name in ["보험 끔", "보험 켬"]:
-			var pr: Rect2 = p.get_global_rect()
-			# 보험 끔: 퍼짐 설명 + 스페어 없음 이유 줄 + [카센터로] / 보험 켬: 방문 중 보험 요금 + "N번 시도 가능"
-			var shown: bool = p._danger_note.visible and p._wait.visible and p.to_car_button.visible if state_name == "보험 끔" \
-					else p._tries.visible and p._cost.text.contains("+")
-			if not p._master_line.is_visible_in_tree() or not shown or not view.encloses(pr) or pr.intersects(town.area()) \
-					or pr.intersects(m.small_button.get_global_rect()) or pr.intersects(m.settings_button.get_global_rect()):
-				bad.append("강화 칸 %s %dx%d %s" % [state_name, size.x, size.y, pr])
-			_click(p.insure_button.get_global_rect().get_center())
-			await _frames(3)
+		var pr: Rect2 = p.get_global_rect()
+		var shown: bool = p._danger_note.visible and p._wait.visible and p.to_car_button.visible   # 퍼짐 설명 + 스페어 없음 이유 줄 + [카센터로]
+		if not p._master_line.is_visible_in_tree() or not shown or not view.encloses(pr) or pr.intersects(town.area()) \
+				or pr.intersects(m.small_button.get_global_rect()) or pr.intersects(m.settings_button.get_global_rect()):
+			bad.append("강화 칸 %dx%d %s" % [size.x, size.y, pr])
 		_click(p.master_tab_button.get_global_rect().get_center())
 		await _frames(3)
 		var mr: Rect2 = p.get_global_rect()
