@@ -77,13 +77,13 @@ func _reach(s: GameState, kind: String, n: int) -> void:
 ## 랩핑: json 순서, 값·보상, 사기(돈·한 번만·보상용은 못 삼), 입히기(가진 것만, "" = 벗김, 없는 트럭)
 func test_wraps() -> void:
 	check_eq(Wrap.ids(b), ["stripe", "flame", "gold18", "bandage"], "랩핑 4개 (json 순서)")
-	check_eq(Wrap.ids(b).map(func(id): return Wrap.price(b, id)), [1000000, 10000000, -1, -1], "값 (보상용 −1)")
+	check_eq(Wrap.ids(b).map(func(id): return Wrap.price(b, id)), [8000000, 30000000, -1, -1], "값 (보상용 −1, v8a C4)")
 	check_eq(Wrap.ids(b).map(func(id): return Wrap.reward_of(b, id)), ["", "", "star_18", "first_destroy"], "보상 업적")
 	check_eq([Wrap.price(b, "nope"), Wrap.reward_of(b, "nope")], [-1, ""], "모르는 id")
 	var s := GameState.new_game()
-	s.money = 999999
+	s.money = 7999999
 	check(not Wrap.can_buy(b, s, "stripe") and not Wrap.buy(b, s, "stripe"), "1원 모자란데 삼")
-	s.money = 1000000
+	s.money = 8000000
 	check(Wrap.buy(b, s, "stripe"), "딱 맞는 돈으로 못 삼")
 	check_eq([s.money, s.wraps, Wrap.owned(s, "stripe")], [0, ["stripe"], true], "산 뒤 돈·가진 랩핑")
 	s.money = 10 ** 9
