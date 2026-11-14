@@ -36,7 +36,7 @@
 | 시내 목표 | 상하차 최대(30%)의 수입 효과가 동네의 2배 이상. 창업하면 "확 더 번다" | Q23, 스냅샷 13번 |
 | 노선 틀 | `routes`에 town / city (v7b에서 long 추가, 트럭마다 스위치). 이번엔 회사 단계로만 정해짐: 개인 기사 = town, 대리점 = city | Q23, Q24 |
 
-## 옮길 숫자 (`data/balance.json` → 0.14, `docs/numbers-source.md`에 기록)
+## 옮길 숫자 (`data/balance.json` → 0.14, C4에서 0.15, `docs/numbers-source.md`에 기록)
 
 **허락받은 것 (그대로 넣음):**
 
