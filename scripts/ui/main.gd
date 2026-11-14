@@ -32,6 +32,8 @@
 ## v7b: 이번 바퀴 노선이 "long"인 트럭은 띠에서 화면 밖으로 나갔다 돌아오고(truck.far), "+금액"은 나간 쪽 가장자리, 나가 있는 동안
 ##      구석 "장거리 배송 중 · N분 N초". 사무실 [시내] [장거리] → Trip.set_route → 저장. 장거리 열림(long_unlocked) → 동네 알림
 ##      U2: 프레임마다 Contract.tick (기업 계약 체결·돈), 체결(contract) → 동네 알림, 꺼둔 동안 요약에 계약 줄
+## v8a: 띠·큰 화면 트럭마다 입힌 랩핑(Wrap), 프레임마다 Stats.tick(켜 둔 시간)·Achievement.check.
+##      물류센터 업그레이드 [값] → Upgrade.buy → 알림·저장, 튜닝숍 [랩핑] [값] → Wrap.buy, [입히기]/[벗기기] → Wrap.wear (고른 트럭) → 저장
 extends Control
 
 const Ability = preload("res://scripts/core/ability.gd")
@@ -50,6 +52,11 @@ const Quest = preload("res://scripts/core/quest.gd")
 const Save = preload("res://scripts/core/save.gd")
 const Setting = preload("res://scripts/core/setting.gd")
 const Trip = preload("res://scripts/core/trip.gd")
+## v8a: C1·C2 전이라 화면 시험용 껍데기 (약속과 같은 이름·인자). 합치면 preload 경로만 scripts/core/ 로 (stub_*.gd 머리글)
+const Upgrade = preload("res://scripts/ui/stub_upgrade.gd")
+const Wrap = preload("res://scripts/ui/stub_wrap.gd")
+const Stats = preload("res://scripts/ui/stub_stats.gd")
+const Achievement = preload("res://scripts/ui/stub_achievement.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const Town = preload("res://scripts/ui/town.gd")
@@ -162,6 +169,9 @@ func _ready() -> void:
 	panel.driver.ability_pressed.connect(_on_ability_pressed)
 	panel.driver.reset_pressed.connect(_on_ability_reset)
 	panel.driver.found_pressed.connect(_on_found_pressed)
+	panel.driver.center_upgrade_pressed.connect(_on_center_upgrade_pressed)
+	panel.wrap.buy_pressed.connect(_on_wrap_buy_pressed)
+	panel.wrap.wear_pressed.connect(_on_wrap_wear_pressed)
 	panel.office.buy_pressed.connect(_on_helper_buy_pressed)
 	panel.office.route_pressed.connect(_on_route_pressed)
 	panel.master.day_pressed.connect(_on_day_picked)
@@ -301,6 +311,8 @@ func _process(delta: float) -> void:
 	Master.tick(state, balance, now, rng)
 	Rush.tick(state, balance, delta, rng)
 	Contract.tick(state, balance, delta)
+	Stats.tick(state, delta)
+	Achievement.check(state, balance)
 	town.set_truck_count(state.trucks.size())
 	for i in state.trucks.size():
 		_advance_truck(i, delta)
@@ -355,6 +367,7 @@ func _advance_truck(i: int, delta: float) -> void:
 	else:
 		sprite.follow(Trip.lap_progress(balance, state, i))
 	sprite.boosting = state.truck(i).boost_lap
+	sprite.wrap = Wrap.worn(state, i)   # v8a: 입힌 랩핑대로 차체 색·무늬
 	var house: int = Town.EDGE if far else sprite.nearest_house()   # 동네: "+돈"은 트럭(있어야 할 자리)에서 가장 가까운 집에
 	for e in events:
 		match e["type"]:
@@ -806,6 +819,29 @@ func _on_upgrade_pressed(kind: String) -> void:
 		Quest.check(state, balance)
 		panel.driver.show_bought(kind)
 		_save()   # 산 직후 저장
+	panel.refresh(balance, state)
+
+
+## 물류센터 업그레이드 [값] → Upgrade.buy (개인 기사·돈·레벨은 계산 쪽이 봄) → 알림 → 저장
+func _on_center_upgrade_pressed(id: String) -> void:
+	if Upgrade.buy(balance, state, id):
+		panel.driver.show_upgraded(id)
+		town.notify(tr("NOTICE_UPGRADE") % [tr("UPGRADE_" + id.to_upper()), Upgrade.level(state, id)])
+		_save()
+	panel.refresh(balance, state)
+
+
+## 튜닝숍 [랩핑] [값] → Wrap.buy (보상용·가진 것·돈 모자람이면 그대로) → 저장
+func _on_wrap_buy_pressed(id: String) -> void:
+	if Wrap.buy(balance, state, id):
+		_save()
+	panel.refresh(balance, state)
+
+
+## [입히기] / [벗기기] ("") → 고른 트럭(튜닝숍 트럭 탭)에 Wrap.wear → 저장. 띠 트럭은 다음 프레임 _advance_truck이 바꿈
+func _on_wrap_wear_pressed(id: String) -> void:
+	if Wrap.wear(state, panel.truck, id):
+		_save()
 	panel.refresh(balance, state)
 
 

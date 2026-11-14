@@ -214,7 +214,7 @@ func layout(top_left: Vector2, z: float, text_k: float) -> void:
 func set_truck_count(n: int) -> void:
 	while trucks.size() < n:
 		var t := Truck.new()
-		t.box_color = Feel.HELPER_TRUCK_COLORS[(trucks.size() - 1) % Feel.HELPER_TRUCK_COLORS.size()]
+		t.box_color = Truck.base_color(trucks.size())
 		add_child(t)
 		move_child(t, truck.get_index())
 		t.set_route(route, _stops)
