@@ -81,6 +81,8 @@ static func tick(state: GameState, b, dt: float) -> void         ## 평판 확�
 ```
 
 - 화면이 쓰는 계산은 위 함수만. 더 필요하면 계산 담당이 만들고 보고에 적는다
+- (2026-11-14 구현 뒤 약속에 넣음) 알림 `{ "type": "long_unlocked" }` (한 번), `GameState.long_laps`·`long_unlocked`, `Contract.offline(b, state, hours, rate) -> [번 돈, 세금]` (Trip.apply_offline 안에서만), 화면은 프레임마다 `Contract.tick`. 꺼둔 동안은 스위치 노선으로 계산. 오늘 장부 `sales`에 계약이 들어가고 `contract`는 그중 계약 몫
+- (2026-11-14 시뮬 뒤 넣은 숫자, json 0.17) `routes.long.price_mult` 7.0, `contracts.reputation` [200000, 1700000, 3600000], 라이벌 2,300만 ~ 4,000만. `long_speed`는 시트 값 그대로 (Q28-2)
 
 ## 화면
 
