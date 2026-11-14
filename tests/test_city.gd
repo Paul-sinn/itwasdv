@@ -53,11 +53,11 @@ func _lap(power: int, route: String, u: float = 0.0) -> float:
 	return 10.0 * r["stops_mult"] * (1.0 - u) + 12000.0 * r["road_mult"] / power + 20.0 * r["stops_mult"] * 0.5 * (1.0 - u)
 
 
-## json "routes" = 지시서 "옮길 숫자" (시내 셋은 임시), 틀린 숫자는 막힘
+## json "routes" = 동네 1·1·1, 시내는 C4 시뮬 값, 틀린 숫자는 막힘
 func test_json_routes() -> void:
 	check(b.is_ok(), "진짜 balance.json에 문제가 있음: %s" % ", ".join(b.errors))
 	check_eq(b.routes, { "town": { "price_mult": 1.0, "road_mult": 1.0, "stops_mult": 1.0 },
-			"city": { "price_mult": 1.5, "road_mult": 0.5, "stops_mult": 1.5 } }, "동네 1·1·1, 시내 단가 1.5·도로 0.5·집 수 1.5")
+			"city": { "price_mult": 1.2, "road_mult": 0.4, "stops_mult": 2.0 } }, "동네 1·1·1, 시내 단가 1.2·도로 0.4·집 수 2 (v7-bal C4)")
 	for c in [
 		[func(d): d.erase("routes"), "\"routes\" 묶음이 없음"],
 		[func(d): d["routes"].erase("city"), "routes.city 가 없거나"],
@@ -87,16 +87,16 @@ func test_before_after_agency() -> void:
 		var solo := _game(star, false)
 		var city := _game(star, true)
 		check_near(Trip.lap_seconds(b, solo, 0), 10.0 + 12000.0 / p + 20 * 0.5, 1e-9, "+%d 동네 한 바퀴 (예전 그대로)" % star)
-		check_near(Trip.lap_seconds(b, city, 0), 15.0 + 6000.0 / p + 30 * 0.5, 1e-9, "+%d 시내 한 바퀴 = 싣기 15 + 도로 6000칸 + 30집" % star)
-		check_near(Trip.avg_lap_seconds(b, city, 0), 15.0 + 6000.0 / p + 30 * 0.5, 1e-9, "+%d 시내 평균 한 바퀴" % star)
+		check_near(Trip.lap_seconds(b, city, 0), 20.0 + 4800.0 / p + 40 * 0.5, 1e-9, "+%d 시내 한 바퀴 = 싣기 20 + 도로 4800칸 + 40집" % star)
+		check_near(Trip.avg_lap_seconds(b, city, 0), 20.0 + 4800.0 / p + 40 * 0.5, 1e-9, "+%d 시내 평균 한 바퀴" % star)
 		check_eq([Trip.cargo(b, solo, 0), Trip.lap_cargo(b, solo, 0)], [20.0, 20], "+%d 동네 20집" % star)
-		check_eq([Trip.cargo(b, city, 0), Trip.lap_cargo(b, city, 0)], [30.0, 30], "+%d 시내 30집" % star)
+		check_eq([Trip.cargo(b, city, 0), Trip.lap_cargo(b, city, 0)], [40.0, 40], "+%d 시내 40집" % star)
 		check_eq([Trip.parcel_pay(b, solo, 0), Trip.tip_pay(b, solo, 0)], [2500 - 500 - 125, 2500], "+%d 동네 1건 1875, 팁 2500" % star)
-		check_eq([Trip.parcel_pay(b, city, 0), Trip.tip_pay(b, city, 0)], [3750 - 750 - 188, 3750], "+%d 시내 단가 3750: 1건 2812, 팁 3750" % star)
-		check_eq(Trip.lap_income(b, city, 0), 30 * 2812, "+%d 시내 한 바퀴 수입" % star)
-		var want := 30 * (2812 + 0.02 * 3750) * 3600.0 / (15.0 + 6000.0 / p + 15.0)
-		check_near(Trip.hourly_income(b, city, 0), want, 1e-6, "+%d 시내 시간당 = 30 × (2812 + 팁 2%% × 3750) × 3600 ÷ 한 바퀴" % star)
-		check_near(Trip.hourly_net(b, city, 0), 30 * ((2812 - 84) + 0.02 * (3750 - 113)) * 3600.0 / (30.0 + 6000.0 / p), 1e-6,
+		check_eq([Trip.parcel_pay(b, city, 0), Trip.tip_pay(b, city, 0)], [3000 - 600 - 150, 3000], "+%d 시내 단가 3000: 1건 2250, 팁 3000" % star)
+		check_eq(Trip.lap_income(b, city, 0), 40 * 2250, "+%d 시내 한 바퀴 수입" % star)
+		var want := 40 * (2250 + 0.02 * 3000) * 3600.0 / (20.0 + 4800.0 / p + 20.0)
+		check_near(Trip.hourly_income(b, city, 0), want, 1e-6, "+%d 시내 시간당 = 40 × (2250 + 팁 2%% × 3000) × 3600 ÷ 한 바퀴" % star)
+		check_near(Trip.hourly_net(b, city, 0), 40 * ((2250 - 68) + 0.02 * (3000 - 90)) * 3600.0 / (40.0 + 4800.0 / p), 1e-6,
 				"+%d 시내 내 돈 (세금 3%% 뗀 1건·팁)" % star)
 	for star in [0, 10, 15, 18, 20, 25, 30]:
 		var solo := _game(star, false)
@@ -129,7 +129,7 @@ func test_unload_effect_town_vs_city() -> void:
 				effect["town"] * 100.0, effect["city"] * 100.0, effect["city"] / effect["town"]])
 
 
-## 켜 둔 동안: 시내 한 바퀴 30집 (집 번호 0~29), 1시간 배송 수·돈이 평균과 맞음. 바퀴 중간에 창업하면 실은 건수는 다음 바퀴부터
+## 켜 둔 동안: 시내 한 바퀴 40집 (집 번호 0~39), 1시간 배송 수·돈이 평균과 맞음. 바퀴 중간에 창업하면 실은 건수는 다음 바퀴부터
 func test_city_advance() -> void:
 	var s := _game(10, false)
 	var rng := _rng(1)
@@ -157,15 +157,15 @@ func test_city_advance() -> void:
 			if e["house"] == t.lap_cargo - 1:
 				laps += 1
 	check_eq(first_lap_max, 19, "창업한 바퀴: 이미 실은 20건까지 (동네에서 %d건 배송)" % houses_before.size())
-	check_eq([houses.keys().min(), houses.keys().max(), houses.size()], [0, 29, 30], "그 뒤 바퀴: 집 번호 0~29 (30집)")
-	check_eq(Trip.lap_cargo(bn, s, 0), 30, "lap_cargo = 이번 바퀴 집 수 30")
-	check_eq(gross, parcels * Trip.parcel_pay(bn, s, 0), "배송 돈 = 건수 × 시내 1건 2812")
-	var per_hour := 30.0 * 3600.0 / Trip.avg_lap_seconds(bn, s, 0)
-	check(absf(parcels - per_hour) <= 30.0 + 30.0, "1시간 배송 %d건 ≈ 평균 %.1f건 (창업한 바퀴 몫 + 한 바퀴 안쪽)" % [parcels, per_hour])
+	check_eq([houses.keys().min(), houses.keys().max(), houses.size()], [0, 39, 40], "그 뒤 바퀴: 집 번호 0~39 (40집)")
+	check_eq(Trip.lap_cargo(bn, s, 0), 40, "lap_cargo = 이번 바퀴 집 수 40")
+	check_eq(gross, parcels * Trip.parcel_pay(bn, s, 0), "배송 돈 = 건수 × 시내 1건 2250")
+	var per_hour := 40.0 * 3600.0 / Trip.avg_lap_seconds(bn, s, 0)
+	check(absf(parcels - per_hour) <= 20.0 + 40.0, "1시간 배송 %d건 ≈ 평균 %.1f건 (창업한 바퀴 몫 + 한 바퀴 안쪽)" % [parcels, per_hour])
 	note("시내 +10: 창업 뒤 1시간 배송 %d건 (평균 %.1f건/시간), 배송 돈 %d원" % [parcels, per_hour, gross])
 
 
-## 소수 적재량도 시내에서 stops_mult를 곱한 평균으로 확률 굴림 (21.6 × 1.5 = 32.4 → 32 또는 33)
+## 소수 적재량도 시내에서 stops_mult를 곱한 평균으로 확률 굴림 (21.1 × 2 = 42.2 → 42 또는 43)
 func test_city_cargo_fraction() -> void:
 	var s := _game(0, true)
 	var box := s.truck(0).part("cargo_box")
@@ -174,7 +174,7 @@ func test_city_cargo_fraction() -> void:
 	var c := Trip.cargo(b, s, 0)
 	var town := _game(0, false)
 	town.trucks[0] = s.truck(0)
-	check_near(c, Trip.cargo(b, town, 0) * 1.5, 1e-9, "시내 평균 = 동네 평균 × 1.5")
+	check_near(c, Trip.cargo(b, town, 0) * 2.0, 1e-9, "시내 평균 = 동네 평균 × 2")
 	check(c != floorf(c), "소수 평균: %s" % c)
 	var rng := _rng(2)
 	var sum := 0
@@ -194,10 +194,10 @@ func test_city_offline() -> void:
 	for agency in [false, true]:
 		var s := _game(10, agency, 0, 1)
 		var r := Trip.apply_offline(s, b, 3 * 3600.0)   # 창고 Lv1 4시간 안, 야간팀 50%
-		var lap := 70.0 if agency else 100.0   # +10 출력 150: 시내 15 + 40 + 15, 동네 10 + 80 + 10
-		var n := 30 if agency else 20
-		var pay := 2812 if agency else 1875
-		var tip := 3750 if agency else 2500
+		var lap := 72.0 if agency else 100.0   # +10 출력 150: 시내 20 + 32 + 20, 동네 10 + 80 + 10
+		var n := 40 if agency else 20
+		var pay := 2250 if agency else 1875
+		var tip := 3000 if agency else 2500
 		var per_truck := floori(n * 3600.0 / lap * 3.0 * 0.5)
 		check_eq(r["parcels"], per_truck * 2, "%s 꺼둔 3시간 배송 = 트럭마다 %d건/시간 × 3 × 0.5" % [Trip.route_id(s, 0), floori(n * 3600.0 / lap)])
 		var gross := floori(n * (pay + 0.02 * tip) * 3600.0 / lap * 3.0 * 0.5)
@@ -207,7 +207,7 @@ func test_city_offline() -> void:
 
 ## 화면용 lap_progress: 싣는 동안 0, 그 뒤 바퀴 끝까지 고르게 1까지 (싣는 시간은 노선·상하차 반영)
 func test_lap_progress() -> void:
-	for c in [[false, 0, 10.0], [true, 0, 15.0], [true, 30, 10.5]]:
+	for c in [[false, 0, 10.0], [true, 0, 20.0], [true, 30, 14.0]]:
 		var s := _game(10, c[0], c[1])
 		var load_s: float = c[2]
 		var lap := Trip.lap_seconds(b, s, 0)
@@ -218,3 +218,34 @@ func test_lap_progress() -> void:
 			t.lap_clock = clocks[k]
 			check_near(Trip.lap_progress(b, s, 0), want[k], 1e-9, "%s 상하차 %d: %.2f초 → %s (출발 0, 싣고 0, 가운데 0.5, 끝 1)"
 					% [Trip.route_id(s, 0), c[1], clocks[k], want[k]])
+
+
+## 화면용 lap_stop_progress: 지난 집 수 + 다음 집까지 달린 몫. 싣는 동안 0, 집 앞에 서면 정수, 마지막 집 뒤 복귀는 n ~ n+1
+func test_lap_stop_progress() -> void:
+	# [대리점, 상하차, 싣기, 집 수, 달리기, 정차] (+10 출력 150)
+	for c in [[false, 0, 10.0, 20, 80.0, 0.5], [true, 30, 14.0, 40, 32.0, 0.35]]:
+		var s := _game(10, c[0], c[1])
+		var t := s.truck(0)
+		var n: int = c[3]
+		var leg: float = c[4] / (n + 1)
+		var seg: float = leg + c[5]
+		var load_s: float = c[2]
+		var cases := [[0.0, 0.0], [load_s, 0.0], [load_s + leg / 2.0, 0.5], [load_s + leg + c[5] / 2.0, 1.0],
+				[load_s + seg + leg / 4.0, 1.25], [load_s + (n - 1) * seg + leg + c[5] / 2.0, float(n)],
+				[load_s + n * seg + leg / 2.0, n + 0.5], [Trip.lap_seconds(b, s, 0), n + 1.0], [Trip.lap_seconds(b, s, 0) + 5.0, n + 1.0]]
+		for k in cases:
+			t.lap_clock = k[0]
+			check_near(Trip.lap_stop_progress(b, s, 0), k[1], 1e-9, "%s 상하차 %d: %.3f초 → %s" % [Trip.route_id(s, 0), c[1], k[0], k[1]])
+	# 진짜로 달리면서: 배달한 집 수 ≤ 자리 ≤ 배달한 집 수 + 1, 바퀴 안에서 줄지 않음
+	var g := _game(18, true, 10)
+	var rng := _rng(3)
+	var bad := 0
+	var last := 0.0
+	for k in 4000:
+		Trip.advance(g, bn, 0, 0.37, rng)
+		var tr := g.truck(0)
+		var p := Trip.lap_stop_progress(bn, g, 0)
+		if p < tr.lap_delivered or p > tr.lap_delivered + 1 or (p < last and tr.lap_delivered > 0):
+			bad += 1
+		last = p if tr.lap_delivered > 0 else 0.0
+	check_eq(bad, 0, "달리는 동안 자리가 배달한 집 수와 안 맞거나 뒤로 감")
