@@ -1,5 +1,5 @@
 {
-  "version": "0.13",
+  "version": "0.14",
   "trip": {
     "unit_price": 2500,
     "base_cargo": 20,
@@ -18,10 +18,10 @@
     "success": [0.95, 0.91, 0.87, 0.83, 0.79, 0.75, 0.71, 0.67, 0.63, 0.59, 0.50, 0.46, 0.42, 0.39, 0.35, 0.33, 0.32, 0.30, 0.30, 0.30, 0.30, 0.30, 0.10, 0.06, 0.03, 0.03, 0.025, 0.02, 0.015, 0.01],
     "destroy": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.02, 0.03, 0.04, 0.05, 0.08, 0.11, 0.15, 0.15, 0.16, 0.17, 0.18, 0.20],
     "broken_drop_to": 15,
-    "cost_base": 35000,
+    "cost_base": 65000,
     "cost_mult": 1.5,
     "spare_price": 5000000,
-    "spare_drop_chance": 0.00005
+    "spare_drop_chance": 0.000006
   },
   "offline": {
     "ignore_under_seconds": 180
@@ -47,12 +47,21 @@
     "large": { "unlock_star": 15, "pay_mult": 3, "share": 0.10 },
     "vip": { "unlock_star": 18, "pay_mult": 5, "share": 0.05 }
   },
-  "rush": { "min_minutes": 30, "max_minutes": 60, "ring_seconds": 30, "parcels": 20, "pay_mult": 2 },
-  "weekly": { "target_parcels": 30000, "xp": 2000, "coupons": 1 },
+  "rush": { "min_minutes": 30, "max_minutes": 60, "ring_seconds": 300, "parcels": 50, "pay_mult": 2 },
+  "weekly": { "target_parcels": 60000, "xp": 2000, "reward_hours": 24 },
   "master": {
     "unlock_star": 10,
-    "insure_fee_mult": 2,
-    "bonuses": { "destroy_cut": 0.3, "enhance_discount": 0.2, "setting_up_mult": 1.5, "success_mult": 1.2, "spare_mult": 2, "setting_discount": 0.2, "double_step": 0.1 }
+    "bonuses": { "destroy_cut": 0.3, "success_mult": 1.2, "double_step": 0.1 }
+  },
+  "visitors": {
+    "min_days": 21, "max_days": 28,
+    "insurer": { "fee_mult": 10, "events": { "partner_discount": 0.5, "recovery_star": 17 } },
+    "magician": { "up_mult": 2 },
+    "dealer": { "premium_spares": 1, "premium_drop_to": 17 }
+  },
+  "routes": {
+    "town": { "price_mult": 1.0, "road_mult": 1.0, "stops_mult": 1.0 },
+    "city": { "price_mult": 1.5, "road_mult": 0.5, "stops_mult": 1.5 }
   },
   "depot": {
     "warehouse_hours": [4, 6, 8, 12],
@@ -64,18 +73,19 @@
   "company": {
     "stages": ["solo", "agency", "regional", "national", "global"],
     "tax_rates": [0.0, 0.03, 0.05, 0.07, 0.10],
-    "agency_price": 500000000,
+    "agency_price": 300000000,
     "staff_share": 0.3,
-    "helper_prices": [5000000, 20000000],
+    "helper_prices": [5000000, 8000000],
     "city_xp_per_parcel": 15,
-    "rivals": [8000000, 9300000, 10800000, 12500000, 14500000, 16800000, 19500000, 22600000, 26200000, 30400000]
+    "rivals": [6000000, 7000000, 7700000, 8500000, 9400000, 10400000, 11500000, 12700000, 14000000, 15500000]
   },
   "setting": {
     "lines_by_grade": [1, 2, 3, 3, 3],
     "up_chance": [0.3, 0.08, 0.02, 0.003],
     "ceiling": [5, 20, 80, 500],
     "roll_cost": [20000, 80000, 1600000, 6000000, 10000000],
-    "cost_cut_cap": 0.6,
+    "fuel_cut_cap": 0.6,
+    "maint_cut_cap": 0.6,
     "engine_guard_cap": 0.3,
     "overboost_mult": 2,
     "parts": {
@@ -101,12 +111,12 @@
       "fuel_cut": {
         "kind": "common",
         "weight": 10,
-        "values": [0.1, 0.2, 0.3, 0.45, 0.6]
+        "values": [0.07, 0.12, 0.2, 0.3, 0.45]
       },
       "cargo": {
         "kind": "own",
         "weight": 10,
-        "values": [0.05, 0.08, 0.12, 0.2, 0.3]
+        "values": [0.035, 0.055, 0.085, 0.14, 0.21]
       },
       "engine_guard": {
         "kind": "own",
@@ -121,7 +131,7 @@
       "maint_cut": {
         "kind": "own",
         "weight": 10,
-        "values": [0.03, 0.06, 0.09, 0.13, 0.18]
+        "values": [0.15, 0.30, 0.45, 0.55, 0.60]
       },
       "junk_ride": { "kind": "junk", "weight": 12 },
       "junk_scent": { "kind": "junk", "weight": 12 },

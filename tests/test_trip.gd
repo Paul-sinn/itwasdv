@@ -12,15 +12,32 @@ const Trip = preload("res://scripts/core/trip.gd")
 const STARS := [0, 10, 18, 30]
 const TIP_AVG := 50.0   ## v5b 팁 평균 (배송 1건마다) = 기본 팁 확률 2% × 팁 2500 (단가 × 1.0). 능력치 없을 때
 
-var b: Balance = Balance.load_file()
+## 진짜 숫자에서 두 가지만 고정: 세팅 옵션 수치를 v6-bal 값(적재량 5~30%, 기름값 절감 10~60%)으로 (이 파일 세팅 테스트는 그 수치로
+## 손으로 계산한 식을 봄. v7-bal에서 json 수치가 바뀜), 주간 목표 보상 돈 0 (오래 돌린 돈과 시간당 수입을 비교할 때 하루치 보상이 안 섞이게)
+var b: Balance = _pinned_balance()
 ## v3 숫자(단가 100, 적재량 5, 정차 2초, 스페어 드랍 0.0002): 집마다 시각이 딱 떨어져서, 시각·배송 수를 손으로 계산한 테스트에 씀
 var bv3: Balance = _v3_balance()
 ## v6b 대형·VIP를 끈 진짜 숫자 (1시간 돈이 시간당 수입과 한 바퀴치 안인지 보는 테스트용: VIP 한 건이 한 바퀴치만큼 흔들어서)
 var bn: Balance = _no_special_balance()
 
 
-func _no_special_balance() -> Balance:
+func _pinned_balance() -> Balance:
+	var d := _pinned_dict()
+	var bal: Balance = Balance.from_dict(d)
+	assert(bal.is_ok(), ", ".join(bal.errors))
+	return bal
+
+
+func _pinned_dict() -> Dictionary:
 	var d := real_balance_dict()
+	d["setting"]["options"]["cargo"]["values"] = [0.05, 0.08, 0.12, 0.2, 0.3]
+	d["setting"]["options"]["fuel_cut"]["values"] = [0.1, 0.2, 0.3, 0.45, 0.6]
+	d["weekly"]["reward_hours"] = 0
+	return d
+
+
+func _no_special_balance() -> Balance:
+	var d := _pinned_dict()
 	d["special"]["large"]["share"] = 0.0
 	d["special"]["vip"]["share"] = 0.0
 	return Balance.from_dict(d)
@@ -34,7 +51,7 @@ func _special_mult(star: int) -> float:
 
 
 func _v3_balance() -> Balance:
-	var d := real_balance_dict()
+	var d := _pinned_dict()
 	d["trip"]["unit_price"] = 100
 	d["trip"]["base_cargo"] = 5
 	d["trip"]["stop_seconds"] = 2
@@ -89,7 +106,7 @@ func test_lap_numbers_match_formula() -> void:
 		var t := _game(star).truck(0)
 		check_eq(Trip.power(b, star), e["power"], "+%d 출력" % star)
 		check_eq(Trip.speed(b, t), float(e["power"]), "+%d 속도" % star)
-		check_eq(Trip.cargo(b, t), 20, "+%d 적재량" % star)
+		check_eq(Trip.cargo(b, _st(t), 0), 20, "+%d 적재량" % star)
 		check_near(Trip.lap_seconds(b, _st(t), 0), e["lap"], 1e-9, "+%d 한 바퀴 초" % star)
 		check_near(Trip.avg_lap_seconds(b, _st(t), 0), e["lap"], 1e-9, "+%d 평균 한 바퀴 초 (오버부스트 없음)" % star)
 		check_eq(Trip.lap_income(b, _st(t), 0), e["lap_income"], "+%d 한 바퀴 수입" % star)
@@ -306,9 +323,9 @@ func test_setting_speed() -> void:
 	check_near(Trip.speed(b, t), 150.0 * 1.08, 1e-9, "속도 = 150 × 1.08")
 	_put(t, "ecu", 1, ["speed", "speed"])                           # + 스트리트 5% × 2
 	check_near(Trip.speed(b, t), 150.0 * (1.0 + 0.08 + 0.05 + 0.05), 1e-9, "속도 = 150 × 1.18 (두 부품 합)")
-	check_near(Trip.cargo(b, t), 22.4, 1e-9, "적재량 스포츠 12% → 평균 22.4건")
+	check_near(Trip.cargo(b, _st(t), 0), 22.4, 1e-9, "적재량 스포츠 12% → 평균 22.4건")
 	check_near(Trip.avg_lap_seconds(b, _st(t), 0), 10.0 + 12000.0 / (150.0 * 1.18) + 22.4 * 0.5, 1e-9, "평균 한 바퀴 초 (정차 22.4집)")
-	check_near(Trip.lap_seconds(b, _st(t), 0), 10.0 + 12000.0 / (150.0 * 1.18) + Trip.lap_cargo(b, t) * 0.5, 1e-9, "지금 바퀴 초 (실은 건수만큼 정차)")
+	check_near(Trip.lap_seconds(b, _st(t), 0), 10.0 + 12000.0 / (150.0 * 1.18) + Trip.lap_cargo(b, _st(t), 0) * 0.5, 1e-9, "지금 바퀴 초 (실은 건수만큼 정차)")
 	check_near(Trip.hourly_income_at(b, _st(t), 0, 11), 22.4 * (1875 + TIP_AVG) * 3600.0 / (10.0 + 12000.0 / (160.0 * 1.18) + 22.4 * 0.5),
 			1e-6, "성공하면 시간당도 세팅 반영")
 
@@ -317,15 +334,15 @@ func test_setting_speed() -> void:
 func test_setting_cargo() -> void:
 	var t := _game(0).truck(0)
 	_put(t, "cargo_box", 0, ["cargo"])
-	check_eq(Trip.cargo(b, t), 21.0, "적재량 5% 한 줄 → 21")
+	check_eq(Trip.cargo(b, _st(t), 0), 21.0, "적재량 5% 한 줄 → 21")
 	check_eq(Trip.lap_income(b, _st(t), 0), 21 * 1875, "한 바퀴 수입 = 21건")
 	_put(t, "cargo_box", 1, ["cargo", "junk_radio"])
-	check_near(Trip.cargo(b, t), 21.6, 1e-12, "8% 한 줄 → 21.6 (소수점 그대로)")
-	check_eq(typeof(Trip.cargo(b, t)), TYPE_FLOAT, "평균 적재량은 소수")
+	check_near(Trip.cargo(b, _st(t), 0), 21.6, 1e-12, "8% 한 줄 → 21.6 (소수점 그대로)")
+	check_eq(typeof(Trip.cargo(b, _st(t), 0)), TYPE_FLOAT, "평균 적재량은 소수")
 	_put(t, "cargo_box", 3, ["cargo", "cargo"])
-	check_eq(Trip.cargo(b, t), 28.0, "20% 두 줄 → 28 (27.999… 가 아님)")
+	check_eq(Trip.cargo(b, _st(t), 0), 28.0, "20% 두 줄 → 28 (27.999… 가 아님)")
 	_put(t, "cargo_box", 4, ["cargo", "cargo", "cargo"])
-	check_eq(Trip.cargo(b, t), 38.0, "30% 세 줄 → 38")
+	check_eq(Trip.cargo(b, _st(t), 0), 38.0, "30% 세 줄 → 38")
 	check_near(Trip.lap_seconds(b, _st(t), 0), 10.0 + 120.0 + 38 * 0.5, 1e-9, "정차가 38집")
 
 
@@ -413,7 +430,7 @@ func test_fuel_cut_prototype_is_cap() -> void:
 	var t := _game(0).truck(0)
 	_put(t, "cargo_box", 4, ["fuel_cut", "junk_ride", "junk_gloss"])   # 프로토타입 60% 한 줄
 	check_near(Setting.total(b, t, "fuel_cut"), 0.6, 1e-12, "1줄 = 60%")
-	check_near(Setting.total(b, t, "fuel_cut"), b.cost_cut_cap, 1e-12, "1줄 = 상한 cost_cut_cap")
+	check_near(Setting.total(b, t, "fuel_cut"), b.fuel_cut_cap, 1e-12, "1줄 = 상한 fuel_cut_cap")
 	var one := Trip.parcel_pay(b, _st(t), 0)
 	check_eq(one, 2500 - 200 - 125, "1줄: 500 × 0.4 = 200")
 	_put(t, "cargo_box", 4, ["fuel_cut", "fuel_cut", "junk_gloss"])
@@ -422,6 +439,19 @@ func test_fuel_cut_prototype_is_cap() -> void:
 	_put(t, "ecu", 4, ["fuel_cut", "fuel_cut", "fuel_cut"])
 	check_eq(Trip.parcel_pay(b, _st(t), 0), one, "5줄(300%)이어도 60%")
 	note("기름값 절감 프로토타입: 1줄 %d원, 2줄 이상 %d원 (절감 없음 %d원)" % [one, Trip.parcel_pay(b, _st(t), 0), 2500 - 500 - 125])
+
+
+## v7-bal: 기름값 절감·정비비 감소 상한은 각자 60% (합쳐서 자르지 않음). 정비비 = 2500 × 5% = 125
+func test_fuel_maint_caps_separate() -> void:
+	var t := _game(0).truck(0)
+	_put(t, "cargo_box", 4, ["fuel_cut", "fuel_cut", "junk_gloss"])   # 120% → 60%
+	check_eq(Trip.parcel_pay(b, _st(t), 0), 2500 - 200 - 125, "기름값만 120% → 60%: 500 × 0.4 = 200")
+	_put(t, "tire", 4, ["maint_cut", "maint_cut", "junk_gloss"])      # 정비비 감소 합 120% → 60%
+	check_near(Setting.total(b, t, "maint_cut"), b.setting_options["maint_cut"]["values"][4] * 2.0, 1e-12, "정비비 감소 합 (상한 전)")
+	check_eq(Trip.parcel_pay(b, _st(t), 0), 2500 - 200 - 50, "둘 다 60%: 기름값 200, 정비비 125 × 0.4 = 50 (합쳐서 자르면 기름값 350·정비비 88)")
+	_put(t, "cargo_box", 2, ["fuel_cut", "junk_ride"])                # 기름값 30% (상한 안쪽)
+	check_eq(Trip.parcel_pay(b, _st(t), 0), 2500 - 350 - 50, "기름값 30% + 정비비 60%: 350 + 50 (합 90%여도 각자)")
+	check_eq([b.fuel_cut_cap, b.maint_cut_cap], [0.6, 0.6], "상한 각자 60%")
 
 
 ## v4 C1 ⑨: 엔진 보호 3줄(프로토타입 10% × 3 = 30%) → 퍼짐 × 0.7, 줄어든 만큼 실패 (+20 퍼짐 4%, v6-bal)

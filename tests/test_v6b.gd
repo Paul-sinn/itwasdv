@@ -1,8 +1,10 @@
-## v6b C1: 대형·VIP (trip.gd), 급송 전화 (rush.gd), 주간 배송 목표·쿠폰 (weekly.gd, master.gd 주 번호), 저장 형식 8
+## v6b C1: 대형·VIP (trip.gd), 급송 전화 (rush.gd), 주간 배송 목표 (weekly.gd, master.gd 주 번호), 저장 형식 8
+## v7-bal: 급송 300초·50건, 주간 목표 6만 건·보상은 돈(하루치 수입) + 경험치 (쿠폰 지움)
 extends "res://tests/test_base.gd"
 
 const Ability = preload("res://scripts/core/ability.gd")
 const Balance = preload("res://scripts/core/balance.gd")
+const Company = preload("res://scripts/core/company.gd")
 const Driver = preload("res://scripts/core/driver.gd")
 const Enhance = preload("res://scripts/core/enhance.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
@@ -65,8 +67,9 @@ func test_json_matches_spec() -> void:
 	check(b.is_ok(), "진짜 balance.json에 문제가 있음: %s" % ", ".join(b.errors))
 	check_eq(b.special, { "large": { "unlock_star": 15, "pay_mult": 3.0, "share": 0.10 }, "vip": { "unlock_star": 18, "pay_mult": 5.0, "share": 0.05 } },
 			"special (대형 +15 ×3 10%, VIP +18 ×5 5%)")
-	check_eq([b.rush_min_minutes, b.rush_max_minutes, b.rush_ring_seconds, b.rush_parcels, b.rush_pay_mult], [30.0, 60.0, 30.0, 20, 2.0], "rush")
-	check_eq([b.weekly_target, b.weekly_xp, b.weekly_coupons], [30000, 2000, 1], "weekly")
+	check_eq([b.rush_min_minutes, b.rush_max_minutes, b.rush_ring_seconds, b.rush_parcels, b.rush_pay_mult], [30.0, 60.0, 300.0, 50, 2.0],
+			"rush (v7-bal: 벨 300초, 50건)")
+	check_eq([b.weekly_target, b.weekly_xp, b.weekly_reward_hours], [60000, 2000, 24.0], "weekly (v7-bal: 6만 건, 보상 하루치 24시간)")
 
 
 ## ① +14 전부 보통, +15 대형 약 10%, +18 VIP 약 5%·대형 약 9.5%, 퍼져서 +15면 VIP 0 (10만 건씩, 1%p 안)
@@ -97,10 +100,10 @@ func test_special_pay() -> void:
 		var s := _game(18)
 		for id in c[0]:
 			s.abilities[id] = c[0][id]
-		if c[1] == 4:   # 적재함 프로토타입 기름값 절감 60% (상한): 단가의 20% × 0.4
+		if c[1] == 4:   # 적재함 프로토타입 기름값 절감 45% × 2줄 → 상한 60%: 단가의 20% × 0.4
 			var box := s.truck(0).part("cargo_box")
 			box["grade"] = 4
-			box["lines"] = ["fuel_cut", "junk_ride", "junk_gloss"]
+			box["lines"] = ["fuel_cut", "fuel_cut", "junk_gloss"]
 		var want: Dictionary = c[2]
 		var rng := _rng(5)
 		var seen := {}
@@ -148,7 +151,7 @@ func test_hourly_matches_long_run() -> void:
 	check_near(Trip.hourly_income(b, s14, 0), Trip.hourly_income(bn, s14, 0), 1e-9, "+14는 대형·VIP 없음")
 
 
-## ④ 급송: 30~60분 사이에만 울림, 받으면 트럭 0 다음 20건만 ×2, 안 받으면 30초 뒤 사라지고 돈 그대로, 꺼 두면 안 울림,
+## ④ 급송: 30~60분 사이에만 울림, 받으면 트럭 0 다음 50건만 ×2, 안 받으면 300초 뒤 사라지고 돈 그대로, 꺼 두면 안 울림,
 ##    꺼둔 동안·급송이 남은 동안 시계가 안 감
 func test_rush() -> void:
 	# 간격 1만 번: 최소·최대·평균
@@ -165,7 +168,7 @@ func test_rush() -> void:
 	check(lo >= 1800.0 and hi <= 3600.0, "벨 간격이 30~60분 밖: %.1f ~ %.1f초" % [lo, hi])
 	check(lo < 1810.0 and hi > 3590.0, "1만 번인데 30분·60분 근처가 안 나옴: %.1f ~ %.1f초" % [lo, hi])
 	check_near(sum / 10000.0, 2700.0, 30.0, "평균 45분")
-	# 그 시각에 울림 → 받으면 다음 20건 ×2 (트럭 0만)
+	# 그 시각에 울림 → 받으면 다음 50건 ×2 (트럭 0만)
 	var s := _game(0)
 	s.trucks.append(TruckState.new())
 	var r := _rng(8)
@@ -178,19 +181,19 @@ func test_rush() -> void:
 	check(Rush.is_ringing(s), "시각이 됐는데 안 울림")
 	check_eq(_events(s, "rush_call").size(), 1, "rush_call 알림 한 번")
 	check(Rush.accept(s, b), "울리는데 받기가 안 됨")
-	check_eq([Rush.is_ringing(s), Rush.parcels_left(s)], [false, 20], "받은 뒤 벨 끝, 급송 20건")
+	check_eq([Rush.is_ringing(s), Rush.parcels_left(s)], [false, 50], "받은 뒤 벨 끝, 급송 50건")
 	var e1 := Trip.advance(s, b, 1, 600.0, r).filter(func(e): return e["type"] == "parcel")
 	check(not e1.is_empty() and e1.all(func(e): return not e["rush"] and e["gross"] == 1875), "트럭 1 배송이 급송이 됨")
-	check_eq(Rush.parcels_left(s), 20, "트럭 1 배송에 급송 건수가 줄어듦")
+	check_eq(Rush.parcels_left(s), 50, "트럭 1 배송에 급송 건수가 줄어듦")
 	var p0 := []
-	while p0.size() < 25:
+	while p0.size() < 55:
 		for e in Trip.advance(s, b, 0, 5.0, r):
 			if e["type"] == "parcel":
 				p0.append(e)
-	var first := p0.slice(0, 20)
-	var after := p0.slice(20)
-	check(first.all(func(e): return e["rush"] and e["pay"] == 3750), "트럭 0 처음 20건이 급송 3750원이 아님: %s" % [first.map(func(e): return e["pay"])])
-	check(after.all(func(e): return not e["rush"] and e["pay"] == 1875), "21번째부터 보통이 아님: %s" % [after.map(func(e): return e["pay"])])
+	var first := p0.slice(0, 50)
+	var after := p0.slice(50)
+	check(first.all(func(e): return e["rush"] and e["pay"] == 3750), "트럭 0 처음 50건이 급송 3750원이 아님: %s" % [first.map(func(e): return e["pay"])])
+	check(after.all(func(e): return not e["rush"] and e["pay"] == 1875), "51번째부터 보통이 아님: %s" % [after.map(func(e): return e["pay"])])
 	check_eq(Rush.parcels_left(s), 0, "급송 다 씀")
 	# 급송이 남은 동안 시계가 안 감
 	var g := _game(0)
@@ -201,16 +204,16 @@ func test_rush() -> void:
 	var next := g.rush_next
 	Rush.tick(g, b, 5 * 3600.0, r)
 	check_eq([g.rush_next, Rush.is_ringing(g), _events(g, "rush_call").size()], [next, false, 1], "급송이 남은 동안 다음 벨 시계가 감")
-	# 안 받으면 30초 뒤 사라짐, 돈 그대로
+	# 안 받으면 300초 뒤 사라짐, 돈 그대로
 	var m := _game(0)
 	Rush.tick(m, b, 0.0, r)
 	Rush.tick(m, b, m.rush_next, r)
 	m.take_events()
 	var money := m.money
-	Rush.tick(m, b, 29.9, r)
-	check(Rush.is_ringing(m), "30초 전에 끝남")
+	Rush.tick(m, b, 299.9, r)
+	check(Rush.is_ringing(m), "300초 전에 끝남")
 	Rush.tick(m, b, 0.2, r)
-	check_eq([Rush.is_ringing(m), Rush.parcels_left(m), m.money], [false, 0, money], "30초 뒤 사라짐, 돈 변화 없음")
+	check_eq([Rush.is_ringing(m), Rush.parcels_left(m), m.money], [false, 0, money], "300초 뒤 사라짐, 돈 변화 없음")
 	check_eq(_events(m, "rush_missed").size(), 1, "rush_missed 알림 한 번")
 	check(m.rush_next >= 1800.0 and m.rush_next <= 3600.0, "놓친 뒤 다음 벨 간격: %s" % m.rush_next)
 	# 꺼 두면 안 울림 (울리던 중에 끄면 조용히 끝)
@@ -242,7 +245,8 @@ func test_rush() -> void:
 	note("벨 간격 1만 번: %.1f ~ %.1f초, 평균 %.1f초 / 20시간 한 번에 벨 %d번" % [lo, hi, sum / 10000.0, calls])
 
 
-## ⑤ 주간: 켜 둔·꺼둔 배송을 다 셈, 목표에 닿으면 쿠폰 +1·경험치 +2000·알림 한 번, 같은 주 두 번 안 줌, 주가 바뀌면 0
+## ⑤ 주간: 켜 둔·꺼둔 배송을 다 셈, 목표에 닿으면 돈(하루치 = 시간당 내 돈 × 24) +·경험치 +2000·알림 한 번, 같은 주 두 번 안 줌,
+##    주가 바뀌면 0
 func test_weekly() -> void:
 	# 주 번호·요일: 월요일 0시에 바뀜
 	check_eq([Master.weekday(SUN_1115), Master.weekday(MON_1116), Master.weekday(MON_1116 + 86399), Master.weekday(MON_1123 - 1)], [6, 0, 0, 6],
@@ -261,8 +265,8 @@ func test_weekly() -> void:
 	Trip.apply_offline(s, b, 3 * 3600.0)
 	check_eq(Weekly.progress(s), s.parcels_total - p0, "진행 = 켜 둔 배송 + 꺼둔 동안 배송")
 	check(Weekly.progress(s) > 0 and not Weekly.is_done(s), "아직 목표 전")
-	check_eq(Weekly.target(b), 30000, "목표 30000건")
-	# 목표에 닿으면 (목표 100으로 바꾼 balance): 쿠폰 +1, 경험치 +2000, 알림 한 번. 같은 주에는 두 번 안 줌
+	check_eq(Weekly.target(b), 60000, "목표 60000건")
+	# 목표에 닿으면 (목표 100으로 바꾼 balance): 돈 + 하루치, 경험치 +2000, 알림 한 번. 같은 주에는 두 번 안 줌
 	var d := real_balance_dict()
 	d["weekly"]["target_parcels"] = 100
 	var b100: Balance = Balance.from_dict(d)
@@ -270,31 +274,43 @@ func test_weekly() -> void:
 	Master.tick(w, b100, MON_1116, _rng(10))
 	w.take_events()
 	var xp0 := _total_xp(w)
+	var reward := floori(Company.hourly_net(b100, w) * 24.0)
+	check_eq(Weekly.reward_money(b100, w), reward, "reward_money = floor(시간당 내 돈 × 24)")
+	check(reward > 0, "하루치 보상이 0원")
+	var money0 := w.money
+	var earned := 0
 	var parcels := 0
 	var done := []
 	var r := _rng(10)
 	while parcels < 300:
 		for e in Trip.advance(w, b100, 0, 10.0, r):
 			parcels += 1 if e["type"] == "parcel" else 0
+			earned += e["pay"] if e["type"] == "parcel" or e["type"] == "tip" else 0
 		done.append_array(w.take_events().filter(func(e): return e["type"] == "weekly_done"))
-	check_eq(done, [{ "type": "weekly_done", "coupons": 1, "xp": 2000 }], "알림 한 번")
-	check_eq([w.coupons, Weekly.is_done(w)], [1, true], "쿠폰 +1, 달성")
+	check_eq(done, [{ "type": "weekly_done", "money": reward, "xp": 2000 }], "알림 한 번 (돈 = 하루치)")
+	check_eq([w.money - money0, Weekly.is_done(w)], [earned + reward, true], "돈 = 배송·팁 + 하루치, 달성")
 	check_eq(_total_xp(w) - xp0, parcels * 10 + 2000, "경험치 = 배송 × 10 + 2000")
 	# 같은 주 다른 날 tick: 그대로
 	Master.tick(w, b100, MON_1123 - 1, _rng(10))
-	check_eq([Weekly.progress(w), w.coupons, Weekly.is_done(w)], [parcels, 1, true], "같은 주: 진행·쿠폰 그대로")
+	check_eq([Weekly.progress(w), Weekly.is_done(w)], [parcels, true], "같은 주: 진행 그대로, 다시 안 줌")
 	# 주가 바뀌면 0, 다시 채우면 또 받음
 	Master.tick(w, b100, MON_1123, _rng(10))
-	check_eq([Weekly.progress(w), Weekly.is_done(w), w.coupons], [0, false, 1], "새 주: 진행 0, 쿠폰은 그대로")
+	check_eq([Weekly.progress(w), Weekly.is_done(w)], [0, false], "새 주: 진행 0")
+	w.take_events()
 	Trip.advance(w, b100, 0, 1800.0, r)   # +0 30분 ≈ 250건
-	check_eq([w.coupons, Weekly.is_done(w)], [2, true], "새 주에 다시 달성 → 쿠폰 2")
+	check_eq([Weekly.is_done(w), _events(w, "weekly_done").size()], [true, 1], "새 주에 다시 달성 → 또 받음")
+	# 하루치는 받는 순간 켜 둔 상태 기준: 대리점 보조 트럭이 있으면 그 몫(직원 몫·세금 뗀 내 돈)도 들어감
+	var a := _game(10)
+	a.company_stage = GameState.AGENCY
+	a.trucks.append(TruckState.new())
+	check_eq(Weekly.reward_money(b, a), floori((Trip.hourly_net(b, a, 0) + Trip.hourly_net(b, a, 1)) * 24.0), "보조 트럭 포함 하루치")
 	# 꺼둔 동안 배송으로도 달성, 주가 바뀐 뒤 켜면 새 주에 (Master.tick을 먼저)
 	var o := _game(10)
 	Master.tick(o, b100, MON_1116, _rng(11))
 	o.weekly_parcels = 90
 	Master.tick(o, b100, MON_1123 + 3600, _rng(11))
 	var ro := Trip.apply_offline(o, b100, 20 * 3600.0)
-	check_eq([Weekly.progress(o), o.coupons], [ro["parcels"], 1], "주가 바뀐 뒤 켬: 꺼둔 동안 배송이 새 주에 (지난주 90건은 0으로), 달성")
+	check_eq([Weekly.progress(o), Weekly.is_done(o)], [ro["parcels"], true], "주가 바뀐 뒤 켬: 꺼둔 동안 배송이 새 주에 (지난주 90건은 0으로), 달성")
 	# 시계가 거꾸로: 멈추지 않음 (주가 바뀐 것으로 봄)
 	Master.tick(o, b100, MON_1116, _rng(11))
 	check_eq([o.weekly_week, Weekly.progress(o)], [Master.week_index(MON_1116), 0], "시계가 거꾸로 가도 그 주로")
@@ -305,10 +321,9 @@ func test_weekly() -> void:
 	check_eq(Weekly.progress(n), 50, "처음 tick은 지금 진행 그대로")
 
 
-## ⑥ 저장 → 읽기 같음, 옛 형식(7) 읽힘, 범위 밖은 자름, 틀린 모양은 깨짐
+## ⑥ 저장 → 읽기 같음, 옛 형식(7) 읽힘, 범위 밖은 자름, 틀린 모양은 깨짐 (쿠폰은 v7-bal에서 지움: 옛 파일의 coupons는 버림)
 func test_save_v8() -> void:
 	var s := _game(18)
-	s.coupons = 3
 	s.weekly_week = Master.week_index(MON_1116)
 	s.weekly_parcels = 12345
 	s.weekly_done = true
@@ -318,12 +333,12 @@ func test_save_v8() -> void:
 	s.rush_left = 7
 	var r := Save.from_dict(JSON.parse_string(JSON.stringify(Save.to_dict(s, 1794000000))), b)
 	check_eq(r["status"], Save.Status.OK, "읽기 (%s)" % r["error"])
-	var keys := ["coupons", "weekly_week", "weekly_parcels", "weekly_done", "rush_enabled", "rush_next", "rush_ring", "rush_left"]
+	var keys := ["weekly_week", "weekly_parcels", "weekly_done", "rush_enabled", "rush_next", "rush_ring", "rush_left"]
 	if r["state"] != null:
 		var got := []
 		for k in keys:
 			got.append(r["state"].get(k))
-		check_eq(got, [3, s.weekly_week, 12345, true, false, 1234.5, 12.25, 7], "형식 8 칸")
+		check_eq(got, [s.weekly_week, 12345, true, false, 1234.5, 12.25, 7], "형식 8 칸")
 	# 형식 7 (v5b): 칸 없음 → 처음 값
 	var d7 := Save.to_dict(_game(0), 1794000000)
 	d7["version"] = 7
@@ -335,20 +350,21 @@ func test_save_v8() -> void:
 		var got7 := []
 		for k in keys:
 			got7.append(r7["state"].get(k))
-		check_eq(got7, [0, -1, 0, false, true, -1.0, 0.0, 0], "형식 7: 쿠폰 0, 주 모름, 진행 0, 급송 켜짐, 벨 새로")
+		check_eq(got7, [-1, 0, false, true, -1.0, 0.0, 0], "형식 7: 주 모름, 진행 0, 급송 켜짐, 벨 새로")
 	# 범위 밖은 자름
 	var dc := Save.to_dict(_game(0), 1794000000)
-	dc["coupons"] = -3
+	dc["coupons"] = "많이"   # 형식 10까지의 쿠폰: 모양과 상관없이 버림
 	dc["weekly_parcels"] = -10
 	dc["rush_left"] = 99
-	dc["rush_ring"] = 100
+	dc["rush_ring"] = 1000
 	dc["rush_next"] = 1e9
 	var rc := Save.from_dict(dc, b)
+	check_eq(rc["status"], Save.Status.OK, "범위 밖 읽기 (%s)" % rc["error"])
 	if rc["state"] != null:
-		check_eq([rc["state"].coupons, rc["state"].weekly_parcels, rc["state"].rush_left, rc["state"].rush_ring, rc["state"].rush_next],
-				[0, 0, 20, 30.0, 3600.0], "쿠폰·진행 음수 → 0, 급송 99 → 20, 벨 100초 → 30, 다음 벨 → 60분")
+		check_eq([rc["state"].weekly_parcels, rc["state"].rush_left, rc["state"].rush_ring, rc["state"].rush_next],
+				[0, 50, 300.0, 3600.0], "진행 음수 → 0, 급송 99 → 50, 벨 1000초 → 300, 다음 벨 → 60분")
 	# 틀린 모양 → 깨짐
-	for bad in [["weekly_done", "yes"], ["rush_enabled", 1], ["coupons", "많이"], ["rush_next", "곧"]]:
+	for bad in [["weekly_done", "yes"], ["rush_enabled", 1], ["rush_left", "많이"], ["rush_next", "곧"]]:
 		var db := Save.to_dict(_game(0), 1794000000)
 		db[bad[0]] = bad[1]
 		check_eq(Save.from_dict(db, b)["status"], Save.Status.BROKEN, "%s = %s 를 못 걸러냄" % bad)
@@ -366,7 +382,8 @@ func test_bad_numbers() -> void:
 		[func(d): d["rush"]["parcels"] = 0, "rush.parcels = 0"],
 		[func(d): d["rush"]["ring_seconds"] = 0, "rush.ring_seconds = 0"],
 		[func(d): d["weekly"]["target_parcels"] = 0, "weekly.target_parcels = 0"],
-		[func(d): d["weekly"]["coupons"] = 1.5, "weekly.coupons = 1.5"],
+		[func(d): d["weekly"]["reward_hours"] = -1, "weekly.reward_hours = -1"],
+		[func(d): d["weekly"].erase("reward_hours"), "weekly.reward_hours 이 없음"],
 		[func(d): d.erase("rush"), "\"rush\" 묶음이 없음"],
 	]
 	var found := PackedStringArray()

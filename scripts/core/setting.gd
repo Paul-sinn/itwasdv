@@ -11,6 +11,7 @@ const Balance = preload("res://scripts/core/balance.gd")
 const Enhance = preload("res://scripts/core/enhance.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const TruckState = preload("res://scripts/core/truck_state.gd")
+const Visitor = preload("res://scripts/core/visitor.gd")
 
 ## 돌릴 수 없는 이유. NONE이면 돌릴 수 있음.
 enum Block { NONE, LOCKED, NO_MONEY, PENDING }
@@ -40,21 +41,18 @@ static func unlocked(b: Balance, state: GameState, i: int, part: String) -> bool
 	return state.truck(i).star >= unlock_star(b, part) and state.company_stage >= unlock_stage(b, part)
 
 
-## 돌리기 1번 비용. 명장 "세팅 비용 할인" 보너스 중이면(s.active_bonus) round(비용 × (1 − 할인)). 화면 = 실제
-static func roll_cost(b: Balance, grade: int, s: GameState) -> int:
-	var cost: int = b.roll_cost[grade]
-	if s.active_bonus == "setting_discount":
-		cost = roundi(cost * (1.0 - b.master_bonuses["setting_discount"]))
-	return cost
+## 돌리기 1번 비용 (할인 없음: v7-bal에서 명장 "세팅 비용 할인"을 뺌. 인자는 부르는 곳이 그대로 쓰게 둠). 화면 = 실제
+static func roll_cost(b: Balance, grade: int, _s: GameState) -> int:
+	return b.roll_cost[grade]
 
 
-## 한 번 돌릴 때 등급업 확률. 최고 등급은 0. 명장 "세팅 등급업 확률 상승" 중이면 × setting_up_mult (최대 1, 천장은 그대로)
+## 한 번 돌릴 때 등급업 확률. 최고 등급은 0. 마술사가 온 날이면 × magician_up_mult (최대 1, 천장 카운터는 그대로 쌓임)
 static func up_chance(b: Balance, grade: int, s: GameState) -> float:
 	if grade >= max_grade(b):
 		return 0.0
 	var p := b.up_chance[grade]
-	if s.active_bonus == "setting_up_mult":
-		p = minf(1.0, p * b.master_bonuses["setting_up_mult"])
+	if Visitor.today(s) == "magician":
+		p = minf(1.0, p * b.magician_up_mult)
 	return p
 
 

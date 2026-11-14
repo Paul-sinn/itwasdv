@@ -119,26 +119,30 @@ func test_reset() -> void:
 	check_eq(Ability.points_left(s), 59, "여러 번 초기화 (무료, 횟수 제한 없음)")
 
 
-## ③ 상하차 30 → 정차 시간 0.7배, 한 바퀴 초가 그만큼 줆 (advance 집 시각도)
+## ③ 상하차 30 → 물류센터에서 싣는 시간·정차 시간 둘 다 0.7배 (싣는 시간은 v7-bal Q19-3), 한 바퀴 초가 그만큼 줆 (advance 집 시각도)
 func test_unload() -> void:
 	var plain := _game(0)
 	var s := _game(0, { "unload": 30 })
 	check_near(Trip.lap_seconds(b, plain, 0), 10.0 + 120.0 + 20 * 0.5, 1e-9, "+0 능력치 없음 140초")
-	check_near(Trip.lap_seconds(b, s, 0), 10.0 + 120.0 + 20 * 0.35, 1e-9, "상하차 30: 정차 0.5 × 0.7 = 0.35초 → 137초")
-	check_near(Trip.lap_seconds(b, plain, 0) - Trip.lap_seconds(b, s, 0), 20 * 0.5 * 0.3, 1e-9, "줄어든 초 = 20집 × 0.15초")
-	check_near(Trip.avg_lap_seconds(b, s, 0), 137.0, 1e-9, "평균 한 바퀴도")
-	check_near(Trip.hourly_income(b, s, 0) / Trip.hourly_income(b, plain, 0), 140.0 / 137.0, 1e-9, "시간당 = 140 ÷ 137배")
-	# advance: 1번째 집 = 10 + 120/21 + 0.35, 137초에 새 바퀴
+	check_near(Trip.lap_seconds(b, s, 0), 7.0 + 120.0 + 20 * 0.35, 1e-9, "상하차 30: 싣기 10 × 0.7 = 7초, 정차 0.5 × 0.7 = 0.35초 → 134초")
+	check_near(Trip.lap_seconds(b, plain, 0) - Trip.lap_seconds(b, s, 0), 10 * 0.3 + 20 * 0.5 * 0.3, 1e-9, "줄어든 초 = 싣기 3초 + 20집 × 0.15초")
+	check_near(Trip.avg_lap_seconds(b, s, 0), 134.0, 1e-9, "평균 한 바퀴도")
+	check_near(Trip.hourly_income(b, s, 0) / Trip.hourly_income(b, plain, 0), 140.0 / 134.0, 1e-9, "시간당 = 140 ÷ 134배")
+	check_near(Trip.lap_seconds(b, _game(0, { "unload": 10 }), 0), 9.0 + 120.0 + 20 * 0.45, 1e-9, "상하차 10: 싣기 9초, 정차 0.45초")
+	# advance: 1번째 집 = 7 + 120/21 + 0.35, 134초에 새 바퀴
 	var rng := _rng(3)
 	s.truck(0).lap_cargo = 20
-	var first := 10.0 + 120.0 / 21.0 + 0.35
+	var first := 7.0 + 120.0 / 21.0 + 0.35
 	check_eq(_count(Trip.advance(s, b, 0, first - 0.01, rng), "parcel"), 0, "1번째 집 시각 전")
-	check_eq(_count(Trip.advance(s, b, 0, 0.02, rng), "parcel"), 1, "1번째 집 = 10 + 120 ÷ 21 + 0.35초")
-	Trip.advance(s, b, 0, 137.0 - 0.01 - s.truck(0).lap_clock, rng)
-	check_eq(s.truck(0).lap_delivered, 20, "137초 직전: 20집 다 배송")
+	check_eq(_count(Trip.advance(s, b, 0, 0.02, rng), "parcel"), 1, "1번째 집 = 7 + 120 ÷ 21 + 0.35초")
+	Trip.advance(s, b, 0, 134.0 - 0.01 - s.truck(0).lap_clock, rng)
+	check_eq(s.truck(0).lap_delivered, 20, "134초 직전: 20집 다 배송")
 	Trip.advance(s, b, 0, 0.02, rng)
-	check_eq(s.truck(0).lap_delivered, 0, "137초: 새 바퀴")
-	note("상하차 30: 한 바퀴 %.2f → %.2f초, 시간당 ×%.4f" % [Trip.lap_seconds(b, plain, 0), 137.0, 140.0 / 137.0])
+	check_eq(s.truck(0).lap_delivered, 0, "134초: 새 바퀴")
+	# 보조 트럭은 능력치가 없어서 싣는 시간도 그대로
+	s.trucks.append(TruckState.new())
+	check_near(Trip.lap_seconds(b, s, 1), 140.0, 1e-9, "보조 트럭 +0: 140초 그대로")
+	note("상하차 30: 한 바퀴 %.2f → %.2f초, 시간당 ×%.4f" % [Trip.lap_seconds(b, plain, 0), 134.0, 140.0 / 134.0])
 
 
 ## ④ 협상 20 → 배송 1건 돈 1.2배 (협상 0~20 모두 반올림 1원 안), advance 돈도
@@ -165,6 +169,7 @@ func test_kind_tips() -> void:
 	check_near(Trip.tip_chance(b, _game(0, { "kind": 30 }), 0), 0.17, 1e-12, "친절 30 → 17%")
 	for c in [[{}, 0.02, 2500], [{ "kind": 30 }, 0.17, 2500], [{ "kind": 30, "nego": 20 }, 0.17, 3000]]:
 		var s := _game(14, c[0])   # +14: 보통 배송만 (v6b 대형 +15·VIP +18은 팁도 그 단가라)
+		s.weekly_done = true   # 10만 건이면 주간 목표(6만 건) 보상 돈이 섞여서 (v7-bal)
 		var rng := _rng(77)
 		var events := []
 		var money0 := s.money
@@ -222,9 +227,10 @@ func test_knowhow_offline_xp() -> void:
 
 ## ⑦ 정비 지식 20 → 드랍 기대값 2배 (켜 둔 동안 10만 건 굴림, 꺼둔 동안 소수 나머지)
 func test_mech_drop() -> void:
-	check_near(Trip.spare_chance(b, _game(0), 0), 0.00005, 1e-15, "정비 지식 0 = spare_drop_chance")
-	check_near(Trip.spare_chance(b, _game(0, { "mech": 20 }), 0), 0.0001, 1e-15, "정비 지식 20 → 2배")
-	check_near(Trip.spare_chance(b, _game(0, { "mech": 7 }), 0), 0.00005 * 1.35, 1e-15, "정비 지식 7 → 1.35배")
+	var p0 := b.spare_drop_chance
+	check_near(Trip.spare_chance(b, _game(0), 0), p0, 1e-15, "정비 지식 0 = spare_drop_chance")
+	check_near(Trip.spare_chance(b, _game(0, { "mech": 20 }), 0), p0 * 2.0, 1e-15, "정비 지식 20 → 2배")
+	check_near(Trip.spare_chance(b, _game(0, { "mech": 7 }), 0), p0 * 1.35, 1e-15, "정비 지식 7 → 1.35배")
 	# 켜 둔 동안: 확률을 0.01로 키운 balance로 10만 건
 	var d := real_balance_dict()
 	d["engine"]["spare_drop_chance"] = 0.01
@@ -251,8 +257,8 @@ func test_mech_drop() -> void:
 	var o20 := _game(10, { "mech": 20 })
 	var r20 := Trip.apply_offline(o20, b, 3 * 3600.0)
 	check_eq(r20["parcels"], ro["parcels"], "정비 지식은 배송 수를 안 바꿈")
-	check_near(o0.spare_drop_carry, ro["parcels"] * 0.00005, 1e-12, "꺼둔 동안 정비 지식 0")
-	check_near(o20.spare_drop_carry, ro["parcels"] * 0.0001, 1e-12, "꺼둔 동안 정비 지식 20 = 2배")
+	check_near(o0.spare_drop_carry, ro["parcels"] * p0, 1e-12, "꺼둔 동안 정비 지식 0")
+	check_near(o20.spare_drop_carry, ro["parcels"] * p0 * 2.0, 1e-12, "꺼둔 동안 정비 지식 20 = 2배")
 	note("켜 둔 동안 10만 건 드랍률 %.4f → %.4f (×%.3f), 꺼둔 3시간 소수 나머지 %.4f → %.4f"
 			% [rates[0], rates[1], rates[1] / rates[0], o0.spare_drop_carry, o20.spare_drop_carry])
 
@@ -283,7 +289,7 @@ func test_helper_truck_no_abilities() -> void:
 	k.trucks.append(TruckState.new())
 	k.truck(1).star = 10
 	var r := Trip.apply_offline(k, b, 3 * 3600.0)
-	var p0 := floori(Trip.cargo(b, k.truck(0)) * 3600.0 / Trip.avg_lap_seconds(b, k, 0) * 3.0 * 0.5)
+	var p0 := floori(Trip.cargo(b, k, 0) * 3600.0 / Trip.avg_lap_seconds(b, k, 0) * 3.0 * 0.5)
 	check_eq(r["xp"], p0 * 5, "트럭 2대: 경험치는 트럭 0 배송(%d건)만, 전체 %d건" % [p0, r["parcels"]])
 	check(r["parcels"] > p0, "트럭 1 배송이 꺼둔 동안에 없음")
 
