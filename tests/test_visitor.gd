@@ -74,7 +74,7 @@ func test_json_matches_spec() -> void:
 	check_eq(D, floori(NOW / 86400.0), "테스트 날짜 번호")
 
 
-## 방문 일정: 잠겼으면 안 옴, 열린 날 다음 방문 = 21~28일 뒤, 3년 매일 켜면 NPC마다 21~28일(+미룬 날)마다 한 번,
+## 방문 일정: 잠겼으면 안 옴, 열린 날 첫 방문 = 1~28일 뒤 (C2: 사용자 답), 3년 매일 켜면 그 뒤 NPC마다 21~28일(+미룬 날)마다 한 번,
 ## 하루에 한 명, 같은 날 두 번 tick해도 알림 한 번, 명장 요일엔 안 옴
 func test_schedule() -> void:
 	var locked := GameState.new_game()
@@ -85,7 +85,17 @@ func test_schedule() -> void:
 	Master.tick(s, b, NOW, _rng(3))
 	for id in Visitor.IDS:
 		var n := Visitor.next_day(s, id)
-		check(n >= D + 21 and n <= D + 28, "%s 첫 방문 %d일 뒤" % [id, n - D])
+		check(n >= D + 1 and n <= D + 28, "%s 첫 방문 %d일 뒤" % [id, n - D])
+	# 첫 방문 날짜 1000번: 1~28일 고르게 (같은 날 열린 1000명. 겹쳐서 미뤄지기 전 값)
+	var firsts := {}
+	var fr := _rng(31)
+	for k in 1000:
+		var f := _game(10)
+		Master.tick(f, b, NOW - DAY, fr)   # 열린 날 = D − 1 → 방문은 D ~ D + 27 (오늘 tick 안 함: 미루기 전 값)
+		var x: int = f.visitor_next["insurer"] - (D - 1)
+		firsts[x] = firsts.get(x, 0) + 1
+	check(firsts.keys().min() == 1 and firsts.keys().max() == 28 and firsts.size() == 28, "첫 방문 1~28일 모두 나옴: %s" % [firsts.keys()])
+	note("첫 방문 1000번: %d~%d일, 날마다 %d~%d번" % [firsts.keys().min(), firsts.keys().max(), firsts.values().min(), firsts.values().max()])
 	for master_day in [-1, 2]:   # 명장 요일 없음 / 수요일
 		var m := _game(10)
 		var rng := _rng(4)
@@ -93,6 +103,7 @@ func test_schedule() -> void:
 			Master.set_day(m, master_day, NOW)
 		var last := { "insurer": D, "magician": D, "dealer": D }
 		var gaps := { "insurer": [], "magician": [], "dealer": [] }
+		var first_gap := { }   # 열린 날 → 첫 방문 (1~28일 + 미룬 날)
 		var two_a_day := 0
 		var on_master := 0
 		var bad_today := 0
@@ -104,7 +115,10 @@ func test_schedule() -> void:
 			two_a_day += 1 if v.size() > 1 else 0
 			if v.size() == 1:
 				var who: String = v[0]["who"]
-				gaps[who].append(D + k - last[who])
+				if first_gap.has(who):
+					gaps[who].append(D + k - last[who])
+				else:
+					first_gap[who] = D + k - last[who]
 				last[who] = D + k
 				on_master += 1 if m.active_bonus != "" else 0
 				bad_today += 0 if Visitor.today(m) == who else 1
@@ -118,8 +132,9 @@ func test_schedule() -> void:
 				mean += x
 			mean /= maxf(1.0, g.size())
 			check(g.size() >= 38 and lo >= 21 and hi <= 31, "명장 요일 %d, %s: 3년 %d번, 간격 %d~%d일" % [master_day, id, g.size(), lo, hi])
+			check(first_gap.get(id, 0) >= 1 and first_gap.get(id, 0) <= 31, "명장 요일 %d, %s 첫 방문 %d일 뒤" % [master_day, id, first_gap.get(id, 0)])
 			check_near(mean, 24.5, 1.5, "명장 요일 %d, %s 평균 간격" % [master_day, id])
-			note("명장 요일 %d, %s: 3년 %d번, 간격 %d~%d일 (평균 %.2f)" % [master_day, id, g.size(), lo, hi, mean])
+			note("명장 요일 %d, %s: 첫 방문 %d일 뒤, 그 뒤 3년 %d번, 간격 %d~%d일 (평균 %.2f)" % [master_day, id, first_gap.get(id, 0), g.size(), lo, hi, mean])
 
 
 ## 같은 날 둘 이상이면 보험사 → 마술사 → 부품상 순서, 나머지는 다음 날로. 명장 방문 중인 날엔 안 오고 다음 날로
@@ -419,7 +434,7 @@ func test_save_v11() -> void:
 		check_eq([g10.premium_spares, g10.use_premium, g10.visitor_next, g10.visitor_day, g10.insurer_event, g10.insured_day],
 				[0, false, {}, -1, "", -1], "형식 10: 처음 값")
 		Master.tick(g10, b, NOW, _rng(26))
-		check(Visitor.next_day(g10, "dealer") >= D + 21, "형식 10 +18: 첫 tick에서 방문 날짜 굴림")
+		check(Visitor.next_day(g10, "dealer") >= D + 1 and Visitor.next_day(g10, "dealer") <= D + 28, "형식 10 +18: 첫 tick에서 방문 날짜 굴림 (첫 방문 1~28일)")
 	# 범위 밖·모르는 값은 자르거나 버림
 	var dc := Save.to_dict(s, 1794000000)
 	dc["premium_spares"] = -2

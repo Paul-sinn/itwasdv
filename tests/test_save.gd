@@ -236,7 +236,7 @@ func test_format_5_file_reads() -> void:
 	if r["state"] != null:
 		var s: GameState = r["state"]
 		check_eq(s.truck(0).lap_cargo, 0, "형식 5: 아직 안 굴림")
-		check_eq(Trip.lap_cargo(b, s.truck(0)), ceili(Trip.cargo(b, s.truck(0))), "안 굴렸을 때 Trip.lap_cargo = ceil(평균)")
+		check_eq(Trip.lap_cargo(b, s, 0), ceili(Trip.cargo(b, s, 0)), "안 굴렸을 때 Trip.lap_cargo = ceil(평균)")
 		s.quest_index = 22
 		Trip.advance(s, b, 0, 0.5, RandomNumberGenerator.new())
 		check(s.truck(0).lap_cargo >= 1, "진행했는데 안 굴림: %d" % s.truck(0).lap_cargo)

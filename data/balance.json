@@ -59,6 +59,10 @@
     "magician": { "up_mult": 2 },
     "dealer": { "premium_spares": 1, "premium_drop_to": 17 }
   },
+  "routes": {
+    "town": { "price_mult": 1.0, "road_mult": 1.0, "stops_mult": 1.0 },
+    "city": { "price_mult": 1.5, "road_mult": 0.5, "stops_mult": 1.5 }
+  },
   "depot": {
     "warehouse_hours": [4, 6, 8, 12],
     "warehouse_prices": [2000000, 3000000, 40000000],
