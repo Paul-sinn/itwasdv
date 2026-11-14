@@ -50,8 +50,8 @@ func _rng(seed_value: int) -> RandomNumberGenerator:
 ## json: 장거리 숫자, 터보 부품·장거리 속도 옵션, 틀린 숫자는 막힘
 func test_json_long() -> void:
 	check(b.is_ok(), "진짜 balance.json에 문제가 있음: %s" % ", ".join(b.errors))
-	check_eq(b.routes["long"], { "price_mult": 4.0, "road_mult": 5.0, "stops_mult": 1.0, "xp_per_parcel": 30, "unlock_star": 10 },
-			"장거리: 단가 ×4 (임시), 도로 ×5, 집 수 ×1, 경험치 30, +10")
+	check_eq(b.routes["long"], { "price_mult": 7.0, "road_mult": 5.0, "stops_mult": 1.0, "xp_per_parcel": 30, "unlock_star": 10 },
+			"장거리: 단가 ×7 (v7b C4), 도로 ×5, 집 수 ×1, 경험치 30, +10")
 	check_eq([Setting.unlock_stage(b, "turbo"), Setting.unlock_star(b, "turbo")], [GameState.AGENCY, 10], "터보 = 대리점 + +10")
 	check_eq(b.setting_parts["turbo"]["options"], PackedStringArray(["speed", "fuel_cut", "long_speed", "junk_ride", "junk_scent",
 			"junk_cupholder", "junk_radio", "junk_gloss"]), "터보 옵션")
@@ -109,7 +109,7 @@ func test_switch_next_lap() -> void:
 	check_eq([Trip.route_id(s, 0), s.truck(0).lap_route, Trip.lap_cargo(bn, s, 0), s.long_laps], ["long", "long", 20, 1], "다음 바퀴: 장거리 20집, 장거리 1바퀴")
 	check_eq(pays["city"].keys(), [city_pay], "시내 바퀴 배송 돈 2250")
 	check_eq(pays["long"].keys(), [Trip.parcel_pay(bn, s, 0)], "장거리 바퀴 배송 돈 = 장거리 단가")
-	check_eq(Trip.parcel_pay(bn, s, 0), 10000 - 2000 - 500, "장거리 단가 10000 → 1건 7500")
+	check_eq(Trip.parcel_pay(bn, s, 0), 17500 - 3500 - 875, "장거리 단가 17500 → 1건 13125")
 	check_eq(houses["city"].back(), 39, "시내 바퀴는 40집까지")
 	# 장거리 300초: 집 k 끝 = 10 + 400 × k/21 + 0.5k → 14집 (k=14: 10 + 266.7 + 7 = 283.7, k=15: 303.2)
 	check_eq(houses["long"], range(14), "장거리 바퀴 300초에 14집 (집 사이가 김)")
@@ -130,11 +130,11 @@ func test_long_lap_numbers() -> void:
 	check_near(Trip.lap_seconds(b, s, 0), 10.0 + 400.0 + 10.0, 1e-9, "+10 장거리 한 바퀴 420초")
 	check_near(Trip.avg_lap_seconds(b, s, 0), 420.0, 1e-9, "평균 한 바퀴")
 	check_eq([Trip.cargo(b, s, 0), Trip.lap_cargo(b, s, 0)], [20.0, 20], "20집")
-	check_eq([Trip.parcel_pay(b, s, 0), Trip.tip_pay(b, s, 0), Trip.lap_income(b, s, 0)], [7500, 10000, 150000], "1건 7500, 팁 10000, 한 바퀴 15만")
-	check_near(Trip.hourly_income(b, s, 0), 20 * (7500 + 0.02 * 10000) * 3600.0 / 420.0, 1e-6, "시간당 = 20 × 7700 × 3600 ÷ 420 = 132만")
+	check_eq([Trip.parcel_pay(b, s, 0), Trip.tip_pay(b, s, 0), Trip.lap_income(b, s, 0)], [13125, 17500, 262500], "1건 13125, 팁 17500, 한 바퀴 26.25만")
+	check_near(Trip.hourly_income(b, s, 0), 20 * (13125 + 0.02 * 17500) * 3600.0 / 420.0, 1e-6, "시간당 = 20 × 13475 × 3600 ÷ 420 = 231만")
 	check_near(Trip.hourly_income(b, s, 1), Trip.hourly_income(b, s, 0), 1e-6, "보조 트럭도 같은 번 돈")
-	check_near(Trip.hourly_net(b, s, 1), 20 * ((7500 - 2250 - 225) + 0.02 * (10000 - 3000 - 300)) * 3600.0 / 420.0, 1e-6,
-			"보조 트럭 내 돈 = 직원 몫 30%·세금 3% 뗀 1건·팁")
+	check_near(Trip.hourly_net(b, s, 1), 20 * ((13125 - 3938 - 394) + 0.02 * (17500 - 5250 - 525)) * 3600.0 / 420.0, 1e-6,
+			"보조 트럭 내 돈 = 직원 몫 30%·세금 3% 뗀 1건·팁 (3937.5·393.75는 반올림)")
 	# 경험치: 만렙이면 평판으로 그대로 → 한 바퀴 20건 × 30
 	s.driver_level = Driver.max_level(b)
 	var rng := _rng(2)
@@ -146,7 +146,7 @@ func test_long_lap_numbers() -> void:
 	var rep1 := s.reputation
 	Trip.advance(s, bn, 1, 420.0 - 0.001, rng)
 	check_eq(s.reputation, rep1, "보조 트럭 장거리 배송은 경험치 0")
-	note("+10 장거리 한 바퀴 420초, 시간당 번 돈 %d (시내 %d) — 단가 ×4는 임시, C3 시뮬로" % [floori(Trip.hourly_income(b, s, 0)),
+	note("+10 장거리 한 바퀴 420초, 시간당 번 돈 %d (시내 %d) — 단가 ×7 (v7b C4)" % [floori(Trip.hourly_income(b, s, 0)),
 			floori(Trip.hourly_income_on(b, _game([10], true), 0, "city"))])
 
 
@@ -180,7 +180,7 @@ func test_turbo_long_only() -> void:
 	check_near(Trip.hourly_income(b, s, 0), Trip.hourly_income(b, plain, 0), 1e-6, "시내 시간당 그대로")
 	s.truck(0).lap_route = "long"
 	check_near(Trip.lap_seconds(b, s, 0), 10.0 + 60000.0 / (150.0 * 1.3) + 10.0, 1e-9, "장거리: 속도 150 × (1 + 0.3)")
-	check_near(Trip.hourly_income_on(b, s, 0, "long"), 20 * 7700 * 3600.0 / (20.0 + 60000.0 / 195.0), 1e-6, "장거리 시간당")
+	check_near(Trip.hourly_income_on(b, s, 0, "long"), 20 * 13475 * 3600.0 / (20.0 + 60000.0 / 195.0), 1e-6, "장거리 시간당")
 	turbo["lines"] = ["long_speed", "speed", "long_speed"]   # 장거리 30 + 30, 이동 속도 20 (+ 다른 부품 이동 속도도 더함)
 	s.truck(0).part("ecu")["lines"] = ["speed"]   # 순정 3%
 	check_near(Trip.lap_seconds(b, s, 0), 20.0 + 60000.0 / (150.0 * (1.0 + 0.6 + 0.2 + 0.03)), 1e-9, "장거리: %끼리 더함 (1 + 0.6 + 0.2 + 0.03)")
@@ -193,7 +193,7 @@ func test_hourly_on_and_left() -> void:
 	var s := _game([10], true)
 	var city := Trip.hourly_income(b, s, 0)
 	check_near(Trip.hourly_income_on(b, s, 0, "city"), city, 1e-6, "시내 바퀴에서 시내 = hourly_income")
-	check_near(Trip.hourly_income_on(b, s, 0, "long"), 1320000.0, 1e-6, "장거리 132만")
+	check_near(Trip.hourly_income_on(b, s, 0, "long"), 2310000.0, 1e-6, "장거리 231만 (20 × 13475 × 3600 ÷ 420)")
 	check_eq([s.truck(0).lap_route, Trip.route_id(s, 0)], ["", "city"], "물어봐도 이번 바퀴 그대로")
 	s.truck(0).lap_route = "long"
 	check_near(Trip.hourly_income_on(b, s, 0, "city"), city, 1e-6, "장거리 바퀴에서 물어본 시내")

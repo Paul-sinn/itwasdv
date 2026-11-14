@@ -1,5 +1,5 @@
 {
-  "version": "0.16",
+  "version": "0.17",
   "trip": {
     "unit_price": 2500,
     "base_cargo": 20,
@@ -62,10 +62,10 @@
   "routes": {
     "town": { "price_mult": 1.0, "road_mult": 1.0, "stops_mult": 1.0 },
     "city": { "price_mult": 1.2, "road_mult": 0.4, "stops_mult": 2.0 },
-    "long": { "price_mult": 4.0, "road_mult": 5.0, "stops_mult": 1.0, "xp_per_parcel": 30, "unlock_star": 10 }
+    "long": { "price_mult": 7.0, "road_mult": 5.0, "stops_mult": 1.0, "xp_per_parcel": 30, "unlock_star": 10 }
   },
   "contracts": {
-    "reputation": [150000, 450000, 900000],
+    "reputation": [200000, 1700000, 3600000],
     "sales_share": [0.05, 0.07, 0.10]
   },
   "depot": {
@@ -82,7 +82,7 @@
     "staff_share": 0.3,
     "helper_prices": [5000000, 8000000],
     "city_xp_per_parcel": 15,
-    "rivals": [23000000, 24200000, 25400000, 26700000, 28100000, 29500000, 31000000, 32600000, 34300000, 36000000]
+    "rivals": [23000000, 24500000, 26000000, 27700000, 29400000, 31300000, 33300000, 35400000, 37600000, 40000000]
   },
   "setting": {
     "lines_by_grade": [1, 2, 3, 3, 3],
