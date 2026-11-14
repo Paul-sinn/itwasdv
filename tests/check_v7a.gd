@@ -615,7 +615,7 @@ func _u2(b: Balance) -> void:
 	var ranks_seen := []
 	var rank_ok: bool = locked == ["세계 순위표 · 잠김", "전국 순위표 · 잠김", "지역 순위표 · 잠김"] and o.locked_rows[0].is_visible_in_tree()
 	for target in ["start", "middle"]:
-		if target == "middle":   # 준비: 시작과 다른 중간 순위가 되는 단계 (v7-bal 시내 단가로는 +0 세 대도 이미 중간쯤)
+		if target == "middle":   # 준비: 시작과 다른 중간 순위가 되는 단계 (라이벌 숫자에 따라 +0 세 대가 이미 중간일 수도 있어서)
 			_set_stars_for_rank(b, m.state, func(r): return r > 2 and r < b.rivals.size() and r != ranks_seen[0][0])
 		await _frames(2)
 		var rank := Company.rank(b, m.state)
@@ -811,7 +811,7 @@ func _set_stars_for_rank(b: Balance, s: GameState, cond: Callable) -> void:
 	push_error("조건에 맞는 순위가 되는 단계가 없음")
 
 
-## 준비: 트럭 전부 최대 단계 + 부품 전부 최고 등급 (지금 json 라이벌로는 이래야 시내 1위: 3대 +30 전부 최대 ≈ 3,047만 > 3,040만)
+## 준비: 트럭 전부 최대 단계 + 부품 전부 최고 등급 (시내 1위가 되게. v7-bal json: 3대 +30 전부 최대 ≈ 4,080만 > 1위 라이벌 3,600만)
 func _max_out(b: Balance, s: GameState) -> void:
 	for i in s.trucks.size():
 		s.truck(i).star = b.max_star

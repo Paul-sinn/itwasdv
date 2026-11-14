@@ -355,7 +355,6 @@ func refresh(b: Balance, s: GameState) -> void:
 	_spares.text = tr("GARAGE_SPARES") % s.spares if s.premium_spares == 0 else tr("GARAGE_SPARES_BOTH") % [s.spares, s.premium_spares]
 	var now := Trip.hourly_income(b, s, truck)
 	var mine := Company.hourly_net(b, s)   # "약 N분 뒤": 모든 트럭 시간당 내 돈 (직원 몫·세금 뗀 뒤)
-	var premium := s.use_premium and s.premium_spares > 0   # 퍼지면 고급을 먼저 씀 (Enhance.force_destroy와 같은 조건)
 	premium_button.set_pressed_no_signal(s.use_premium)
 	premium_button.disabled = is_busy()
 	if at_max:
@@ -377,8 +376,9 @@ func refresh(b: Balance, s: GameState) -> void:
 		else:
 			_danger.text = tr("GARAGE_DANGER") % Fmt.percent(c["destroy"])
 			_danger.add_theme_color_override("font_color", Feel.COLOR_DANGER)
-		var notes := PackedStringArray([tr("GARAGE_DANGER_NOTE_PREMIUM") % [s.premium_spares, b.premium_drop_to] if premium \
-				else tr("GARAGE_DANGER_NOTE") % b.broken_drop_to])
+		var drop := Enhance.drop_to(s, b, truck)   # 지금 퍼지면 내려갈 단계 (고급 스페어·복구 보험 규칙은 계산 쪽)
+		var notes := PackedStringArray([tr("GARAGE_DANGER_NOTE_PREMIUM") % [s.premium_spares, drop] if s.use_premium and s.premium_spares > 0 \
+				else tr("GARAGE_DANGER_NOTE") % drop])   # 글만 [고급 스페어 쓰기] 켬 + 남음으로 고름
 		if Visitor.insurer_event(s) == "recovery":   # 오늘 복구 보험 (가입 안 하고 퍼져도 이 단계 밑으로 안 내려감)
 			notes.append(tr("GARAGE_RECOVERY_NOTE") % b.recovery_star)
 		_danger_note.text = "\n".join(notes)

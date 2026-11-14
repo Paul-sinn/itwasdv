@@ -67,6 +67,7 @@ var city := false            ## 시내 그림인가 (set_city)
 var _houses: Array[Vector2] = []     ## 집 자리 (길 가운데 선 위, 설계 좌표). 시내면 정차할 곳마다 (집·회사 건물)
 var _stops := PackedFloat64Array()   ## 집마다 길 위 거리 (트럭이 서는 곳)
 var _rows := PackedInt32Array()      ## 집마다 묶음 번호 (보이는 곳 사각형을 묶음마다 하나로. 동네는 집마다 따로, 시내는 CITY_SPANS 구간)
+var _city_step := 0.0               ## 시내 집 간격 (집 폭을 이 안으로 줄임)
 var _hud: HBoxContainer
 var _star_label: Label
 var _money_label: Label
@@ -283,6 +284,7 @@ func _city_spots(n: int) -> void:
 	for span: Array in Feel.CITY_SPANS:
 		total += absf(span[2] - span[1])
 	var step := total / n
+	_city_step = step
 	var start := 0.0   # 이 구간 앞까지 이어 붙인 길이
 	for k in Feel.CITY_SPANS.size():
 		var span: Array = Feel.CITY_SPANS[k]
@@ -668,6 +670,7 @@ func _house_rect(spot: Vector2) -> Rect2:
 	var bottom := spot.y - Feel.TOWN_ROAD_WIDTH / 2.0 - 1.0
 	if city:
 		var c := Feel.CITY_COMPANY_SIZE if is_company(_houses.find(spot)) else Feel.CITY_HOUSE_SIZE
+		c.x = minf(c.x, _city_step - Feel.CITY_HOUSE_GAP)   # 촘촘하면 폭만 줄임 (옆집과 안 겹치게)
 		return Rect2(spot.x - c.x / 2.0, bottom - c.y, c.x, c.y)
 	var s := Feel.TOWN_HOUSE_SIZE
 	var ov := Feel.TOWN_ROOF_OVERHANG
@@ -716,8 +719,10 @@ func _draw() -> void:
 			var win := Feel.CITY_WINDOW
 			var gap := Feel.CITY_WINDOW_GAP
 			var y := r.position.y + gap
+			var cols := [r.get_center().x - gap / 2.0 - win.x, r.get_center().x + gap / 2.0] if r.size.x >= win.x * 2.0 + gap * 2.0 \
+					else [r.get_center().x - win.x / 2.0]   # 좁으면 창문 한 줄
 			while y + win.y <= r.end.y - gap:
-				for x in [r.get_center().x - gap / 2.0 - win.x, r.get_center().x + gap / 2.0]:
+				for x in cols:
 					draw_rect(Rect2(x, y, win.x, win.y), Feel.COLOR_COMPANY_WINDOW)
 				y += win.y + gap
 			continue
