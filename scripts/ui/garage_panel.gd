@@ -9,7 +9,7 @@
 ##      "지금 돈이면 N번 시도 가능". 확률·비용·보험 요금·횟수는 Enhance·Economy 값을 그대로 (now_local은 main이 매 프레임 넣음)
 ## v7a: 튜닝숍 위쪽 트럭 탭 ("내 트럭", "2호차", "3호차". 트럭이 1대거나 [명장] 칸이면 숨김). 고른 트럭(truck)의 강화·세팅을 보여 주고
 ##      (1280x720에 맞게 탭은 NPC 줄 안, 얼굴 옆 이름·인사말 자리에. 탭이 보이는 동안 이름·인사말은 숨김)
-##      main이 강화·돌리기·보험을 그 트럭에. "모자란 금액 · 약 N분 뒤"는 내 트럭 시간당 수입 기준 그대로
+##      main이 강화·돌리기·보험을 그 트럭에. "모자란 금액 · 약 N분 뒤"는 모든 트럭 시간당 내 돈(Company.hourly_net) 기준
 ##      U2: 창업하면 건물 줄에 [사무실] (office_tab.gd: 보조 트럭·순위표·장부). 대리점 전(F3 처음부터 포함)에는 버튼을 숨기고 튜닝숍으로
 ## 보여주기만 한다. 버튼을 누르면 신호만 보내고, 실제 강화·구매·돌리기는 main.gd → scripts/core 가 한다.
 extends PanelContainer
@@ -349,7 +349,7 @@ func refresh(b: Balance, s: GameState) -> void:
 		_master_line.text = tr("GARAGE_MASTER_VISIT") % Fmt.master_bonus(b.master_bonuses, s.active_bonus)
 	_spares.text = tr("GARAGE_SPARES") % s.spares
 	var now := Trip.hourly_income(b, s, truck)
-	var mine := Trip.hourly_income(b, s, 0)   # shortcut: "약 N분 뒤"는 내 트럭 번 돈 기준 (보조 트럭·세금 빼고), 모든 트럭 내 돈 합 함수가 생기면 그걸로
+	var mine := Company.hourly_net(b, s)   # "약 N분 뒤": 모든 트럭 시간당 내 돈 (직원 몫·세금 뗀 뒤)
 	# 보험: 걸 수 없게 되면(방문일이 지남·쿠폰을 다 씀) 저절로 끔. 뜸 중에는 못 바꿈
 	var can_insure := Enhance.can_insure(s, now_local)
 	if insure and not can_insure and not _busy:

@@ -233,8 +233,7 @@ func refresh(b: Balance, s: GameState, locked: bool) -> void:
 	var block := Setting.block_reason(s, b, truck, selected)
 	match block:
 		Setting.Block.NO_MONEY:
-			var hourly := Trip.hourly_income(b, s, 0)   # shortcut: 내 트럭 번 돈 기준 (보조 트럭·세금 빼고), 모든 트럭 내 돈 합 함수가 생기면 그걸로
-			_wait.text = tr("SETTING_SHORT") % [Fmt.money(cost - s.money), Fmt.wait_text(Economy.seconds_to_afford(cost, s.money, hourly))]
+			_wait.text = tr("SETTING_SHORT") % [Fmt.money(cost - s.money), Fmt.wait_text(Economy.seconds_to_afford(cost, s.money, Company.hourly_net(b, s)))]
 		Setting.Block.PENDING:
 			_wait.text = tr("SETTING_PENDING")
 	_wait.visible = block == Setting.Block.NO_MONEY or block == Setting.Block.PENDING

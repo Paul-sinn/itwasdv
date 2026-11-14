@@ -12,6 +12,7 @@
 ## U2 (사무실): ① 창업 전 사무실 건물 없음, 뒤에는 띠·큰 화면 건물 줄에 있고 클릭하면 사무실 화면, 작은 화면 3가지에서 다른 건물·집·말풍선과 안 겹침
 ##    ② [트럭] 사기 → 돈 −값·트럭 +1·저장, 다 사면 "더 살 수 없어요"   ③ [순위표] 내 줄 = Company.rank, "다음 순위까지" = next_gap, 잠긴 줄 3개
 ##    ④ [장부] 숫자 = Company.today, 세율표 5줄·지금 단계 강조   ⑤ 구석 줄 "시내 N위"   ⑥ 1위 알림 한 번   ⑦ en, 창 크기
+## U3: "N원 모자람 · 약 N분 뒤" = Economy.seconds_to_afford(값, 돈, Company.hourly_net) (대리점 트럭 3대: 강화·세팅·창고·카센터)
 ## 현지 시각은 main.now_local_override로 고정 (2026-11-18 수요일 낮 12시). 진짜 저장·설정 파일은 건드리지 않는다.
 ##
 ## 실행:
@@ -22,6 +23,7 @@ const ErrorWatch = preload("res://tests/error_watch.gd")   ## 실행 중 스크�
 const MAIN_SCENE := "res://scenes/main.tscn"
 const Balance = preload("res://scripts/core/balance.gd")
 const Company = preload("res://scripts/core/company.gd")
+const Depot = preload("res://scripts/core/depot.gd")
 const Economy = preload("res://scripts/core/economy.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Master = preload("res://scripts/core/master.gd")
@@ -73,7 +75,8 @@ func _run() -> void:
 	_click(d.found_button.get_global_rect().get_center())
 	await _frames(2)
 	var short_ok: bool = d._agency.is_visible_in_tree() and d.found_button.is_visible_in_tree() and d.found_button.disabled \
-			and short_text == "대리점 창업 %s원 · %s원 모자람" % [Fmt.money(price), Fmt.money(1000)] and Company.stage(m.state) == 0
+			and short_text == "대리점 창업 %s원 · %s원 모자람" % [Fmt.money(price), Fmt.money(1000)] \
+			and Company.stage(m.state) == 0
 	m.state.money = price + 12345   # 준비: 돈이 모임
 	await _frames(2)
 	_click(d.found_button.get_global_rect().get_center())
@@ -311,6 +314,7 @@ func _run() -> void:
 			FIT_SIZES.size(), SMALL_SIZES.size(), fit["ko"], fit["en"]])
 
 	await _u2(b)
+	await _u3(b)
 
 	Engine.time_scale = 1.0
 	Save.delete_file(TEST_SAVE)
@@ -581,7 +585,7 @@ func _u2(b: Balance) -> void:
 	_click(o.buy_button.get_global_rect().get_center())
 	await _frames(2)
 	var short_ok: bool = o.buy_button.disabled and o._no_helper.is_visible_in_tree() and empty_text == "아직 보조 트럭이 없어요" \
-			and short_note == "%s원 모자람" % Fmt.money(1) and buy_text == "보조 트럭 사기 (%s원)" % Fmt.money(price1) and m.state.trucks.size() == 1
+			and short_note == "%s원 모자람 · %s" % [Fmt.money(1), _wait_for(b, m.state, price1)] and buy_text == "보조 트럭 사기 (%s원)" % Fmt.money(price1) and m.state.trucks.size() == 1
 	m.state.money = price1 + 777
 	await _frames(2)
 	_click(o.buy_button.get_global_rect().get_center())
@@ -854,3 +858,55 @@ func _visible_texts(node: Node) -> Array:
 		if (n is Label or n is Button) and n.is_visible_in_tree() and n.text != "":
 			out.append(n.text)
 	return out
+
+
+# ---------------- U3: "약 N분 뒤"는 모든 트럭 시간당 내 돈 ----------------
+
+## 대리점 트럭 3대, 돈 1,000원: 강화 칸·세팅 칸·물류센터 창고·카센터의 "약 N분 뒤"가 Company.hourly_net 기준인가 (진짜 클릭으로 칸을 열어 봄)
+func _u3(b: Balance) -> void:
+	TranslationServer.set_locale("ko")
+	Save.delete_file(TEST_SAVE)
+	var m := await _launch(b)
+	var p = m.panel
+	var s: GameState = m.state
+	s.quest_index = Quest.count(b)
+	_agency_with_helpers(b, s, 2)
+	s.truck(0).star = 5
+	s.money = 1000
+	await _frames(2)
+	_click(m.town.building_rects()["tuning"].get_center())
+	await _frames(3)
+	_click(p.engine_tab_button.get_global_rect().get_center())
+	await _frames(2)
+	var cost := Economy.enhance_cost(b, 5, s)
+	var got := { "강화": p._wait.text }
+	var want := { "강화": tr("GARAGE_SHORT_WAIT") % _wait_for(b, s, cost) }
+	_click(p.setting_tab_button.get_global_rect().get_center())
+	await _frames(1)
+	_click(p.setting.part_buttons["cargo_box"].get_global_rect().get_center())
+	await _frames(2)
+	var rc := Setting.roll_cost(b, s.truck(0).part("cargo_box")["grade"], s)
+	got["세팅"] = p.setting._wait.text
+	want["세팅"] = tr("SETTING_SHORT") % [Fmt.money(rc - 1000), _wait_for(b, s, rc)]
+	_click(p.building_buttons["depot"].get_global_rect().get_center())
+	await _frames(2)
+	_click(p.driver.depot_page_button.get_global_rect().get_center())
+	await _frames(2)
+	var wp := Depot.price(b, s, "warehouse")
+	got["창고"] = p.driver._waits["warehouse"].text
+	want["창고"] = tr("DEPOT_SHORT") % [Fmt.money(wp - 1000), _wait_for(b, s, wp)]
+	_click(p.building_buttons["car_center"].get_global_rect().get_center())
+	await _frames(2)
+	var sp := Economy.spare_price(b)
+	got["카센터"] = p._car_wait.text
+	want["카센터"] = tr("CAR_SHORT") % [Fmt.money(sp - 1000), _wait_for(b, s, sp)]
+	var net := Company.hourly_net(b, s)
+	_report(got == want and net != Trip.hourly_income(b, s, 0),
+			"U3 대리점 트럭 3대: '약 N분 뒤' = seconds_to_afford(값, 돈, Company.hourly_net %s원/시간) (내 트럭 번 돈 %s원/시간 아님): %s" % [
+			Fmt.money(int(net)), Fmt.money(int(Trip.hourly_income(b, s, 0))), got])
+	await _close(m)
+
+
+## "약 N분 뒤 가능": 돈 money에서 price를 모을 때까지 (모든 트럭 시간당 내 돈 기준)
+func _wait_for(b: Balance, s: GameState, price: int) -> String:
+	return Fmt.wait_text(Economy.seconds_to_afford(price, s.money, Company.hourly_net(b, s)))

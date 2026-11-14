@@ -3,7 +3,7 @@
 ##   그 아래 두 칸 고르기 (v5b. 한 화면에 다 넣으면 1280x720에서 창 밖으로 나감):
 ##     [능력치]: 남은 포인트 + [초기화](두 번 눌러야), 능력치 5줄 (이름 n/최대 · 지금 효과 / 한 줄 설명, [+]), 예시 빌드 4줄
 ##     [창고·할 일]: 대리점 창업 한 줄 (v7a: "대리점 창업 5억원 · 4.9억원 모자람" [창업] 두 번 눌러야 / 창업 뒤 "대리점 (시내)".
-##                   1280x720에 맞게 모자란 금액도 같은 줄, "약 N분 뒤"는 안 붙임),
+##                   1280x720에 맞게 모자란 금액도 같은 줄, "약 N분 뒤"는 안 붙임: 붙이면 두 줄이 되어 차고가 창 밖),
 ##                   다음 할 일 (끝낸 수 n/25, 이름·설명·진행·보상), 주간 배송 목표 (v6b),
 ##                   창고 확장·야간 배송팀 (지금 값 → 다음 값, 가격, [올리기], 모자란 금액)
 ## 숫자는 scripts/core 의 Driver·Quest·Depot·Ability 값을 그대로 보여 준다 (효과를 여기서 계산하지 않음).
@@ -20,7 +20,6 @@ const GameState = preload("res://scripts/core/game_state.gd")
 const Quest = preload("res://scripts/core/quest.gd")
 const Ability = preload("res://scripts/core/ability.gd")
 const Weekly = preload("res://scripts/core/weekly.gd")
-const Trip = preload("res://scripts/core/trip.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
 const Fmt = preload("res://scripts/ui/fmt.gd")
 const Town = preload("res://scripts/ui/town.gd")
@@ -32,7 +31,6 @@ signal found_pressed                 ## [창업]을 두 번째 누름 (첫 번�
 
 enum Page { ABILITY, DEPOT }
 
-const TRUCK := 0   ## "모자란 금액 · 약 N분 뒤"를 셀 때 쓰는 시간당 수입 (shortcut: 내 트럭 번 돈 기준, 모든 트럭 내 돈 합 함수가 생기면 그걸로)
 const KINDS := ["warehouse", "night"]
 ## 종류별 번역 키: 이름("창고 확장 Lv.N"), 값("꺼둔 동안 쌓이는 시간 …")
 const KIND_KEYS := {
@@ -270,8 +268,7 @@ func refresh(b: Balance, s: GameState) -> void:
 		var short := price > 0 and s.money < price
 		_waits[kind].visible = short
 		if short:
-			var hourly := Trip.hourly_income(b, s, TRUCK)
-			_waits[kind].text = tr("DEPOT_SHORT") % [Fmt.money(price - s.money), Fmt.wait_text(Economy.seconds_to_afford(price, s.money, hourly))]
+			_waits[kind].text = tr("DEPOT_SHORT") % [Fmt.money(price - s.money), Fmt.wait_text(Economy.seconds_to_afford(price, s.money, Company.hourly_net(b, s)))]
 
 
 ## 대리점 창업 줄: 창업 전 "대리점 창업 5억원" [창업] (돈이 모자라면 꺼짐 + 같은 줄에 모자란 금액), 창업 뒤 "대리점 (시내)"만.

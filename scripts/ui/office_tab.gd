@@ -1,5 +1,5 @@
 ## 대리점 사무실 화면 (v7a U2. 창업 뒤 띠·큰 화면 건물 줄의 사무실을 누르면). 세 칸 고르기:
-##   [트럭]: 보조 트럭 목록 ("2호차  +3 · 시간당 M원") + [보조 트럭 사기 (N원)] (모자라면 꺼짐 + 모자란 금액, 다 샀으면 "더 살 수 없어요")
+##   [트럭]: 보조 트럭 목록 ("2호차  +3 · 시간당 M원") + [보조 트럭 사기 (N원)] (모자라면 꺼짐 + "N원 모자람 · 약 N분 뒤", 다 샀으면 "더 살 수 없어요")
 ##   [순위표]: 잠긴 줄 3개(세계·전국·지역) + 시내 순위표: "다음 순위까지 시간당 N원", 라이벌 10곳 + 나 (내 줄 강조, 1위면 1위 색)
 ##   [장부]: 오늘 매출·직원 몫·세금·순이익 + 세율표 5줄 (지금 단계 강조)
 ## 순위·남은 양·오늘 집계·보조 트럭 값은 Company 값을, 라이벌 매출·세율은 balance 숫자를 그대로 보여 준다 (여기서 계산하지 않음).
@@ -9,6 +9,7 @@ extends VBoxContainer
 
 const Balance = preload("res://scripts/core/balance.gd")
 const Company = preload("res://scripts/core/company.gd")
+const Economy = preload("res://scripts/core/economy.gd")
 const GameState = preload("res://scripts/core/game_state.gd")
 const Trip = preload("res://scripts/core/trip.gd")
 const Feel = preload("res://scripts/ui/feel.gd")
@@ -153,7 +154,7 @@ func _refresh_trucks(b: Balance, s: GameState) -> void:
 	if price < 0:
 		_buy_note.text = tr("OFFICE_HELPER_FULL")
 	elif s.money < price:
-		_buy_note.text = tr("AGENCY_SHORT") % Fmt.money(price - s.money)
+		_buy_note.text = tr("DEPOT_SHORT") % [Fmt.money(price - s.money), Fmt.wait_text(Economy.seconds_to_afford(price, s.money, Company.hourly_net(b, s)))]
 	_buy_note.visible = price < 0 or s.money < price
 
 
