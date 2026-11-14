@@ -85,6 +85,24 @@ static func lap_progress(b: Balance, s: GameState, i: int) -> float:
 	return clampf((s.truck(i).lap_clock - load_s) / maxf(lap_seconds(b, s, i) - load_s, 0.001), 0.0, 1.0)
 
 
+## 화면 트럭 자리를 집 기준으로: 지난 집 수 + 다음 집까지 달린 몫 (0 ~ n+1, n = lap_cargo). 싣는 동안 0,
+## 집 앞에 서 있는 동안 그 집 번호(정수), 마지막 집 뒤 복귀 구간은 n ~ n+1. 시간은 _drive와 같은 식:
+## 집 k 배달 끝 = 싣기 + 달리기 × k/(n+1) + k × 정차 → 구간 하나 = 달리기/(n+1) 달리고 정차
+static func lap_stop_progress(b: Balance, s: GameState, i: int) -> float:
+	var t := s.truck(i)
+	var n := lap_cargo(b, s, i)
+	var leg := _drive_at(b, s, i, t.star, t.boost_lap) / (n + 1)
+	var seg := leg + _stop(b, s, i)
+	var tau := t.lap_clock - _load(b, s, i)
+	if tau <= 0.0:
+		return 0.0
+	var j := mini(floori(tau / seg), n)
+	var into := tau - j * seg
+	if into >= leg:   # 집 j+1 앞에 섬 (j = n이면 바퀴 끝)
+		return float(j + 1)
+	return j + into / leg
+
+
 ## 트럭 i의 평균 한 바퀴 초 = 안 걸린 바퀴 × (1 − p) + 걸린 바퀴 × p,  p = min(오버부스트 합, 1)
 static func avg_lap_seconds(b: Balance, s: GameState, i: int) -> float:
 	return _avg_lap_at(b, s, i, s.truck(i).star)

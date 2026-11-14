@@ -138,18 +138,27 @@ static func try_enhance(state: GameState, b: Balance, i: int, rng: RandomNumberG
 ##   보험사 "복구 보험" 날이면 recovery_star(+17)보다 아래로 안 내려감 (고급과 겹쳐도 +17)
 ## 강화에서 퍼졌을 때와 치트 F5 "강제로 퍼지게 하기"에서 같이 쓴다. 통계는 안 센다 (강화 버튼 결과만 셈).
 static func force_destroy(state: GameState, b: Balance, i: int) -> Dictionary:
-	var t := state.truck(i)
-	var premium := state.use_premium and state.premium_spares > 0
-	var to := b.broken_drop_to
+	var premium := _premium_now(state)
+	var to := drop_to(state, b, i)
 	if premium:
 		state.premium_spares -= 1
-		to = b.premium_drop_to
 	else:
 		state.spares = maxi(0, state.spares - 1)
+	state.truck(i).star = to
+	return { "drop_to": to, "premium": premium }
+
+
+## 트럭 i가 지금 퍼지면 내려갈 단계 (아무것도 안 바꿈. force_destroy와 같은 규칙, 화면 안내 줄용):
+##   고급 스페어 켜짐 + 남음 → premium_drop_to(+17), 아니면 broken_drop_to(+15). 복구 보험 날이면 recovery_star 밑으로 안 감. 지금 단계보다 높으면 지금 단계
+static func drop_to(state: GameState, b: Balance, i: int) -> int:
+	var to := b.premium_drop_to if _premium_now(state) else b.broken_drop_to
 	if Visitor.insurer_event(state) == "recovery":
 		to = maxi(to, b.recovery_star)
-	t.star = mini(t.star, to)
-	return { "drop_to": t.star, "premium": premium }
+	return mini(state.truck(i).star, to)
+
+
+static func _premium_now(state: GameState) -> bool:
+	return state.use_premium and state.premium_spares > 0
 
 
 ## 굴리는 확률 세 개 (보험 전):
